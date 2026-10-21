@@ -1,0 +1,52 @@
+# 專案 e2e 落地映射表範本（放各專案規則帳本 `CLAUDE_rulebook.md`）
+
+本技能只寫跨專案規則；每個專案在 `CLAUDE_rulebook.md` 內以下表為一節，記錄「本專案怎麼落地」——映射表屬規則帳本之一環。與帳本體例的對應：每列契約即一條規則；「本專案實名／模式」是站點全集；「偏離與依據」填了即「刻意不套」、空白且未落地即「未套」；可重跑之盤點指令沿用 [e2e-setup-contract.md](e2e-setup-contract.md) 末節之 audit 指令。**只寫名稱與模式，不寫行號**（行號會漂移；要定位用 Grep）。與技能契約（SKILL.md §3）不同之處必須在「偏離與依據」欄說明，否則視為缺口。
+
+```markdown
+## e2e 落地映射（規則帳本之一節；對應全域技能 role-coder-for-test-e2e §3 契約）
+
+### 服務與 port
+
+| 項目 | 值 |
+|---|---|
+| 後端 | `node srv.mjs`（port NNNNN，≥ 8000、與他專案錯開、寫死不隨機） |
+| 前端 | (a) `npm run serve`（port NNNN，≥ 8000 且與他專案錯開）/ (b) 先 `npm run build`，由後端 serve `dist` |
+| w-screenctl | `node node_modules/w-screenctl/g.mjs`（port 7000，被佔用另選） |
+| seed 腳本 | `g_initialTestData.mjs`（hermetic：e2e 進場先刪 DB 目錄再跑；偵測 stdout `finish.`） |
+| e2e 執行 | 單獨跑某檔：`npx mocha test/e2e-<flow>.test.mjs --reporter list --timeout NNNNNN` / 逐檔隔離（獨立程序）：`node test/tools/run-e2e-isolated.mjs` |
+| 共用實作 | `test/tools/e2eLib.mjs` 單一橋接 → `w-package-tools-e2e/src/`（devDependency，寫明版號）；`e2e-setup.mjs` 只留組態與專案專屬原語 |
+
+### 契約映射
+
+| 契約 | 本專案實名 / 模式（括號內為套件模組與選項） | 偏離與依據 |
+|---|---|---|
+| C1 launch wrapper | `launchBrowser()`；旗標組：六旗標 / 四旗標（列出） | 例：四旗標含 `--font-render-hinting=none`，依據＝本專案 2026-xx 字形重畫症狀；尚未升級六旗標因需全量重產 |
+| C2 server lifecycle | `startServersOnce({ backendOnly })` / `cleanup()`；root `after` + 直跑顯式 cleanup | |
+| C3 換設定重啟 | `restartBackend(path, envOverride)` / `genTempSettings(overrides)` → `test/_tmp/settings-e2e-*.json`（cleanup 刪除；絕不放 `./tmp/`） | |
+| C4 DB 重置 | `resetToBaseSeed()`（直接 DB）/ `resetDb(browser, seed)`（throwaway page） | |
+| C5 進站與語系 | `openApp(browser)`（`?token=sys`）/ `setLang(page, lang)` | |
+| C6 截圖 | `captureStable(page, { initialWaitMs: 1500 })`；截圖範圍：全頁 / 視窗（含重排原因，見技能 §8.5） | 例：某流程改視窗截圖，依據＝全頁截圖觸發 resize 使抽屜翻面／圖片瀏覽器重排（探測 log 路徑） |
+| C7 紅框 | `captureStableWithBox`：sharp 合成 / **DOM 注入（缺口，待遷移）** | |
+| C8 遮罩 | `maskRegions` / `overlayRegions`（`_staref-*` 自舉）/ `{ sel, fixedWidth }`；非決定性畫布：比對端「標準圖覆蓋＋DOM 貼回」（函式名、貼回目標清單、命中數自測腳本）；跨流程共有動態區（主頁即時數值）之共用覆蓋函式；**不可固定之值清單**（每列：值／出現之流程與畫面／覆蓋函式／語意斷言，見 unfixable-values-masking §2） | 例：地圖／三維畫布不填黑，依據＝手冊須見畫面；產製時間、耗時採比對端覆蓋而不填黑，依據＝手冊須見版本行；半透明貼回層之殘餘風險列觀察項 |
+| C9 比對 | `assertBaselineMatch(buf, path, label, opts)` / `assertOrRegenBaseline(assert, flow, file, buf, opts)`；pixelmatch `includeAA:false, threshold 0.1, maxDiffPixels 100`；fail-dump `./testPending/` | |
+| C10 輸入 | `typeIntoInput(page, locator, value)`；表格 `typeIntoCell` / `fillAgGridCell` | |
+| C11 偵測等待 | `waitUntilExist(page, label, fn, { timeout, arg })` | |
+| C12 settle 訊號 | `waitDrawerReady`（`[state]`）/ `waitMutationSettled`（簽章） | |
+| C13 regen 入口 | (a) `node test/e2e-x.test.mjs --baseline [--names] [--langs] [--write-mode]` + `generateBaseline()` 末尾 `cleanup()` / (b) `npx mocha … --baseline` 或 `E2E_REGEN=1`；兩端皆 `runBaselineCase`、篩選 `createBaselineGate`、等價驗證 `E2E_BASELINE_OUT_DIR` | 例：某檔仍手寫篩選或兩份流程＝缺口，列入已知缺口 |
+| C14 端點 | `baseUrl` / `apiBaseUrl`（127.0.0.1） | |
+
+### 專案特有機制
+
+- 例：統計頁確定性資料：`settings.staEventMock=true`（mock 資料集）/ fixture log `logs/e2e-*-fixture.log` / 合成 log 目錄 + `restartBackend(genTempSettings({ logFd }))`
+- 例：in-memory 計數清除 API：`/api/cleanKpIpCallApi?token=…`
+- 例：端到端不變式 helper：`getResolvedActiveTargets(page, userId)`
+- 例：`e2e-doubleclick` 為 API-level（後端 mutex 契約：兩次皆成功 / 一成功一 reject）
+- 例：api 測試層 root `after` 強制 `process.exit()`（第三方 client 內部 `setInterval` 無法 close）
+
+### 已知缺口 / 待辦（對照技能 audit 指令）
+
+- 例：`chromium.launch` 散落 N 處，待收斂為 wrapper
+- 例：紅框仍 DOM 注入，待改 sharp 合成（幾何一致可免重產，需交叉比對證明）
+- 例：N 檔產製端不跑語意斷言／手寫 `startsWith` 篩選，待改 runBaselineCase＋createBaselineGate（改後以暫存目錄重產做等價驗證）
+- 例：表格 idle 仍用雙重 rAF N 處，待改內容＋幾何簽章（waitGridIdle）
+```

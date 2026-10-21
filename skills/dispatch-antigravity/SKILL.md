@@ -1,0 +1,433 @@
+---
+name: dispatch-antigravity
+description: 當任務需要委派給 Antigravity，或需要使用其提供的 Gemini 模型時，透過 w-dispatch-ai 以非互動子程序方式執行 Google Antigravity CLI（agy）。內含依任務性質（審計／複審／調查／寫測試）決定權限下限的判準：權限不足時會以 exit 0 交回看似正常卻沒做事的結果。派工逾時：正式派工一律 4 小時，派工腳本須以 detached 行程執行並分段等待——掛在工具呼叫上（前景最長 10 分鐘、背景最長 2 小時）必被中途終止。
+---
+
+# dispatch-antigravity
+
+使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.53；固定旗標與自用鍵自 1.0.17 起未變動，**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-10-18 以 1.4.2 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
+
+需要變更模型 slug、effort、print 模式旗標、逾時或工作區可視範圍時，讀取 [references/agy-flags.md](references/agy-flags.md)。
+
+## 套件裝在哪：技能目錄的上一層，不要自己另裝
+
+`w-dispatch-ai` 與其相依（`wsemi` 等）統一裝在**技能根目錄自己的 `node_modules`**——也就是**本技能目錄的上一層**（技能根有自己的 `package.json` 管這些相依），一般是 `~/.claude/skills/node_modules/`。
+
+```javascript
+import { createRequire } from 'module';
+import path from 'path';
+
+//技能根＝本技能目錄的上一層（本技能目錄之絕對路徑由載入本技能時取得）
+const skillsRoot = path.resolve('<本技能目錄之絕對路徑>', '..');
+const req = createRequire(import.meta.url);
+const wda = req(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'));
+//取回的就是預設匯出物件本身（不會再包一層 default）：wda.KINDS／wda.dispatchAntigravity／wda.budgetFor 直接可用
+```
+
+**三條鐵則**：
+
+- **不要在專案裡 `npm install w-dispatch-ai`**。專案若另有一份，`import 'w-dispatch-ai'` 會優先解析到專案那份（通常較舊），**使用者更新技能根的版本就永遠傳不到你這裡**——他以為在測新版，你實際跑的是另一份。
+- **找不到就回報使用者**（請他到技能根 `npm i`）。不要自己找地方安裝，也不要改用其他路徑硬湊。
+- **查版本要指名路徑**：直接下 `npm ls w-dispatch-ai` 或 `require.resolve('w-dispatch-ai')` 都是**從當前專案解析**，看到的可能是別份。要確認真正被載入的那一份，讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
+
+## 必要預設值
+
+除非使用者明確指定其他模型或推理強度，否則必須使用：
+
+- 模型：`gemini-3.8-flash-high`
+- 推理強度：模型 slug 已內嵌的 `high`
+
+`high` 是 **Gemini 3.8 Flash** 能給到的最深等級。預設時不要再傳入 `effort: 'high'`；模型 slug 已包含等級，重複設定沒有必要，而且維持單一設定來源可避免 slug／effort 衝突。
+
+**查某支模型能用哪些 effort，用 `/effort` 實查，不要看 `--help`**：
+
+```bash
+MSYS_NO_PATHCONV=1 agy -p /effort --model gemini-3.8-flash --output-format json
+# 回應之 command.data.available 即清單；adjustable 為 false 表示該模型不可調
+```
+
+`MSYS_NO_PATHCONV=1` 只在 Git Bash 需要：MSYS 會把開頭為 `/` 的參數當成 POSIX 路徑，改寫成 `C:/Program Files/Git/effort` 再交給 agy。2026-10-18 於 agy 1.4.2 實查：
+
+| 基礎 slug | available |
+|---|---|
+| `gemini-3.8-flash` | low, medium, high |
+| `gemini-4-argon` | low, medium, high |
+| `claude-opus-5-5`、`claude-sonnet-5-5` | low, medium, high |
+| `gpt-oss-120b` | 不可調（`adjustable: false`） |
+
+同一版的 `--help` 卻把 `--effort` 列為 `low|medium|high|xhigh|max`（1.2.6 為 `low|medium|high`，1.2.13 為 `low|medium|high|max`）——那只是 CLI 層的字面值域。實際傳 `--model gemini-3.8-flash --effort max` 回 `gemini-3.8-flash has no "max" effort (available: low, medium, high)`；帶檔位 slug 再配不一致的 effort（如 `--model gemini-3.8-flash-high --effort max`）回 `conflicts with --effort=max`。**當前型錄沒有任何一支接受 `xhigh` 或 `max`**，所以 `gemini-3.8-flash-high` 仍是本技能能拿到的最深檔；日後某支模型的 available 出現 `xhigh`／`max`，才有升級空間。
+
+不帶檔位的基礎 slug（如 `gemini-3.8-flash`、`gemini-4-argon`）agy 解析得出來（預設檔位 medium，可搭配 `effort`），只是不列在 `agy models` 的輸出裡。
+
+**Gemini 4 Argon 是另一支可選的 Gemini，不是預設**：`gemini-4-argon-{high,medium,low}` 見於 agy 1.4.0（套件記錄）與 1.4.2（2026-10-18 本機）之型錄，`w-dispatch-ai` 1.0.50 起收為 `agy:gemini-4-argon-high` 條目。它的額度是 agy `/usage` 裡獨立的「Gemini 4 Argon」群組，只有 7 天窗口、沒有 5 小時窗口（套件 2026-10-16 以前後對照實測，與「Gemini Models」群組分開）。**未給 `model` 時 agy 預設就是 Gemini 4 Argon (Medium)**（套件 2026-10-16 以 agy 1.4.0 實測；預設由 agy 決定、可能隨版本變動），會悄悄耗用這個 7 天額度——所以派工一律明給 `model`。要改用 Argon，須使用者明確指定。
+
+**為何是 3.8**：Gemini 3.8 Flash 於 agy **1.1.25** 進入型錄（changelog 記為「Added Gemini 3.8 Flash to the model catalog when connecting with a `GEMINI_API_KEY`」），2026-09-03 本機 `agy models` 已實際列出三檔 slug，並以 `agy -p ... --model gemini-3.8-flash-high` 實跑通過（8.8 秒、exit 0）。`w-dispatch-ai` 1.0.34 之 providers 表同日自 3.7 升為 3.8，附實測：**回應 12.5s（3.7 為 62.2s）、讀檔 14.6s（3.7 為 57.6s）**。
+
+型錄由伺服器供給，會獨立於 CLI 版本變動。固定模型前一律先跑 `agy models` 對照，不可憑推測寫入新 slug——2026-09-02 查核時 3.8 尚不存在，隔日即上架，就是這個道理。
+
+```javascript
+import wda from 'w-dispatch-ai';
+
+const result = await wda.dispatchAntigravity('分析此專案並完成指定修改', {
+    model: 'gemini-3.8-flash-high',
+    cwd: '/absolute/path/to/project',
+    timeoutMs: 14_400_000,   // 正式派工一律 4 小時；須照〈逾時與等待〉以 detached 執行，不可在工具呼叫內直接 await
+    validate: 'nonempty',
+});
+
+if (!result.ok) {
+    throw new Error(result.error);
+}
+console.log(result.stdout);
+```
+
+未提供 `addDirs` 時，`dispatchAntigravity()` 會自動把實際 `cwd` 加入 agy 工作區。需要更多目錄時明確傳入 `addDirs`；若傳入 `[]`，則不公開任何目錄——那等於被派對象什麼都讀不到，見「權限」一節。
+
+## CLI 版本下限：派工須 agy ≥ 1.1.25
+
+下限訂在 1.1.25 有三個理由，前兩個是**只會在非互動派工情境出現**的卡死（會讓子程序永不結束，只能等 `timeoutMs` 到期被殺）：
+
+- 1.1.24：headless 呼叫在 stdout／stderr 被導管接走時，離開階段會卡住（未對保留的串流設 `FD_CLOEXEC`，子程序抓著呼叫端的 pipe 不放）。`dispatchAntigravity()` 正是以 pipe 收 stdout／stderr。
+- 1.1.23：`models`、`agents` 這類子命令在繼承到未關閉的 stdin pipe 時會卡住而不執行。
+- 1.1.25：Gemini 3.8 Flash 才進入型錄；舊版沒有本技能的預設模型。
+
+因此本技能之型錄查核與派工都要求 agy 1.1.25 以上；版本較舊時先 `agy update`，不要把逾時當成模型或提示詞的問題來調。
+
+## 模型與 effort 規則
+
+`agy models` 會輸出 `<slug> <顯示名稱>`。必須傳入第一欄 slug。2026-10-18 於 agy 1.4.2 之型錄（共 13 項，完整清單見 references）：
+
+```text
+gemini-4-argon-medium    Gemini 4 Argon (Medium)
+gemini-4-argon-high      Gemini 4 Argon (High)
+gemini-4-argon-low       Gemini 4 Argon (Low)
+gemini-3.8-flash-high    Gemini 3.8 Flash (High)
+gemini-3.8-flash-medium  Gemini 3.8 Flash (Medium)
+gemini-3.8-flash-low     Gemini 3.8 Flash (Low)
+claude-opus-5-5-*、claude-sonnet-5-5-*（各 low／medium／high）、gpt-oss-120b-medium
+```
+
+3.7 Flash、3.6 Flash、3.1 Pro 與 Claude 4.6 系已全數下架（套件記錄 `gemini-3.6-flash-low`、`gemini-3.1-pro` 於 agy 1.4.0 回 `not recognized as a known model`）。
+
+Antigravity 也接受 `--effort`（各模型實際可用值以「必要預設值」一節之 `/effort` 實查為準）。若使用轉接器的 `effort` 選項，應搭配相容的基礎模型 slug。帶有等級的 slug 若再搭配不一致的 effort，agy 會拒絕執行。本技能預設固定使用 `gemini-3.8-flash-high`，並省略 `effort`。
+
+## 提示詞傳輸
+
+與另外三個轉接器不同，agy 要求提示詞作為 `--print` 的值，單次任務不會從 stdin 讀取提示詞。因此 `dispatchAntigravity()` 會將提示詞限制為 30,000 個字元，以保留 Windows 命令列長度的安全空間。
+
+輸入更長時，應先把內容寫入允許存取目錄內的檔案，再派送一段引用該路徑的短提示詞。
+
+## 逾時與等待：正式派工一律 4 小時，以 detached 行程執行
+
+**轉接器預設 300000（5 分鐘）遠遠不夠**：審計要把模組讀完、複審要逐格核對、寫測試還得把測試跑起來，而 agy 光是啟動就常吃掉數秒到二十幾秒，單次派工超過 1 小時已是常態。被逾時砍掉時 token 早就燒完卻拿不到任何結果——**逾時砍掉的不是等待時間，是整批已經付過錢的工作**，重派還要再付一次。
+
+**正式派工一律 `timeoutMs: 14_400_000`（4 小時）。逾時是上限不是固定等待**——提早做完就提早回，給大不吃虧；給小才會兩頭空。適用於所有正式派工：審計、複審、調查、寫測試、跑測試、多檔重構、產長報告，以及任何要求逐項核對者。**唯一例外是能力探測與單問一句**：維持 1–3 分鐘、前景執行——探測本來就要快失敗。
+
+### 為何不能在工具呼叫裡直接等
+
+Claude Code 對每一種工具呼叫都有時限，到期即終止整個行程，`timeoutMs` 給多大都沒用：
+
+| 呼叫方式 | 預設 | 上限 |
+|---|---|---|
+| Bash 前景 | 120000（2 分鐘） | 600000（10 分鐘） |
+| Bash `run_in_background: true` | 1800000（30 分鐘） | 7200000（2 小時） |
+| `Monitor` | 300000（5 分鐘） | 1800000（30 分鐘） |
+
+2026-10-03 實測：`run_in_background` 設 `timeout: 60000` 的指令於 60 秒整被終止、沒給 `timeout` 的指令於 30 分鐘整被終止（通知皆為 stopped after reaching its background time limit）；同日以 `nohup … &` 自前景 Bash 啟動的 node 行程，在該次工具呼叫結束後照常跑完並寫出結果檔。所以 4 小時派工必須**脫離工具呼叫**：派工腳本以 detached 行程執行、過程與結果落檔，等待則用背景指令分段進行。
+
+### 執行步驟（正式派工一律照做）
+
+**步驟 1：寫派工腳本。** 提示詞先寫進 `./tmp/<案名>/prompt.md`，再寫 `./tmp/<案名>/dispatch.mjs`：
+
+```javascript
+// ./tmp/<案名>/dispatch.mjs —— 由步驟 2 以 detached 啟動；過程與結果一律落檔
+import fs from 'fs';
+import path from 'path';
+import { createRequire } from 'module';
+
+const dir = path.resolve('./tmp/<案名>');
+const out = (name) => path.join(dir, name);
+const skillsRoot = path.resolve('<本技能目錄之絕對路徑>', '..');
+const wda = createRequire(import.meta.url)(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'));
+
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(out('node.pid'), String(process.pid));   //步驟 3 判斷存活、中止時樹狀終止都靠它
+let result;
+try {
+    result = await wda.dispatchAntigravity(fs.readFileSync(out('prompt.md'), 'utf8'), {
+        model: 'gemini-3.8-flash-high',
+        cwd: '<被派對象工作目錄之絕對路徑>',   //其他要讀的目錄以 addDirs 給（見〈權限〉）
+        timeoutMs: 14_400_000,   //printTimeout 由此自動推導為 14430 秒（比外層晚 30 秒、只作後備），不要另給
+        validate: 'nonempty',
+        onStdout: (chunk) => fs.appendFileSync(out('stdout.log'), chunk),   //失敗結果只留 500 字元，過程靠這份
+    });
+}
+catch (err) {
+    result = { ok: false, error: `dispatch.mjs 例外：${err?.stack || err}` };
+}
+fs.writeFileSync(out('result.json'), JSON.stringify(result, null, 2));
+```
+
+提示詞以 `--print` 傳入，上限 30,000 字元（見〈提示詞傳輸〉）；更長的內容寫成檔案，`prompt.md` 只放引用該路徑的短提示詞。走遞補鏈或工作流時，同樣用這支腳本包住整個呼叫（把 `dispatchAntigravity` 換成 `dispatchAiFallback` 或工作流函數），步驟 2、3 不變。
+
+**步驟 2：以 detached 啟動。** 用前景 Bash 執行，立即返回；**不要**用 `run_in_background` 跑派工本身，那會讓它受上表時限約束：
+
+```bash
+nohup node ./tmp/<案名>/dispatch.mjs > ./tmp/<案名>/run.log 2>&1 &
+sleep 3; cat ./tmp/<案名>/node.pid   # 印得出 PID 才算啟動成功；印不出來先讀 run.log
+```
+
+**步驟 3：分段等待。** 用背景 Bash，`timeout` 必須明給 `7200000`（不給就是 30 分鐘）；迴圈在第 6900 秒自行結束，趕在上限之前回報：
+
+```text
+Bash({ run_in_background: true, timeout: 7200000,
+  description: '等待派工 <案名>（本段至多 115 分鐘）',
+  command: 'd=./tmp/<案名>; end=$(( $(date +%s) + 6900 )); while [ ! -f "$d/result.json" ] && node -e "process.kill(+process.argv[1],0)" "$(cat "$d/node.pid")" 2>/dev/null && [ "$(date +%s)" -lt "$end" ]; do sleep 30; done; if [ -f "$d/result.json" ]; then echo "DONE $(date +%H:%M:%S)"; elif [ "$(date +%s)" -ge "$end" ]; then echo "STILL-RUNNING $(date +%H:%M:%S)"; else echo "CRASHED $(date +%H:%M:%S)"; tail -20 "$d/run.log"; fi' })
+```
+
+通知回來後依輸出的第一個字處置：
+
+| 輸出 | 意義 | 處置 |
+|---|---|---|
+| `DONE` | `result.json` 已寫出 | 讀它，**再驗產物**——exit 0 與非空輸出都不是成功判準，agy 被權限擋下也是 exit 0（見〈權限〉與下節） |
+| `STILL-RUNNING` | 本段到期，派工仍在跑 | 原指令重掛下一段。累計超過派工應有的最長總時長（單次嘗試為 4 小時；遞補鏈與工作流依下節公式）仍未結束，才視為異常回報 |
+| `CRASHED` | 行程已結束卻沒有 `result.json`（被外力終止、機器休眠、node 崩潰） | 讀 `run.log` 與 `stdout.log` 找原因；**找到原因前不要重派** |
+
+**session 中斷或重開後**：派工照跑，不受影響（2026-10-03 實測：由 `claude -p` 的 Bash 工具以 `nohup` 啟動的行程，在該 `claude` 行程結束後照常跑完）；只有機器重開會中斷它。接手時先看 `./tmp/<案名>/`：有 `result.json` → 直接驗收；沒有、但 `node.pid` 的行程仍存活 → 重掛步驟 3；兩者皆無才考慮重派。**不要因為換了 session 就重派**——那正是浪費 token 的主因。
+
+**中止**：Windows 用 `cmd //c "taskkill /F /T /PID <node.pid 之值>"`（`/T` 連同 agy 子行程一起結束）；其他平台以 `kill` 終止該 PID 及其子行程。中止前先徵詢使用者。
+
+### 逾時分層：五層都要放行
+
+**任一層先到就被截斷**（套件 README 之「Timeout 總覽」明訂②④⑤的數值須嚴格遞增；③不在這條階梯內，恆比②晚 30 秒）：
+
+| 層 | 誰在殺 | 預設 | 正式派工怎麼設 |
+|---|---|---|---|
+| ①呼叫端（Claude Code 的工具呼叫時限） | harness 終止整個行程 | 見上節表格，最長 2 小時 | 派工照〈執行步驟〉detached 執行，此層即不作用；只有等待受它約束，所以等待要分段 |
+| ②轉接器 `timeoutMs`（單次嘗試） | 逾時終止程序樹 | 300000 | `14_400_000` |
+| ③agy 自身 `--print-timeout` | agy 自己結束，以 exit 0 交回部分輸出 | `0s`（等到完成；agy 1.4.0 與 1.4.2 之 `--help` 皆載明） | 由 `timeoutMs` 推導為 `timeoutMs + 30 秒`（給 4 小時即 14430 秒），比②晚到、只在外層強殺失效時兜底；**不要另給比 `timeoutMs` 小的 `printTimeout`**——那會讓它先到，把慢回合變成 `ok: true` 的截斷輸出 |
+| ④單一名額之遞補鏈 `budgetMs` | 預算用盡即停止遞補 | `null`（不限） | 要嘛不給，要嘛 ≥ `鏈組數 K × 14_400_000`；給小了會把第②③層一起壓下去 |
+| ⑤工作流總時長 | 無獨立參數，由結構推導 | 無（刻意） | `runRolePipeline` 最壞 ≈ M×K×`timeoutMs`。K=4、M=3 配 4 小時就是 **48 小時**——先算再決定要不要拆階段 |
+
+**第③層刻意比第②層晚 30 秒到期（1.0.50 起）**：外層先砍，結果是 `TIMEOUT` 失敗（`errorType: 'timeout'`），遞補鏈才能整組跳過、記冷卻；agy 自己的計時只在外層強殺失效時兜底。推導值以 `wsemi` 計時器上限 2147483647 毫秒封頂（agy 拒收超出 Go duration 範圍之值），而且 `budgetMs` 把 `timeoutMs` 壓得再小，推導出的 `printTimeout` 也一樣晚 30 秒，不會反轉。**1.0.49 以前恰好相反**（推導為 `max(30, timeoutMs 秒數 − 30)`，內層先到）：自然耗時超過那個截止點的回合一律被當成 `ok: true` 的截斷輸出，連超過 `timeoutMs` 者亦然——舊筆記、舊腳本裡的「14370 秒」「內層先到、30 秒下限」都已不成立。
+
+**agy 的內層逾時仍是「假成功」，只是預設不再先到**（2026-09-10 實測，套件 2026-10-16 以 agy 1.4.0 重測同型）：只有你明給比 `timeoutMs` 小的 `printTimeout` 時才會發生——agy 回 **exit 0、`ok: true`**，stdout 為已產出的部分（可能為空），stderr 只有 `[agy] print timeout after <t> with turn in progress; returning partial output`，**`errorType` 是空的**，`nonempty` 也擋不住非空的部分輸出。反過來說，**1.0.50 起慢到 `timeoutMs` 的回合一律回 `TIMEOUT` 失敗，而失敗結果的 `stdout` 只留 500 字元**——過程要保得住，只能靠 `onStdout` 落檔（〈執行步驟〉的範本已掛）。
+
+**最常見的假象**：`timeoutMs` 明明給了 4 小時，派工卻在 2 分鐘、10 分鐘、30 分鐘或 2 小時整斷掉——全是第①層砍的：派工掛在前景，或掛在 `run_in_background` 上（沒給 `timeout` 是 30 分鐘，給滿也只有 2 小時）。**只改 `timeoutMs` 沒用：派工一定要照〈執行步驟〉detached 執行（第①層），第③層則交給轉接器由 `timeoutMs` 推導、不要另給小值**。
+
+**單次派工還會乘上去的**：`timeoutMs` 是**每次嘗試**的上限，不是總時長；自訂 `validate` 的等待也算在同一次嘗試內（`src/runExecCli.mjs`）。`maxRetries: N` 時總時長約 `timeoutMs × (1+N)`，再加重試間隔（`retryDelayMs` 預設 5000，實際間隔為 `retryDelayMs × 已嘗試次數`、單次上限 15000）；**`TIMEOUT` 會被重試，每次耗滿 `timeoutMs`，且不受 `budgetMs` 約束**。不重試、立即中止的只有確定性失敗：`ENOENT`（命令不存在、不存在的 `.cmd`／`.bat`、npm shim 的入口檔缺失）、exit code 2（參數錯誤）、`cwd` 不存在，以及子進程根本起不來的同步錯誤（命令列過長、權限不足、非有效執行檔、參數含空字元；這類結果 `code` 為 `null`、`errorType` 為 `spawn`）。**`printTimeout` 於呼叫前依 `timeoutMs` 推導一次，重試沿用同一組旗標，故不會累加、也不會逐次重算**。
+
+**走遞補鏈或工作流時，三個值必須成套設，缺一即壞**（以下皆為 `w-dispatch-ai/src/dispatchAiFallback.mjs` 之實際行為）：
+
+```javascript
+{ timeoutMs: 14_400_000, minAttemptMs: 14_400_000, budgetMs: K * 14_400_000 }  // K＝遞補鏈之組數
+```
+
+| 選項 | 預設 | 實際行為與陷阱 |
+|---|---|---|
+| `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**（agy 的 `printTimeout` 依壓縮後的值加 30 秒推導，仍晚於外層）；給得比 `timeoutMs` 小，4 小時等於白設 |
+| `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
+| `cooldownMs` | `0`（關閉） | 只對**有明給 `id`** 的條目記冷卻；內建觸發只有 HTTP 429 與逾時，而 **429 僅 REST 類偵測得到**；CLI 類的限流埋在輸出文字裡，內建規則抓不到 |
+| `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /quota/i.test(r.stderr \|\| '')`。agy 額度用盡時的實際字樣與離開碼套件未驗證，先觀察到再寫 |
+| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
+
+遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰。
+
+**`budgetFor()` 有陷阱，不要照抄**：它**只累加條目自己的 `timeoutMs`**，讀不到你寫在 opt／`defaults` 的那一個；而套件內建的 providers 條目**刻意不帶 `timeoutMs`**，所以 `budgetFor(內建條目)` 恆為「條目數 × 300000」（1.0.53 內建 21 條就是 105 分鐘）——比你的 4 小時還小，反而把它壓下去。要用它就得先把 `timeoutMs: 14_400_000` 逐條寫進每個條目，否則直接寫 `K × 14_400_000`。
+
+**工作流層的覆寫順序**（細者覆蓋粗者）：`dispatchAiWkf` 的 `defaults` → 各工作流 `callOpt` → 階段／名額規格 → provider 條目。把 4 小時寫在 `defaults`、而某條目自帶較小的 `timeoutMs` 時，**條目會贏**。另外 1.0.49 起呼叫層的 `validate`（含寫在 `defaults` 者）會與工作流的 `parse`／`check` **取交集**，兩者皆過才算過——此前被靜默忽略，舊設定升版後可能開始擋下回覆而換家。
+
+**與套件內建規劃的關係**：`w-dispatch-ai/src/providers.mjs` 檔頭的 timeout 規劃以「單一 AI 工作約 15 分鐘」估出 `timeoutMs: 1_200_000`，那是一般複雜任務的估法；**正式派工以本節的 4 小時為準**，不要照抄 20 分鐘把它調回去。套件內部四層（②～⑤）的權威整合說明在套件 README 的「Timeout 總覽」一節；第①層是呼叫端的事，README 不涵蓋。
+
+**被砍時要保住已完成的部分**：失敗結果的 `stdout` 只會留 500 字元（`wsemi/src/execCli.mjs`），所以正式派工一律掛 `onStdout` 邊跑邊落檔——〈執行步驟〉的範本已寫入 `stdout.log`，不要拿掉，否則被砍就真的什麼都不剩。
+
+**逾時與假成功是兩回事**：外層逾時被殺時 `errorType` 為 `timeout`；而**權限不足、提示詞層被禁止寫檔、明給小 `printTimeout` 時的內層逾時三者，agy 都是 exit 0，轉接器回 `ok: true`、不產生 `errorType`**——除非掛了 `validate`：權限不足時 stdout 為空，`nonempty` 會把它轉成 `validation` 失敗。看到「沒有結果但也沒有錯誤」先分清是哪一種，別互相誤診。
+
+## 權限：先定能力下限，再往下收斂
+
+派工前先回答一個問題：**這個任務少了哪一項能力就做不出來？** 那是下限。安全考量只能在下限之上收斂範圍（工作區目錄），不能低於下限——低於下限不是比較安全，是拿不到結果，而且會以 exit 0 回報（見下一節實測）。
+
+| 任務類型 | 能力下限 | agy 的給法 |
+|---|---|---|
+| 純生成、翻譯、改寫（素材全在提示詞內） | 無 | `addDirs: []`，不公開任何目錄 |
+| 探索、調研、讀碼回答 | 讀檔 | `addDirs` 須含全部待查目錄；純讀取任務**不需**跳過權限（2026-09-08 實測通過） |
+| 審計、複審、調查 | 讀檔 ＋ 寫檔（報告落檔）＋ 唯讀查證指令 | `skipPermissions: true`；`addDirs` 同時含被審目錄與產出目錄 |
+| 寫測試、驗證猜想、重現問題 | 讀檔 ＋ 寫測試檔 ＋ 執行測試 | 同上；agy 建檔與跑指令走的都是需要 `command` 權限的工具 |
+| 修改、實作 | 讀 ＋ 寫 ＋ 執行 | 轉接器預設的 `skipPermissions: true` |
+
+轉接器的 `skipPermissions` 預設為 `true`（加入 `--dangerously-skip-permissions`），只有在輸入與工作區可信時才適用。要收斂時 agy 有三個維度：**①工作區目錄**（`addDirs`，最實際——把目標複製或 `git worktree` 出一份到獨立目錄，只把該目錄加進工作區）、**②執行模式**（`extraArgs` 傳 `--mode plan` 為唯讀規劃檔位、`--mode accept-edits` 為可寫執行）、**③終端限制**（`--sandbox`）。後兩者本技能尚未實測，用前先照「派工前的能力探測」驗一次。
+
+- **審計必須自己讀檔**。把檔案內容貼進提示詞不算獨立審計：被派對象只看得到你挑給它的片段，找不出你漏掉的地方，而那正是複審的唯一價值。
+- **驗證猜想必須能寫檔並執行**。不能寫測試就只剩推論；「我認為可能是 X」沒有可重現的執行結果，不是結論。
+- **`addDirs: []` 等於它什麼都讀不到**，探索與審計類任務必然交白卷。
+- **沿用 `w-dispatch-ai/src/providers.mjs` 的條目要先看鎖**：表內四條 agy 條目（`agy:gemini-3.8-flash-high`、`agy:gemini-4-argon-high`、`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`）一律帶 `skipPermissions: false` 與 `addDirs: ['.']`，那是給純文字生成與遞補用的唯讀檔位。條目註解記載的 2026-08-15 canary 實測與本節結論一致：無此鎖時要求建檔會真的落地，`false` 之下寫入被擋、唯讀工具照常，而且**被擋時 agy 回 exit 0、stdout 為空**（2026-10-18 於 1.4.2 重測仍是如此，見下表）。要寫入就得把它覆寫為 `true`。另外這四條在全取鏈中**相鄰**，agy 整體卡頓時會連續逾時 4 次（約 4×`timeoutMs`）才輪到下一家，套件建議全取時搭配 `budgetMs` 與 `cooldownMs`（README 行為變更紀錄第 31 條）。
+
+### 第四層權限：提示詞前綴（走工作流時預設禁止寫檔）
+
+權限共有四層，前三層在你手上、第四層在套件手上：①CLI 旗標（`--dangerously-skip-permissions`／`--mode`）②轉接器選項（`skipPermissions`／`addDirs`）③`providers.mjs` 條目自帶的鎖 ④**提示詞前綴**。
+
+`w-dispatch-ai` 的工作流層（`dispatchAiWkf` 之 `callAi`／`runFanout`／`runRolePipeline`／`runFanoutPipeline`）**預設會在提示詞前掛上 `NO_SIDE_EFFECT`**，其內文明寫「禁止建立、修改或刪除任何檔案…任何寫入磁碟的動作都不會被採用」（唯讀查閱不在此限）。
+
+**後果**：`skipPermissions: true` 給了、工作區也開了，模型仍會照提示詞不寫檔——exit 0、`ok: true`、報告與測試檔一個都沒有。**症狀與權限被自動拒絕完全同型**（agy 兩者都是 exit 0），差別在輸出：權限被拒時 stdout 為空、stderr 帶 `jetski: no output produced — … auto-denied` 那段訊息（agy 1.1.27 時這段訊息印在 stdout），提示詞層被擋則是模型正常回話但沒建檔。
+
+**要落檔就必須顯式關閉**：傳 `promptPrefix: ''`。注意**只有空字串才算關閉**，傳 `null`／`undefined`／省略都會回退成掛上。直接呼叫 `dispatchAntigravity()` 不受影響——該前綴只在工作流層自動掛。
+
+### 權限不足是 exit 0 的假成功，不是錯誤
+
+2026-10-18 以 `w-dispatch-ai` 1.0.53 於 agy 1.4.2 實測：同一道「讀 `probe.txt` 第一行 ＋ 建立輸出檔」的任務，模型 `gemini-3.8-flash-high`，工作區以 `addDirs` 開放，掛 `validate: 'nonempty'`：
+
+| `skipPermissions` | 離開碼 | stdout | stderr | 轉接器結果 | 檔案真的建立？ |
+|---|---:|---|---|---|---|
+| `false` | **0** | 空 | `jetski: no output produced — a tool required the "write_file" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. write_file(<target>)). Alternatively, re-run with --dangerously-skip-permissions …` | `ok: false`、`errorType: 'validation'`——是 `nonempty` 擋下的，不是 agy 報錯 | **否** |
+| `true` | 0 | `READ=探針第一行:… WRITE=DONE` | 空 | `ok: true`，16.6 秒 | 是 |
+
+- **離開碼不是成功判準**。第一列 agy 本身回 exit 0；沒掛 `validate` 時轉接器照樣回 `ok: true`、stdout 為空。
+- **非空輸出也不是成功判準**。2026-09-08 於 agy 1.1.27 測同一型任務時，同一段 jetski 訊息印在 **stdout**（當時權限名為 `command`），`nonempty` 直接放行；1.4.0（套件實測）與 1.4.2（上表）改印到 stderr，`nonempty` 才擋得下。CLI 一改版就可能再變，**最終一律以產物是否落地驗收**。
+- 無介面模式沒有人可以回答權限詢問，未預先核准者一律**自動拒絕**，不是等待、不是報錯。只讀不寫的任務不受影響（1.1.27 實測只讀第一行可正常回 `READ=…`）。
+- 訊息本身指出另一個檔位：在 agy 設定檔的 `permissions.allow` 加規則（如 `write_file(<target>)`）。用它之前先確認該設定檔路徑與規則語法（以最小探測驗證），否則就用 `skipPermissions: true` 搭配收斂過的 `addDirs`。
+
+### 派工前的能力探測
+
+正式派工前，以**與正式派工相同的權限與工作區選項**跑一次最小探測：
+
+```javascript
+const probe = await wda.dispatchAntigravity(
+    '讀取工作區內 <目標檔絕對路徑> 並原文輸出第 1 行；'
+    + '再於 <產出目錄絕對路徑> 建立 probe-out.txt，內容為 OK；'
+    + '最後只回一行：READ=<第1行> WRITE=<DONE 或 FAILED>',
+    //探測維持短逾時、前景執行（壓在前景預設 120000 之內）；正式派工改走〈逾時與等待〉
+    //100_000 時外層 100 秒先到（printTimeout 推導為 130 秒）；agy 啟動就要數秒到二十幾秒，探測任務要夠小
+    { model: 'gemini-3.8-flash-low', addDirs, cwd, timeoutMs: 100_000, validate: 'nonempty' },
+);
+// 只看 stdout 不算數：要確認 probe-out.txt 真的落地
+```
+
+探測可用低階模型，它驗的是權限不是推理；正式派工再換回預設模型。探測失敗時先修權限與 `addDirs`，不要改提示詞重試。
+
+## 結構化輸出
+
+print 模式的輸出格式以 `extraArgs` 指定：
+
+```javascript
+await wda.dispatchAntigravity(prompt, {
+    model: 'gemini-3.8-flash-high',
+    extraArgs: ['--output-format', 'json'],
+    timeoutMs: 14_400_000,
+    validate: 'json',
+});
+```
+
+使用 `stream-json` 時，應將 stdout 當成 JSONL 解析，且不可使用單一文件的 JSON 驗證器。`--json-schema` 可接受行內 schema 字串或 schema 檔案路徑。
+
+## 轉接器契約（w-dispatch-ai 1.0.53）
+
+| 選項 | 轉接器預設值 | 行為 |
+|---|---:|---|
+| `exe` | `agy` | 執行檔名稱或絕對路徑 |
+| `model` | 省略 | 展開為 `--model <slug>` |
+| `effort` | 省略 | 展開為 `--effort <level>` |
+| `skipPermissions` | `true` | 加入 `--dangerously-skip-permissions` |
+| `printTimeout` | `timeoutMs` 秒數 + 30 | agy 內層逾時；預設推導值恆晚於外層，只作後備。明給小於 `timeoutMs` 的值會讓慢回合變成 `ok: true` 的截斷輸出 |
+| `addDirs` | 實際 `cwd` | 重複展開為 `--add-dir`；明確傳入 `[]` 可停用自動加入 |
+| `extraArgs` | `[]` | 插入在 `--print <prompt>` 之前 |
+| `timeoutMs` | `300000` | 外層程序樹逾時 |
+| `cwd` | 目前目錄 | 子程序工作目錄。**它本身不會讓 agy 看得到檔案**——agy 以自身 scratch 目錄為工作區，可視範圍只由 `--add-dir` 決定；未給 `addDirs` 時轉接器自動把有效 `cwd` 加進去，就是為了補這個落差 |
+| `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`；以淺層副本轉傳，物件不可讀（拋錯之 getter 等）時於啟動前回 `errorType: 'params'` |
+| `validate` | 省略 | 由套件自身判定（`src/runExecCli.mjs`；1.0.49 起不交 `execCli`）：規則字串或自訂函數，函數可回傳 Promise，等待時間算在同一次嘗試的 `timeoutMs` 內；拋錯、reject、逾時皆為 `OUTPUT_VALIDATION_FAILED`（`errorType: 'validation'`） |
+| `maxRetries`、`retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
+
+回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`；必須檢查 `ok`。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`；`durationMs` 含驗證時間。轉接器會捕捉提示詞過長與 spawn 失敗，維持不 reject 的契約。
+
+請使用 UMD 預設匯出：`import wda from 'w-dispatch-ai'`。
+
+### 表以外的細節一律查原始碼（當前安裝版）
+
+上表只列常用鍵。**細部設定、權限與工作區、實際可用的模型、錯誤分類等只要不確定，就去讀當前安裝版的原始碼，不要憑記憶或猜測**——技能寫的是查核當日的狀態，套件與 CLI 都會滾動。
+
+原始碼就在**技能根的 `node_modules/w-dispatch-ai/src/`**（見「套件裝在哪」一節）。**不要用 `npm ls` 或 `require.resolve` 查**——那兩者從當前專案解析，可能指到另一份。
+
+| 想知道 | 讀哪個檔 |
+|---|---|
+| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchAntigravity.mjs`（旗標順序為 `--dangerously-skip-permissions` → `--print-timeout` → `--model` → `--effort` → 各 `--add-dir` → `extraArgs` → `--print <prompt>`；自用鍵八個：`exe`／`model`／`effort`／`skipPermissions`／`printTimeout`／`addDirs`／`extraArgs`／`input`，其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`（`validate` 除外，由該檔自行判定）；提示詞上限 30000 字元、`printTimeout` 推導公式（`timeoutMs` 秒數 + 30，封頂於計時器上限）亦在此） |
+| 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
+| 實際可用且已被實測過的模型條目（含權限鎖、`addDirs`、實測耗時） | `src/providers.mjs` |
+| `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。agy 被權限擋下（stdout 空）只靠 `nonempty` 擋得住，這個字更不能打錯 |
+| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`，含命令列過長、權限不足、非有效執行檔；前置檢查擋下的提示詞過長則為 `params`） |
+| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000；其註解已更正：agy 1.4.0 之 `print-timeout` 預設為 `0s`，此值不再以「對齊 5m0s」為依據）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭 |
+| 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
+| 多供應商遞補、金鑰輪替、條目 id 命名規則 | `src/dispatchAiFallback.mjs` 檔頭 |
+
+**檔頭註解是實測紀錄，不是設計說明**：`src/dispatchAntigravity.mjs` 檔頭記著一組最容易誤判的實測（2026-08-13，以隨機 token 驗證）——**只給 `cwd` 而沒有 `--add-dir` 時，弱模型直接回「找不到檔案」、強模型自行摸索（116 秒，對照帶 `--add-dir` 的 6 秒），而且兩者都是 `ok: true`**；這種情況極易被誤判成「模型能力不足」，實際是可視範圍沒開。同檔另記載 `--print` 為帶值旗標（塞 stdin 會進互動模式卡住）、model 與 effort 的衝突規則（帶檔位 slug 與 `--effort` **檔位不一致才拒絕**，一致則放行）、未給 model 時 agy 預設為 Gemini 4 Argon (Medium)、雙逾時改為外層先到的理由，以及權限被擋時 stderr 的訊息。與本技能所述不一致時，以原始碼與其實測註記為準，並回頭修技能。
+
+## 執行期驗證
+
+```bash
+agy --version     # 須 >= 1.1.25
+agy --help
+agy models        # 伺服器即時型錄, 唯一可信的 slug 來源
+MSYS_NO_PATHCONV=1 agy -p /effort --model <基礎slug> --output-format json   # 該模型可用之 effort; 前綴只在 Git Bash 需要
+agy changelog     # 確認新版是否影響 headless 派工
+```
+
+截至 2026-10-18 審查時，本機 agy 1.4.2 之即時 `agy models` 仍列出 `gemini-3.8-flash-high`（另有 Gemini 4 Argon 三檔），並已實跑驗證。無介面模式遇到不存在的指定模型時以 exit 1 結束（`errorType: 'exec'`），不會靜默退回其他模型。
+
+## 派什麼、怎麼驗收：審計／複審／規劃審核類派工先審表，再審方案
+
+本技能只管「怎麼呼叫 agy」與「給到任務所需的能力」；本節是把設計複審、架構審查、規劃審核派給任何對象時「派什麼、怎麼驗收」（四個 dispatch-* 技能本節內容相同，改一處要四處同步）。所稱「表」是輸入空間表：先列軸，每軸成員以 grep 自系統取得，軸與軸做笛卡兒積，每格填「現況／應然／處置」，建法見 skill[role-coder-for-validate]〈Step 1〉。
+
+- **被派對象必須能自行讀檔**：不能讀檔就不是獨立審查，先解決讀檔（見〈權限：先定能力下限，再往下收斂〉），不得改成把檔案內容貼進提示詞充數。派長任務前先以「讀某檔並原文引用第 N 行」做最小探測；`validate` 須要求回覆引用指定內容，不只驗非空。
+- **複審的價值在找出我漏掉的格**，不在評價我已列的方案——方案再好也補不了輸入空間的漏格。提示詞必依序要求：①挑戰表的完整性（缺軸、缺格、格內現況不屬實者，附 `file:line`）；②審對標（同類成熟產品之作法與本系統之差異）與對稱性（同型元素之規則是否一致）；③最後才審方案與步驟。
+- **表還沒建好就先建表，不派工**：沒有表就派人審方案，等於把漏格帶進實作。
+- **收回後逐格核對原始碼**（`file:line`）才採納，不整批接受，也不整批駁回；採納／駁回逐條附理由。
+- **自審的表一定有洞**：曾有一張自認完整的互動矩陣，交外部複審後仍被找出 30 格缺口，且全部屬實。所以派工不是「請你確認我對」，是「請你找我漏的格」；自己檢查過也不能跳過複審。
+
+## 安裝檢查
+
+```bash
+npm install w-dispatch-ai@latest
+
+# Windows PowerShell
+irm https://antigravity.google/cli/install.ps1 | iex
+
+# macOS / Linux
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+
+agy --version
+agy update       # 版本低於 1.1.25 時升級
+```
+
+無人值守／無介面執行前，須先以互動方式完成 Google 認證。
+
+2026-10-18 查核：技能根實裝 `w-dispatch-ai` **1.0.53**，本機 agy 為 **1.4.2**。
+
+| 項目 | 結果 |
+|---|---|
+| 必要預設值 | `gemini-3.8-flash-high` 維持不變；以 1.0.53 實跑「讀檔＋寫檔」通過（16.6 秒、中文原樣讀回、檔案落地） |
+| **`printTimeout` 推導反轉（1.0.50）** | 由 `max(30, timeoutMs 秒數 − 30)` 改為 `timeoutMs 秒數 + 30`：外層先逾時，慢回合由 `ok: true` 的截斷輸出改為 `TIMEOUT` 失敗。本技能原有的「14370 秒」「30 秒下限」「內層先到」等說法已全數改寫 |
+| `--print-timeout` 預設 | agy 1.4.2 `--help` 載明為 `0s`（等到完成；套件記錄 1.4.0 亦同），舊稱 `5m0s` 不符 |
+| `--effort` 值域 | `--help` 擴為 `low\|medium\|high\|xhigh\|max`；以 `/effort` 實查 3.8 Flash、Gemini 4 Argon、Claude 5.5 系之 available 皆為 `low, medium, high`，`high` 仍為最深 |
+| `agy models` 型錄 | 13 項：Gemini 4 Argon 三檔、3.8 Flash 三檔、Claude Opus／Sonnet 5.5 各三檔、GPT-OSS 120B；3.7／3.6 Flash、3.1 Pro、Claude 4.6 系已下架 |
+| 未給 `model` 時 | agy 預設 Gemini 4 Argon (Medium)，耗用其獨立之 7 天額度（套件 2026-10-16 實測） |
+| 權限被擋 | exit 0、stdout 空、jetski 訊息改在 stderr、權限名為 `write_file`；`nonempty` 擋得下（2026-10-18 實測） |
+| `providers.mjs` | agy 條目由 1 條增為 4 條（新增 `agy:gemini-4-argon-high`、`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`），皆帶 `skipPermissions: false` 與 `addDirs: ['.']`、不帶 `effort`；全表由 17 條增為 21 條 |
+| `validate` 與重試 | 1.0.49 起由套件自行判定（可回傳 Promise、與子進程共用 `timeoutMs`），規則名打錯仍被靜默忽略；子進程未能啟動一律 `spawn` 且不重試、遞補鏈整組跳過（1.0.48） |
+| 控制回調 | `coolDetect`／`shouldStop` 為同步契約（回傳 Promise 視同 `false`）；`coolDetect` 宜先排除 `validation`；agy 額度用盡之字樣套件未驗證 |
+
+2026-09-30 查核：npm 最新版 `w-dispatch-ai` 為 **1.0.40**（技能根實裝 1.0.39），本機 agy 為 **1.2.13**。
+
+| 項目 | 結果 |
+|---|---|
+| 必要預設值 | `gemini-3.8-flash-high` 維持不變，當日於 1.2.13 實跑通過 |
+| **`--effort` 值域擴充但不影響結論** | `--help` 由 `low|medium|high` 擴為 `low|medium|high|max`；但實測 3.8 Flash 之 available 仍只有 `low, medium, high`，**無任何 Gemini 接受 `max`**，故 `high` 仍為最深（三種傳法之錯誤訊息見「必要預設值」一節） |
+| `agy models` 型錄 | 3.8 Flash 三檔 slug 仍在 |
+| `providers.mjs` | `agy:gemini-3.8-flash-high` 條目不變（仍帶 `skipPermissions: false` 與 `addDirs: ['.']`），**且刻意不帶 `effort`**——套件同版把其他三家條目都補上 `high` 強度，agy 則因 slug 已內嵌檔位而不另帶（與本技能一致）；全表由 15 條增為 17 條 |
+
+以下為 2026-09-23 於 agy 1.2.6 之查核（旗標表與型錄清單未於 1.2.13 逐項重驗，僅重查 `--effort` 與 3.8 slug）。
+
+| 項目 | 結果 |
+|---|---|
+| `dispatchAntigravity()` 固定旗標與選項 | 與 1.0.17／1.0.22 相同（`--dangerously-skip-permissions`、`--print-timeout`、`--model`、`--effort`、`--add-dir`、`--print`），自用鍵仍為八個，**呼叫方式不變** |
+| 必要預設值 | `gemini-3.8-flash-high` 維持不變，當日於 1.2.6 實跑通過；**當時 `--effort` 值域只有 `low|medium|high`**（1.2.13 已擴為含 `max`，但模型仍不支援，結論不變——見上表） |
+| `agy models` 型錄 | 與 2026-09-03 查得之十四項**逐行相同**，3.8 Flash 三檔仍在 |
+| `agy --help` | 與 references 之旗標表逐行相符，另多 `--remote-control`；子指令新增 `mic-serve`／`plugin`／`remote-control`，皆與非互動派工無關 |
+| `providers.mjs` | `agy:gemini-3.8-flash-high` 條目不變（仍帶 `skipPermissions: false` 之防寫鎖與 `addDirs: ['.']`）；全表由 20 條縮為 15 條 |

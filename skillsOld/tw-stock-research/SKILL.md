@@ -1,0 +1,407 @@
+---
+name: tw-stock-research
+description: 台股盤前調研技能。從 8 個來源（MOPS、鉅亨網、財報狗、MoneyDJ、證交所/櫃買中心法人、收盤股價OHLC、期貨/外資期貨、融資融券）序列抓取近兩日重大訊息與前一交易日(T-1)市場數據，篩選會影響股價的公告/新聞，並彙整盤前報告。使用時機：(1) 需要查詢今日台股重大訊息、(2) 需要法人買賣超資料、(3) 需要個股公告/財報/訴訟/庫藏股等即時資訊、(4) 台股盤前調研任務。
+---
+
+# 台股盤前調研
+
+從 8 個來源**序列**抓取重大訊息與**前一交易日(T-1)**市場數據，篩選會影響股價的公告/新聞，產出**盤前調研報告**。新聞類來源（MOPS、鉅亨網、財報狗、MoneyDJ）的時間範圍**依其各自子技能而定（非統一近兩日）**，例如鉅亨網為近 10 天；`generate_report` 不對新聞做日期視窗過濾。所有日期標註皆使用實際交易日日期（如 `03/27`），不使用「昨日」等相對日期用語，確保週一或假日後首個交易日的報告日期準確。
+
+## 安裝指引
+
+> **[執行AI須先依照技能內說明安裝指定依賴之套件]**
+
+所需套件：`axios`、`cheerio`、`playwright`、`wsemi`、`lodash-es`
+額外需求：環境需安裝 Chrome 或 Chromium（Playwright 透過 `channel: 'chrome'` 自動偵測）
+
+執行前請先驗證套件是否可用：
+```bash
+node -e "import('axios').then(() => import('cheerio')).then(() => import('playwright')).then(() => import('wsemi')).then(() => import('lodash-es')).then(() => console.log('deps OK'))"
+```
+
+若顯示錯誤則安裝（安裝位置由執行環境決定，需確保腳本的模組解析路徑可達）：
+```bash
+npm install axios cheerio playwright wsemi lodash-es
+```
+
+## 🚦 交易日檢查（必要）
+
+執行前**必須先檢查當日是否為台股交易日**，若非交易日則跳過不執行。
+
+### 檢查方式
+
+使用 `check-tw-trading-day` 技能：
+
+```bash
+node check-tw-trading-day/scripts/check_tw_trading_day.mjs [YYYYMMDD] [outputPath]
+# TRADING_DAY=true  → 交易日，繼續執行
+# TRADING_DAY=false → 非交易日，跳過
+```
+
+> 詳見 `check-tw-trading-day` 技能。
+> ⚠️ 務必指定 `outputPath`，否則輸出檔案會寫入專案根目錄。調用方應傳入 `./w-data-news/tw-stock-research/YYYYMMDD/raw/trading_day.json`。
+> ℹ️ 盤前執行時（< 14:30），TWSE 尚無當日收盤資料，`check-tw-trading-day` 會以「平日 + TWSE 未否認」推定為交易日（`presumed: true`），確保盤前調研不被誤擋。
+
+### 非交易日處理
+
+若為非交易日，回報：
+> 今日（YYYY/MM/DD）為台股非交易日，跳過盤前調研。
+
+**常見非交易日**：
+- 週六、週日
+- 國定假日（春節、清明、端午、中秋、國慶、元旦等）
+- 颱風假、臨時停市
+
+## 📦 資料來源與抓取技能
+
+本技能透過調用 8 個專職抓取技能取得資料：
+
+| 來源 | 抓取技能 | 資料類型 | 時間範圍 |
+|------|----------|----------|----------|
+| MOPS | `fetch-tw-news-mops` | 官方公告 | 依子技能而定（非統一近兩日） |
+| 鉅亨網 | `fetch-tw-news-cnyes` | 即時新聞 | 依子技能而定（近 10 天，最多 100 筆） |
+| 財報狗 | `fetch-tw-news-statementdog` | 產業分析 | 依子技能而定（最新清單） |
+| MoneyDJ | `fetch-tw-news-moneydj` | 法說/營收 | 依子技能而定（最新 50 頁） |
+| 法人買賣超（官方） | `fetch-tw-data-institutional` | 三大法人買賣超（外資/投信/自營/合計）；可指定日期 | T-1（前一交易日） |
+| 收盤股價（官方） | `fetch-tw-data-stock` | 上市+上櫃 OHLC、成交量、漲跌 | T-1 及 T-2 |
+| 期貨（官方） | `fetch-tw-data-futures` | 台指期行情、外資期貨未平倉、P/C Ratio | T-1 |
+| 融資融券（官方） | `fetch-tw-data-margin` | 上市+上櫃融資融券餘額 | T-1 |
+
+> **技術細節**請參閱各抓取技能的 SKILL.md
+
+## 執行模式
+
+### ✅ 主控腳本模式（推薦）
+
+使用 `run_research.mjs` 一行完成所有步驟，**不需要手動逐一執行各抓取腳本**：
+
+```bash
+# 語法
+node tw-stock-research/scripts/run_research.mjs [YYYYMMDD] [skillsDir] [baseOutputDir]
+
+# 參數說明
+# YYYYMMDD      (選填)：指定日期，預設為今日
+# skillsDir     (選填)：技能腳本目錄（各子技能腳本所在位置），預設為 cwd
+# baseOutputDir (選填)：資料輸出根目錄；腳本自動在此建立 tw-stock-research/<YYYYMMDD>/，
+#                       agent 調用時應顯式傳入；若省略僅作本地手動執行時的便利 fallback
+#
+# 實際輸出目錄：<baseOutputDir>/tw-stock-research/<YYYYMMDD>/
+
+# 範例：外部 agent 從任意工作目錄執行
+node /path/to/skills-dir/tw-stock-research/scripts/run_research.mjs \
+     20260316 \
+     /path/to/skills-dir \
+     /path/to/base-output-dir
+```
+
+> Agent 調用契約：
+> - `skillsDir` 只用來定位技能腳本與依賴，不代表資料輸出位置
+> - `baseOutputDir` 只用來存放資料輸出，不代表技能庫位置
+> - `run_research.mjs` 與 `generate_report.mjs` 都接收 `baseOutputDir`
+> - 腳本會自行推導 `<baseOutputDir>/tw-stock-research/YYYYMMDD/`
+> - 不要把 `./w-data-news/tw-stock-research/YYYYMMDD` 傳給任何一支 research 腳本作為 `baseOutputDir`
+
+`run_research.mjs` 自動執行以下流程：
+
+```
+run_research.mjs
+  │
+  ├─ 1. 交易日檢查（check-tw-trading-day）
+  │     └─ 非交易日 → 印出提示並 exit 1，不繼續
+  │
+  ├─ 2. 建立輸出目錄 w-data-news/tw-stock-research/YYYYMMDD/raw/
+  │
+  ├─ 3. fetch-tw-news-mops             → raw/mops.json            ⚠️ 最多 6 分鐘（含 launch retry）
+  ├─ 4. fetch-tw-news-cnyes            → raw/cnyes.json
+  ├─ 5. fetch-tw-news-statementdog     → raw/statementdog.json
+  ├─ 6. fetch-tw-news-moneydj          → raw/moneydj.json        ⚠️ 最多 5 分鐘
+  ├─ 7. fetch-tw-data-institutional (twse-t86, all, 前一交易日)   → raw/institutional_twse.json   ← 採用 30 個工作日回溯查找
+  ├─ 8. fetch-tw-data-institutional (tpex-3insti, all, 前一交易日) → raw/institutional_tpex.json   ← 採用 30 個工作日回溯查找
+  │
+  ├─ 9. fetch-tw-data-stock (twse, all, T-1)          → raw/prices_twse.json          ← T-1 OHLC（二次審計用）
+  ├─ 10. fetch-tw-data-stock (tpex, all, T-1)         → raw/prices_tpex.json          ← T-1 OHLC（二次審計用）
+  │
+  ├─ 11. fetch-tw-data-stock (twse, all, T-2)         → raw/prices_twse_t2.json       ← T-2 OHLC（新聞日期交叉審計用）
+  ├─ 12. fetch-tw-data-stock (tpex, all, T-2)         → raw/prices_tpex_t2.json       ← T-2 OHLC（新聞日期交叉審計用）
+  │
+  ├─ 13. fetch-tw-data-futures (TAIFEX, T-1)          → raw/taifex.json               ← 台指期 + 外資期貨 + P/C ratio
+  │
+  ├─ 14. fetch-tw-data-margin (twse, all, T-1)        → raw/margin_twse.json          ← 融資融券（散戶槓桿 + 做空指標）
+  ├─ 15. fetch-tw-data-margin (tpex, all, T-1)        → raw/margin_tpex.json          ← 融資融券（散戶槓桿 + 做空指標）
+  │
+  └─ 16. generate_report.mjs     → report_YYYYMMDD.md（含二次審計）
+```
+
+**容錯機制**：任一抓取步驟失敗時，錯誤自動記錄至 `error_log.jsonl`，**不中斷整體流程**，繼續執行下一步。報告產出失敗則 exit 2。
+
+**二次審計**：步驟 9-10 抓取 T-1 全市場 OHLC 股價（上市 TWSE + 上櫃 TPEX），供 `generate_report.mjs` 對報告中提及「漲停」「跌停」的個股進行交叉驗證。報告中所有日期標註皆使用實際交易日日期（如 `03/27`），不使用「昨日」等模糊用語。審計結果直接嵌入影響總表並產出獨立審計紀錄區塊。若 OHLC 抓取失敗，報告仍可產出但標註「未驗證」。
+
+**法人資料往前偵測**：法人腳本（TWSE/TPEX）以前一工作日為起點，若 TWSE API 回傳無資料（公假日），自動往前推一個工作日，最多回溯 **30 個工作日**（可涵蓋農曆春節等長假）。
+
+> ⚠️ 腳本執行時間約 **3~8 分鐘**（主要取決於 fetch-tw-news-moneydj 的 50 頁爬取）。最差情況（所有子程序皆觸及 timeout）可超過 15 分鐘，外層 exec 呼叫時請設定 **timeout ≥ 3600000 ms（1 小時）**，避免 SIGTERM 中斷。
+
+**完成訊號**：腳本成功產出報告後，會在 stdout 輸出 `RESEARCH_COMPLETE=true`，接著立即 `process.exit(0)`。外層呼叫方可偵測此字串判斷執行成功，無需等待其他 I/O。
+
+### 手動逐步模式（除錯用）
+
+需要單獨重跑某一來源時才使用，執行前須先偵測所需套件是否已安裝（參考安裝指引中的驗證指令）：
+
+```bash
+node fetch-tw-news-mops/scripts/fetch_mops.mjs                                           ./w-data-news/tw-stock-research/YYYYMMDD/raw/mops.json
+node fetch-tw-news-cnyes/scripts/fetch_cnyes.mjs                                         ./w-data-news/tw-stock-research/YYYYMMDD/raw/cnyes.json
+node fetch-tw-news-statementdog/scripts/fetch_statementdog.mjs                           ./w-data-news/tw-stock-research/YYYYMMDD/raw/statementdog.json
+node fetch-tw-news-moneydj/scripts/fetch_moneydj.mjs                                     ./w-data-news/tw-stock-research/YYYYMMDD/raw/moneydj.json
+node fetch-tw-data-institutional/scripts/fetch_twse_t86.mjs    all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/institutional_twse.json
+node fetch-tw-data-institutional/scripts/fetch_tpex_3insti.mjs all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/institutional_tpex.json
+node fetch-tw-data-stock/scripts/fetch_twse_stock.mjs          all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/prices_twse.json
+node fetch-tw-data-stock/scripts/fetch_tpex_stock.mjs          all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/prices_tpex.json
+node fetch-tw-data-stock/scripts/fetch_twse_stock.mjs          all PREV2_YYYYMMDD  ./w-data-news/tw-stock-research/YYYYMMDD/raw/prices_twse_t2.json
+node fetch-tw-data-stock/scripts/fetch_tpex_stock.mjs          all PREV2_YYYYMMDD  ./w-data-news/tw-stock-research/YYYYMMDD/raw/prices_tpex_t2.json
+node fetch-tw-data-futures/scripts/fetch_taifex.mjs                PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/taifex.json
+node fetch-tw-data-margin/scripts/fetch_twse_margin.mjs        all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/margin_twse.json
+node fetch-tw-data-margin/scripts/fetch_tpex_margin.mjs        all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/margin_tpex.json
+node tw-stock-research/scripts/generate_report.mjs YYYYMMDD ./w-data-news
+```
+
+> ⚠️ 新聞類腳本（mops/cnyes/statementdog/moneydj）只接受 `outputPath` 一個參數，**不接受日期**。法人/股價/期貨/融資融券類腳本參數順序為 `[all|code] [YYYYMMDD] [outputPath]`，日期須填**前一交易日**（`PREV_YYYYMMDD`），非當日——當日資料 15:00 後才有，盤前執行必填前一交易日。`PREV2_YYYYMMDD` 為前兩個交易日（T-2），用於新聞日期交叉審計。
+
+## 篩選標準
+
+### 要抓（會影響股價）
+- 營收公告、財報、股利分派
+- 庫藏股買回、減資、現增
+- 併購、處分資產、重大合約
+- 訴訟、仲裁結果、罰鍰
+- 駭客攻擊、資安事件
+- 澄清媒體報導
+- 法人買賣超異常
+
+### 跳過（例行公告）
+- 更名公告
+- 背書保證、資金貸與
+- 董事會/股東會召開通知
+- 發言人/主管異動
+- 純盤勢評論
+
+## 📚 研判經驗（持續累積）
+
+> 此區根據盤後總結報告的驗證結果，持續更新研判經驗。
+
+### ✅ 高準確度利多訊號
+| 類型 | 說明 | 驗證案例 |
+|------|------|----------|
+| 法人大買 | 三大法人單日買超 > 1 萬張 | 燿華 +7.79%（02/04） |
+| 營收創高 | 單月營收創歷史新高 | 亞德客 +1.26%（02/04） |
+| 訴訟勝訴 | 專利/商業訴訟勝訴 | 保瑞 +0.17%（02/04） |
+| 主動維權 | 對外提起專利侵權訴訟 | 億光 +1.77%（02/04） |
+
+### ⚠️ 需降級為中性的利空
+| 類型 | 判斷標準 | 原因 |
+|------|----------|------|
+| 小額罰鍰 | 罰鍰 < 500 萬或 < 市值 0.01% | 對大型公司影響微乎其微（國泰金 120 萬罰鍰，股價反漲） |
+| 輕微資安 | 無營運中斷、無資料外洩 | 市場反應冷淡（驊陞資安事件，股價反漲） |
+| 訴訟未揭露 | 訴訟金額/內容未詳細揭露 | 市場無法評估影響（強茂訴訟，股價反漲） |
+
+### 🔍 研判注意事項
+1. **大盤因子**：大盤上漲日，個股利空容易被稀釋
+2. **利空延後反映**：部分利空可能 T+1~T+3 才反映
+3. **消息提前反映**：重大利多/利空可能已在前一交易日股價反映
+4. **法人動向優先**：法人買賣超是最可靠的短期指標
+
+### 📊 歷史驗證統計
+| 日期 | 總研判 | 符合 | 誤判 | 符合率 |
+|------|--------|------|------|--------|
+| 2026/02/04 | 10 | 7 | 3 | 70% |
+
+## 輸出結構
+
+```
+w-data-news/tw-stock-research/
+└── YYYYMMDD/
+    ├── report_YYYYMMDD.md      # 最終報告（依執行日期命名）
+    ├── error_log.jsonl         # 錯誤紀錄
+    └── raw/
+        ├── trading_day.json        # 交易日檢查結果
+        ├── mops.json
+        ├── cnyes.json
+        ├── statementdog.json
+        ├── moneydj.json
+        ├── institutional_twse.json
+        ├── institutional_tpex.json
+        ├── prices_twse.json        # T-1 上市 OHLC（二次審計用）
+        ├── prices_tpex.json        # T-1 上櫃 OHLC（二次審計用）
+        ├── prices_twse_t2.json     # T-2 上市 OHLC（新聞日期交叉審計用）
+        ├── prices_tpex_t2.json     # T-2 上櫃 OHLC（新聞日期交叉審計用）
+        ├── taifex.json             # 台指期 + 外資期貨 + P/C ratio
+        ├── margin_twse.json        # 上市融資融券
+        └── margin_tpex.json        # 上櫃融資融券
+```
+
+## 📝 錯誤紀錄機制
+
+`run_research.mjs` 執行過程中遭遇的錯誤**自動**記錄至 `error_log.jsonl`，供未來排錯和改進技能參考。
+
+### 紀錄格式
+
+每行一筆 JSON，追加寫入（不覆蓋）：
+
+```json
+{
+  "timestamp": "2026-02-05T00:15:30.000Z",
+  "date": "20260205",
+  "source": "fetch-tw-news-mops",
+  "phase": "fetch",
+  "error": {
+    "type": "unknown",
+    "message": "Browser launch failed",
+    "details": "Error: Failed to launch the browser process"
+  },
+  "resolution": "failed"
+}
+```
+
+### 欄位說明
+
+| 欄位 | 必要 | 說明 |
+|------|------|------|
+| `timestamp` | ✅ | ISO 8601 格式（UTC，`Z` 結尾） |
+| `date` | ✅ | 執行日期（YYYYMMDD） |
+| `source` | ✅ | 來源：fetch-mops / fetch-cnyes / fetch-statementdog / fetch-moneydj / fetch-twse-t86 / fetch-tpex-3insti / fetch-twse-prices / fetch-tpex-prices / fetch-twse-prices-t2 / fetch-tpex-prices-t2 / fetch-taifex / fetch-twse-margin / fetch-tpex-margin / generate_report |
+| `phase` | ✅ | 階段：fetch / report |
+| `error.type` | ✅ | 錯誤類型：timeout / unknown |
+| `error.message` | ✅ | 簡短錯誤訊息 |
+| `error.details` | ❌ | 詳細錯誤內容（stderr 等） |
+| `resolution` | ✅ | 最終結果：固定為 `failed`（錯誤發生才寫入此 log） |
+
+### 定期回顧
+
+每週（或累積 10+ 筆錯誤後）應回顧 `error_log.jsonl`：
+1. 分析常見錯誤模式
+2. 更新相關抓取技能說明
+3. 調整重試策略
+
+## 報告檔名規則
+
+- 檔名格式：`report_YYYYMMDD.md`（例如 `report_20260204.md`）
+- YYYYMMDD 為**執行當日**日期（台灣時間）
+- 每次執行產生獨立檔案，歷史報告皆保留
+- 報告開頭須包含：
+  ```markdown
+  # 台股盤前調研報告（YYYY/MM/DD）
+
+  > 調研日期：YYYYMMDD
+  > 執行時間：YYYY/MM/DD HH:MM:SS (台灣時間)
+  > 來源：MOPS (公開資訊觀測站)、鉅亨網、財報狗、MoneyDJ、證交所/櫃買中心
+  ```
+
+## 報告結構
+
+報告須包含以下章節（依序）：
+
+### 1. 📊 個股影響總表（必要）
+
+報告開頭須提供**個股影響總表**，分為 A/B/C 三級：
+
+- **A 級**（最多 5 檔）：法人方向一致 + 非 clickbait 來源 + 非 T-2 回落。表頭含「本益比」欄。
+- **B 級**：法人方向一致但有警示（clickbait 來源、T-2 回落等）。
+- **C 級**：法人方向相反或無法人資料。
+
+各級表格依信心等級降序排列，利多/利空分開呈現。
+
+**提取規則**：
+- 使用 `generate_report.mjs` 中的 `generateImpactTable` 函式。
+- 透過關鍵字評分掃描新聞標題（利多/利空各有關鍵字列表，score > 0 為利多，score < 0 為利空）。
+- 負向關鍵字（`不漲反跌`、`反跌`、`利多出盡`、`股價不漲`）列於全域 bearish 扣分列表，對所有新聞生效（非僅限利多新聞）。
+- 法人確認欄位：透過 `buildInstMap()` 建立法人買賣超對照表，對每檔個股查詢前一交易日三大法人淨買賣超（股數）。
+- **信心等級**：法人方向與研判一致 → ★★★；無法人資料 → ★★☆；法人方向相反 → ★☆☆。
+- **T-1 漲停/跌停警示（二次審計驗證）**：利多個股且新聞同一子句中提及該股「漲停」時，以 T-1 實際 OHLC 交叉驗證（漲停條件：收盤≈最高 且 漲幅≥9.5%）。驗證通過顯示 `⚠️MM/DD漲停(+X.X%)｜`（MM/DD 為實際交易日），未通過則顯示 `📊MM/DD收XXX(+X.X%)｜`（實際漲跌），無 OHLC 資料則標註 `⚠️MM/DD疑似漲停(未驗證)｜`。跌停亦同理驗證。所有日期皆使用實際交易日日期，不使用「昨日」等相對用語。
+- 表格依信心等級降序排列（★★★ 在前）。
+- 利多/利空分兩張子表輸出，各自獨立排序。
+- 提取 4 碼股票代碼（括號法 + 名稱查找法，nameCodeMap 含法人資料 + MOPS + COMPANY_ALIASES）。
+
+### 2. 後續章節
+
+報告實際輸出順序如下（個股影響總表內含子章節）：
+
+- 大盤概況（加權指數、成交量、漲跌家數、台指期夜盤、外資期貨、P/C ratio）
+- 今日交易摘要（做多/做空首選、風險事件、主攻族群）
+- 盤前焦點變化（T-1 漲停/跌停、族群降溫、籌碼背離）
+- 個股影響總表（A/B/C 分級，含以下子章節）：
+  - 二次審計（T-1 + T-2 股價交叉驗證）
+  - 利多出盡 / 做空候選（漲停+法人賣超/融資追價/T-2回落）
+  - 上榜個股 T-1 價量明細（收盤價、漲跌%、本益比、成交量、法人佔比、融資融券）
+- 主攻族群（族群分組 + 產業脈絡）
+- 三大法人買賣超重點（含主買方標註）
+- MOPS 重大公告精選（含影響等級）
+- 新聞精選（鉅亨網、財報狗、MoneyDJ）
+- 風險提示（集中度、地緣、跌停外溢、外資期貨、高估值）
+- 投資決策重點
+- 免責聲明
+
+## 🔧 常見問題與排除
+
+### 1. 執行錯誤 (Module not found)
+
+**症狀**：
+- `Cannot find module 'axios'`, `cheerio`, `playwright`
+
+**解決方法**：
+確保在工作區執行了所有依賴安裝：
+```bash
+npm install axios cheerio playwright wsemi lodash-es
+```
+
+### 2. 瀏覽器未找到
+
+**症狀**：
+- 腳本輸出 `Error: Browser not found.` (fetch-tw-news-mops)
+
+**解決方法**：
+- 確認系統已安裝 Google Chrome（底層腳本使用 Playwright `channel: 'chrome'` 啟動）。
+- 若 Chrome 安裝在非預設路徑，可在環境變數中設定 `CHROME_PATH` 或修改底層腳本中的 `channel` 設定。
+
+## 快速執行
+
+### 推薦：使用主控腳本（一行完成）
+
+```bash
+# 外部 agent 可從任意工作目錄執行；請顯式傳入 skillsDir 與 baseOutputDir
+npm install axios cheerio playwright wsemi lodash-es
+node tw-stock-research/scripts/run_research.mjs [YYYYMMDD] [skillsDir] [baseOutputDir]
+
+# 範例
+node tw-stock-research/scripts/run_research.mjs 20260316
+```
+
+報告產出位置：`<baseOutputDir>/tw-stock-research/YYYYMMDD/report_YYYYMMDD.md`
+
+### 手動執行（各步驟分開）
+
+```bash
+# 1. 交易日檢查（須先建立輸出目錄）
+mkdir -p ./w-data-news/tw-stock-research/YYYYMMDD/raw   # Unix/Git Bash；PowerShell 請用 New-Item -ItemType Directory -Force -Path .\w-data-news\tw-stock-research\YYYYMMDD\raw
+node check-tw-trading-day/scripts/check_tw_trading_day.mjs YYYYMMDD ./w-data-news/tw-stock-research/YYYYMMDD/raw/trading_day.json
+
+# 2. 安裝依賴
+npm install axios cheerio playwright wsemi lodash-es
+
+# 3. 依序抓取（outputPath 必須為完整相對路徑）
+node fetch-tw-news-mops/scripts/fetch_mops.mjs                                           ./w-data-news/tw-stock-research/YYYYMMDD/raw/mops.json
+node fetch-tw-news-cnyes/scripts/fetch_cnyes.mjs                                         ./w-data-news/tw-stock-research/YYYYMMDD/raw/cnyes.json
+node fetch-tw-news-statementdog/scripts/fetch_statementdog.mjs                           ./w-data-news/tw-stock-research/YYYYMMDD/raw/statementdog.json
+node fetch-tw-news-moneydj/scripts/fetch_moneydj.mjs                                     ./w-data-news/tw-stock-research/YYYYMMDD/raw/moneydj.json
+node fetch-tw-data-institutional/scripts/fetch_twse_t86.mjs    all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/institutional_twse.json
+node fetch-tw-data-institutional/scripts/fetch_tpex_3insti.mjs all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/institutional_tpex.json
+node fetch-tw-data-stock/scripts/fetch_twse_stock.mjs          all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/prices_twse.json
+node fetch-tw-data-stock/scripts/fetch_tpex_stock.mjs          all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/prices_tpex.json
+node fetch-tw-data-stock/scripts/fetch_twse_stock.mjs          all PREV2_YYYYMMDD  ./w-data-news/tw-stock-research/YYYYMMDD/raw/prices_twse_t2.json
+node fetch-tw-data-stock/scripts/fetch_tpex_stock.mjs          all PREV2_YYYYMMDD  ./w-data-news/tw-stock-research/YYYYMMDD/raw/prices_tpex_t2.json
+node fetch-tw-data-futures/scripts/fetch_taifex.mjs                PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/taifex.json
+node fetch-tw-data-margin/scripts/fetch_twse_margin.mjs        all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/margin_twse.json
+node fetch-tw-data-margin/scripts/fetch_tpex_margin.mjs        all PREV_YYYYMMDD   ./w-data-news/tw-stock-research/YYYYMMDD/raw/margin_tpex.json
+
+# 4. 產出報告
+# 語法：node tw-stock-research/scripts/generate_report.mjs [YYYYMMDD] [baseOutputDir]
+# 注意：這裡的 baseOutputDir 是資料根目錄，腳本會自動補上 tw-stock-research/YYYYMMDD
+node tw-stock-research/scripts/generate_report.mjs YYYYMMDD ./w-data-news
+```

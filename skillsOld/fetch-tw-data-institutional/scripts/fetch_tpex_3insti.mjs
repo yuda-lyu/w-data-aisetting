@@ -1,0 +1,91 @@
+import fs from 'fs';
+import path from 'path';
+import { fetchTpex3insti } from './fetchTpex3insti.mjs';
+
+// Windows reserved-device-name guard — 避免 fs 寫入 nul/con/prn 等產生無法刪除的檔案
+const _WIN_RESERVED_RE = /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i;
+function _guardPath(p) {
+    if (_WIN_RESERVED_RE.test(p.replace(/.*[/\\]/, '')))
+        throw new Error(`禁止寫入 Windows 保留裝置名稱: ${p}`);
+}
+
+/**
+ * 櫃買中心 (TPEX) 三大法人買賣超抓取程式 — CLI 包裝
+ *
+ * 用法:
+ * node fetch_tpex_3insti.mjs [stockCode] [date] [outputPath]
+ *
+ * 參數:
+ * 1. stockCode (選填): 指定股票代號或 "all"（預設）。多檔以逗號分隔（例如: "6499,6610"）。
+ * 2. date (選填): 指定日期 (YYYYMMDD)，預設為今日。
+ * 3. outputPath (選填): 儲存結果的檔案路徑。預設為 tpex_3insti_YYYYMMDD.json。
+ *
+ * 輸出（file）：
+ * - 成功：{ status: 'success', message: { source, date, data } }
+ * - 錯誤/無資料：{ status: 'error', message: '...' }
+ */
+
+const args = process.argv.slice(2);
+const stockCodeArg  = args[0] || 'all';
+const dateArg       = args[1];
+const outputPathArg = args[2];
+
+// --- resolve dateStr ---
+let dateStr;
+if (dateArg) {
+    // 使用者有提供日期 → 必須符合 YYYYMMDD 格式，格式不符即明確報錯，不靜默 fallback 今日
+    if (!/^\d{8}$/.test(dateArg)) {
+        console.error(`日期參數格式錯誤：須為 YYYYMMDD（例如 20260210），收到 (${dateArg})`);
+        process.exit(1);
+    }
+    const y = parseInt(dateArg.substring(0, 4));
+    const m = parseInt(dateArg.substring(4, 6)) - 1;
+    const d = parseInt(dateArg.substring(6, 8));
+    const check = new Date(y, m, d);
+    if (check.getFullYear() !== y || check.getMonth() !== m || check.getDate() !== d) {
+        console.error(`日期無效：${dateArg}`);
+        process.exit(1);
+    }
+    dateStr = dateArg;
+} else {
+    // 完全未提供日期 → 使用今日（台北時區）
+    const taipeiStr = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Taipei' }).slice(0, 10);
+    dateStr = taipeiStr.replace(/-/g, '');
+}
+
+// --- resolve stockCodes ---
+let targetCodes = [];
+if (stockCodeArg.toLowerCase() !== 'all') {
+    // split 後須 trim 並過濾空字串，否則「2330, 2317」(逗號後空格) 會產生帶空格的 " 2317" 比對不到而靜默丟股
+    targetCodes = stockCodeArg.split(',').map(c => c.trim()).filter(Boolean);
+}
+
+// --- resolve output path ---
+const defaultFilename = targetCodes.length > 0
+    ? `tpex_3insti_${targetCodes.join('_')}_${dateStr}.json`
+    : `tpex_3insti_${dateStr}.json`;
+const outputFile = outputPathArg || defaultFilename;
+
+function writeOutput(payload) {
+    try {
+        _guardPath(outputFile);
+        const dir = path.dirname(outputFile);
+        if (dir && dir !== '.') fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(outputFile, JSON.stringify(payload, null, 2), 'utf-8');
+        console.log(`Saved parsed data to: ${outputFile}`);
+    } catch (e) {
+        console.error(`寫檔失敗：${e.message}`);
+    }
+}
+
+// --- run ---
+(async () => {
+    try {
+        const result = await fetchTpex3insti(dateStr, targetCodes.length > 0 ? targetCodes : undefined);
+        writeOutput({ status: 'success', message: result });
+    } catch (err) {
+        console.error(err.message || err);
+        writeOutput({ status: 'error', message: err.message || String(err) });
+        process.exit(1);
+    }
+})();

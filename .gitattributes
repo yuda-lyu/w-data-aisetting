@@ -1,0 +1,3 @@
+# .bat must be stored and served with CRLF: cmd.exe mis-resolves labels (goto :fail) in LF-only batch files,
+# and machines download sync.bat via the Gitea raw URL, which serves the stored blob as-is.
+*.bat -text

@@ -1,0 +1,667 @@
+---
+name: dispatch-opencode
+description: 當任務需要委派給 OpenCode，或需要使用 OpenCode 支援的模型供應商時，透過 w-dispatch-ai 以非互動子程序方式執行 OpenCode CLI。內含依任務性質（審計／複審／調查／寫測試）決定權限下限的判準，以及用 opencode agent list 實查有效權限的作法。派工逾時：正式派工一律 4 小時，派工腳本須以 detached 行程執行並分段等待——掛在工具呼叫上（前景最長 10 分鐘、背景最長 2 小時）必被中途終止。
+---
+
+# dispatch-opencode
+
+使用 `w-dispatch-ai` 的 `dispatchOpencode()` 執行自動化 OpenCode 任務。轉接器會呼叫 `opencode run`、選擇代理與模型、透過 stdin 傳入提示詞、視需要注入僅限當次程序的供應商設定與憑證，並以結果物件回報失敗。
+
+**本技能對照的是 1.0.54**（`dispatchOpencode()` 之固定參數自 1.0.17 起未變動；1.0.34 新增 `useStoredAuth` 選項，見「免費模型走匿名」；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。但**條目會隨版本增刪改名，改動頻率遠高於轉接器本身**：1.0.40 到 1.0.54 之間，opencode 免費條目新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free` 與三條 `nemotron-*`，`space-bunny-free` 恢復真名改為 `minimax-m3.1-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`（**1.3 曾是本技能的必要預設模型**），另有 `ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` 四條在 1.0.42 之後加入、幾週內又因自 CLI 型錄消失而移除。更早還有 1.0.25 把 `oc:agnes-ai/agnes-2.5-flash` 改名為 `oc:agnes-ai/agnes-3.0-flash`、1.0.34 把 opencode 自家條目全改為匿名取用。**寫死 id 前先對安裝版核一次**，不要照抄本技能或別處的字面值；`pick` 打錯或用到已移除的 id 會靜默少一條（接法見「展開條目」）。實際安裝版一律讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
+
+需要變更模型、供應商、variant、認證或輸出旗標時，讀取 [references/opencode-flags.md](references/opencode-flags.md)。
+
+## 套件裝在哪：技能目錄的上一層，不要自己另裝
+
+`w-dispatch-ai` 與其相依（`wsemi` 等）統一裝在**技能根目錄自己的 `node_modules`**——也就是**本技能目錄的上一層**（技能根有自己的 `package.json` 管這些相依），一般是 `~/.claude/skills/node_modules/`。
+
+```javascript
+import { createRequire } from 'module';
+import path from 'path';
+
+//技能根＝本技能目錄的上一層（本技能目錄之絕對路徑由載入本技能時取得）
+const skillsRoot = path.resolve('<本技能目錄之絕對路徑>', '..');
+const req = createRequire(import.meta.url);
+const wda = req(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'));
+//取回的就是預設匯出物件本身（不會再包一層 default）：wda.KINDS／wda.dispatchOpencode／wda.providers 直接可用
+```
+
+**三條鐵則**：
+
+- **不要在專案裡 `npm install w-dispatch-ai`**。專案若另有一份，`import 'w-dispatch-ai'` 會優先解析到專案那份（通常較舊），**使用者更新技能根的版本就永遠傳不到你這裡**——他以為在測新版，你實際跑的是另一份。
+- **找不到就回報使用者**（請他到技能根 `npm i`）。不要自己找地方安裝，也不要改用其他路徑硬湊。
+- **查版本要指名路徑**：直接下 `npm ls w-dispatch-ai` 或 `require.resolve('w-dispatch-ai')` 都是**從當前專案解析**，看到的可能是別份。要確認真正被載入的那一份，讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。**深層引用 `w-dispatch-ai/src/providers.mjs` 時同理**——請以技能根的絕對路徑引用，不要靠套件名解析。
+
+深層引用是套件的既定路線：`package.json` **刻意不設 `exports` 欄位**，就是為了讓 `w-dispatch-ai/src/<檔名>.mjs` 這條路徑永遠可用（套件 README 之 Known design notes 明載，勿建議補上 `exports`）。頂層匯出物件則涵蓋全部常用項：`KINDS`、`NO_SIDE_EFFECT`、`dispatchAi`／`dispatchAiFallback`／`dispatchAiWkf`、各家 `dispatchXxx`、`providers`／`resolveProviders`／`readEnvFile`／`budgetFor`、`createFileStore`／`createUsageCounter`／`salvageTruncatedArray`，以及三支額度查詢函數（見「額度查詢沒有 opencode 版」）。
+
+## 必要預設值
+
+除非使用者明確指定其他模型或推理強度，否則必須使用：
+
+- 模型：`opencode/deepseek-v4.1-flash-free`（DeepSeek V4.1 Flash Free；2026-10-19 使用者指示由 `opencode/beam-free` 換上）
+- variant：`max`
+- 取用方式：匿名（`useStoredAuth: false`）
+
+**`max` 是此型錄項目最深的一檔**——variants 只有 `low`、`high`、`max`（沒有 `medium`、`xhigh`）。**各模型的檔位名稱並不一致**：同供應商的 `beam-free` 與 `minimax-m3.1-flash-free` 為 `low`→`max` 五檔、`glm-5.3-flash-free` 同為 `low`／`high`／`max`、`longcat-2.5-preview-free` 只到 `high`、`nemotron-3.5-super-vl-free` 只到 `xhigh`、`big-pickle`、`mimo-v2.6-flash-free`、`nemotron-3-ultra-free`、`nemotron-3.5-lightning-free` 沒有檔位，換模型時別憑記憶套用。`--variant` 沒有對應的轉接器選項，必須經 `extraArgs` 傳入；不傳就是跑供應商預設，不是 `max`。
+
+2026-10-19 之即時型錄（opencode 1.19.3，`opencode models opencode --verbose`）：
+
+```text
+供應商／模型：opencode/deepseek-v4.1-flash-free
+名稱：DeepSeek V4.1 Flash Free
+狀態：status: active（release_date 2026-09-10）
+能力：reasoning: true、toolcall: true；輸入可為文字與圖片
+variant：low、high、max
+脈絡窗：200,000；最大輸出：32,000
+費用：input／output 皆 0
+```
+
+同日以 `w-dispatch-ai` 1.0.54、此設定（`--variant max`、匿名）實跑最小任務（讀中文檔並在工作目錄建檔）兩次皆通過：21.8 秒與 18.2 秒、工具呼叫正常、檔案確實建立、離開碼 0、中文內容原樣往返；並以工作階段紀錄確認兩次實際使用 `deepseek-v4.1-flash-free`、variant `max`（作法見「型錄驗證」）。
+
+**脈絡長度是這個預設模型最要注意的地方**（套件條目註解，2026-10-19 以 opencode 1.19.3 實測）：
+
+- 它**不是 1M 脈絡**（坊間稱此免費版 1M 不成立）：伺服器接受到輸入約 239K token，約 239.9K 起一律回 `ContextOverflowError`。
+- 更早出事的是本機：預設設定下 opencode 在約 168K（型錄脈絡 200,000 扣掉輸出保留 32,000）就**自動壓縮脈絡**，stdout 會混入摘要文字（如「## Objective…」）而**仍是 `ok: true`**。
+- 所以長提示詞控制在約 160K token 以下；要更長時，由呼叫端在 `config` 覆寫 `provider.opencode.models['deepseek-v4.1-flash-free'].limit.context`（上限不超過約 230,000，須留輸出空間），或依任務改派 1M 脈絡的 `opencode/beam-free`、`opencode/minimax-m3.1-flash-free`（換模型須使用者同意）。
+- 4 小時的審計、複審會讀進大量檔案：收回結果時檢查 stdout 有沒有混進壓縮摘要，有就代表脈絡已被壓縮過。
+
+```javascript
+import wda from 'w-dispatch-ai';
+
+const result = await wda.dispatchOpencode('分析此專案並完成指定修改', {
+    model: 'opencode/deepseek-v4.1-flash-free',
+    extraArgs: ['--variant', 'max'],
+    useStoredAuth: false,   // 匿名免費存取，不讀 auth.json（見「免費模型走匿名」）
+    cwd: '/absolute/path/to/project',
+    timeoutMs: 14_400_000,   // 正式派工一律 4 小時；須照〈逾時與等待〉以 detached 執行，不可在工具呼叫內直接 await
+    validate: 'nonempty',
+});
+
+if (!result.ok) {
+    throw new Error(result.error);
+}
+console.log(result.stdout);
+```
+
+此設定走 OpenCode 自家供應商（`opencode`）的匿名免費存取，不需要登入，也不需要金鑰。**免費模型的資料政策各異**：套件條目註解記載 deepseek-v4.1-flash-free 之官方說明為「限時免費、供應商零保留且不以資料訓練」；beam-free 為「輸入不用於訓練、為安全理由保留 30 天」；`big-pickle` 載明免費期間所收資料可能用於改進模型；三條 `nemotron-*` 為 NVIDIA 免費端點、僅供試用、勿送個人或機密資料——敏感內容派工前先查該模型的政策。若型錄或實跑出問題，應明確回報，不可靜默切換成其他模型。
+
+需要換模型時，同供應商的其他免費條目都有套件之實測紀錄（見「條目表」，1.0.54 起型錄上的免費模型都已收為條目）。型錄上新出現、條目表還沒有的，改用前先照「型錄驗證」查 `status`／`toolcall`／`variants`，再實跑一次；清單見 [references/opencode-flags.md](references/opencode-flags.md)。
+
+**走遞補鏈時，這個預設模型在條目表內已有現成條目**：`oc:opencode/deepseek-v4.1-flash-free`（見「條目表」一節），且已是匿名。但該條目**自帶唯讀鎖**、**variant 是 `high` 不是 `max`**——要 `max` 得自己覆寫 `extraArgs`，要寫檔得放開 `config.permission`，兩者都不會自動跟著本節的必要預設值走。
+
+### 不可再用的舊預設值
+
+| 舊預設 | 失效長相 |
+|---|---|
+| `opencode/muse-spark-1.3-contributor-free` ＋ `--variant xhigh` | 2026-10-18 查核時已不在 opencode 1.19.3 之型錄，呼叫即敗；套件 1.0.53 移除條目（官方文件改列付費之 `muse-spark-1.3`，無替代之免費 muse）。同系 `muse-spark-1.2-contributor-free` 更早於 2026-09-30 起回 `UnknownError` |
+| `nvidia/deepseek-ai/deepseek-v4-flash` | 2026-09-08 實跑回 HTTP 410 `Gone`，`detail` 為 has reached its end of life on 2026-08-07；同供應商的 `deepseek-v4-pro` 相同，dated 快照 `deepseek-v4-flash-0731`、`deepseek-v4-pro-0813` 則回 403 `Authorization failed` |
+
+兩次失效的方向相反：nvidia 那次**型錄仍照常列出這四個 ID**（同日 `opencode models nvidia --refresh`），供應商卻已停服；muse-spark 這次則是型錄先拿掉。型錄查得到不等於還在服務、型錄查不到則一定不能用——所以「型錄驗證」一節要求查型錄之外還要實跑。
+
+（2026-10-18 至 10-19 的預設 `opencode/beam-free` ＋ `max` 仍然可用，只是依使用者指示改由 deepseek 擔任預設，所以不列在上表。）
+
+## 認證與單次程序注入
+
+預設模型以匿名取用 OpenCode 自家供應商的免費模型，不需登入。要用付費模型或改走自己的帳號時，`opencode auth login` 完成一次即可；`opencode auth list` 可查已存的憑證。
+
+**可用模型＝已認證／已設定之供應商的模型，其餘等於不存在。** 2026-09-08 實測本機（已認證 `cline`、`nvidia`，加上內建 `opencode`）：`opencode models` 共 111 項、只涵蓋這三家；查一個沒設定的供應商回 `Error: Provider not found: <名稱>`，硬用 `-m <該供應商>/<模型>` 派工則回 `UnknownError`（伺服器錯誤）而不是清楚的「未認證」。看到這兩種錯誤，先查供應商有沒有設定，別懷疑模型名稱拼錯。
+
+**還有第三種錯誤長相：`Model is disabled`（401）**——那是**金鑰所屬工作區沒開這個模型**，不是模型不存在、也不是金鑰無效。同一批金鑰換一把就可能通（不同工作區設定不同），正解是到該工作區把模型開起來。注意 opencode 自家的免費模型在「不登入」時反而可用（見「免費模型走匿名」），所以注入金鑰不一定比較保險——套件的 opencode 自家條目（1.0.54 為 10 條）正是為此全部改走匿名。
+
+要用第三方供應商時，可沿用已儲存的憑證，或只為這次子程序注入金鑰：
+
+```javascript
+await wda.dispatchOpencode(prompt, {
+    model: 'nvidia/<以 opencode models nvidia --verbose 查到的模型>',
+    provider: 'nvidia',
+    key: process.env.NVIDIA_API_KEY,
+});
+```
+
+`key` 與 `provider` 都必須是非空字串。轉接器不會把兩者寫入磁碟，而是為子程序建立 `OPENCODE_AUTH_CONTENT`。不可印出金鑰，也不可把金鑰放進提示詞。
+
+若使用 OpenCode 未內建的供應商（`opencode models <名稱>` 回 `Provider not found` 者），還須透過 `config` 傳入物件或 JSON 字串，內含該供應商的 base URL、模型與憑證來源；轉接器會將其序列化為該子程序的 `OPENCODE_CONFIG_CONTENT`。供應商、模型、base URL 與憑證必須互相對應，缺一就會以上述 `UnknownError` 收場。
+
+## 第三方供應商：型錄查不到 ≠ 不能用
+
+`opencode models` 只列得出 CLI 已認證或已設定的供應商，但 `config` 注入是**當次程序**生效的，所以型錄查不到的供應商照樣派得動。**`Provider not found` 只代表沒註冊在 CLI 端，不是「這個模型不能用」的結論**——要判斷能不能用，看的是有沒有 provider 定義與金鑰。
+
+## 條目表：`providers.mjs` 的 12 個 opencode 條目
+
+`w-dispatch-ai` 自帶一份實測可用的條目表 `w-dispatch-ai/src/providers.mjs`，直接引用即可，不必自己重試一遍。**它是本技能所有模型資訊的上游**，與本技能不一致時以它為準。截至 1.0.54 全表 24 條，其中 `kind: 'opencode'` 者 12 條（依表內順序，即全取時的遞補優先序；各條之 `model` 即 id 去掉 `oc:` 前綴）：
+
+| 條目 id | 取用方式 | 自帶 variant | 備註（條目註解之實測紀錄） |
+|---|---|---|---|
+| `oc:agnes-ai/agnes-3.0-flash` | 金鑰 `AGNES_KEYS` | 無檔位 | 第三方，baseURL `https://apihub.agnes-ai.com/v1`。1.0.25 由 `agnes-2.5-flash` 改名（官方 2026-09-11 發布 3.0；五題探測 3.0 答對推理題而 2.5 答錯、總耗時 41s 對 281s），REST 版 `agnes:agnes-3.0-flash` 同步改名 |
+| `oc:poolside/poolside/laguna-s-2.1` | 金鑰 `POOLSIDE_KEYS` | 無檔位 | 第三方，baseURL `https://inference.poolside.ai/v1` |
+| `oc:opencode/big-pickle` | **匿名**（`useStoredAuth: false`） | 無檔位 | id 不帶 `-free` 後綴但官方〈Pricing〉列為 Free，屬限時免費之 stealth 模型。2026-09-22 匿名 CLI 實測 7.1s。**官方〈Privacy〉載明免費期間所收資料可能用於改進模型**，敏感內容勿走此條。1.0.53 起為全取鏈中第一條 opencode 免費條目 |
+| `oc:opencode/mimo-v2.6-flash-free` | **匿名** | 無檔位 | 2026-09-22 匿名 CLI 實測 7.0s |
+| `oc:opencode/minimax-m3.1-flash-free` | **匿名** | `high` | 2026-10-19 收錄（1.0.54），**即原 `space-bunny-free` 恢復真名**，置於其原位；context 實測約 1M（以預設設定至 949K token 仍答對）、輸出上限 512,000、可輸入圖片與影片，檔位 `low`→`max`。匿名 CLI 實測（variant high）簡答 6.5s、推理題 6.7s 答對、讀相對路徑 9.4s 正確、寫檔被唯讀鎖擋下（回空字串而 `ok: true`）。官方說明為限時免費、供應商零保留且不以資料訓練 |
+| `oc:opencode/longcat-2.5-preview-free` | **匿名** | `high` | 2026-10-03 收錄；context 1M、可輸入圖片。實測簡答 12.0s、推理題 13.1s、讀檔 21.6s、寫檔金絲雀 16.1s（被唯讀鎖擋下） |
+| `oc:opencode/beam-free` | **匿名** | `high` | 2026-10-18 收錄，context 1M、僅文字輸入。匿名 CLI 實測（variant high）簡答 4.9s、推理題 4.4s 答對、讀相對路徑 6.3s 正確、要求寫檔被唯讀鎖擋下（**回空字串而 `ok: true`**）。2026-10-18 至 10-19 曾是本技能的預設模型 |
+| `oc:opencode/deepseek-v4.1-flash-free` | **匿名** | `high` | **即本技能必要預設模型**；2026-10-18 收錄；context 型錄 200K（伺服器實收約 239K，本機約 168K 起自動壓縮，見〈必要預設值〉）、輸出上限 32,000、可輸入圖片，檔位 `low`／`high`／`max`。實測簡答 6.9s、推理題 6.5s 答對、讀檔 8.6s 正確、寫檔被擋（同樣回空字串而 `ok: true`） |
+| `oc:opencode/glm-5.3-flash-free` | **匿名** | `high` | 2026-10-18 收錄；context 200K，檔位 `low`／`high`／`max`。**上游不穩**：同日 10 次中 4 次於約 80 秒後回 `Upstream request failed: Endpoint is unavailable`（`exec`），故排在 opencode 免費條目後段；全取者輪到它而失敗時約多耗 80 秒才換家 |
+| `oc:opencode/nemotron-3-ultra-free` | **匿名** | 無檔位 | 2026-10-19 收錄（1.0.54）；context 1M、僅文字輸入。實測簡答 7.9s、推理題 9.0s、讀檔 12.7s、寫檔金絲雀 9.3s。NVIDIA 免費端點、僅供試用，**勿送個人或機密資料**；額度少且偏慢，故三條 nemotron 排在 opencode 免費條目之末 |
+| `oc:opencode/nemotron-3.5-lightning-free` | **匿名** | 無檔位 | 同上一批收錄；context 262,144、僅文字輸入。實測簡答 29.1s、推理題 6.7s、讀檔 10.4s、寫檔金絲雀 91.8s |
+| `oc:opencode/nemotron-3.5-super-vl-free` | **匿名** | `high` | 同上一批收錄；context 1M、可輸入圖片，檔位 `none`→`xhigh`（沒有 `max`）。實測（variant high）簡答 8.3s、推理題 10.1s、讀檔 9.1s、寫檔金絲雀 14.1s |
+
+**十個 opencode 自家條目一律匿名取用**（`useStoredAuth: false`、不帶 `envVar`），這是 2026-09-18 起的政策性改動，理由見下節。第三方兩條仍走金鑰。
+
+**條目自帶的 variant 是 `high`，不是本技能必要預設值的 `max`**：套件 2026-09-30 起把各家條目的思考強度統一設為 `high`，opencode 側即 `extraArgs: ['--variant','high']`。但**只有實際有檔位的模型才帶**——`big-pickle`、`mimo`、`nemotron-3-ultra`、`nemotron-3.5-lightning` 沒有檔位，第三方自訂 provider 亦無，那些條目就不帶。照抄條目只有 high；要本技能的 `max` 得自己覆寫，且**覆寫 `extraArgs` 時要把原本的 variant 一併帶回**。
+
+**條目換得很快，照抄舊 id 會落入 `missing`**：1.0.34 移除 `deepseek-v4-flash-free` 與 `union-alpha`、換上 `big-pickle` 與 `mimo-v2.6-flash-free`；1.0.40 加 `space-bunny-free`；1.0.42 至 1.0.54 之增刪見本技能開頭。已移除之 id 做 `pick` 時，`hints` 只是字串最接近者，**不保證是同模型的替代**：`space-bunny-free` 的 `oc:` 與 `zen:` 兩個 id 都已移除，同一模型現為 `oc:opencode/minimax-m3.1-flash-free`，要自己改 id；muse-spark-1.3、fledge、ling、cat-jam、step-5 則無替代模型。全表由 20 條（1.0.26）縮到 15 條（1.0.34，zen REST 系大量退場，見免費層閘門），其後 17 條（1.0.40）、22 條（1.0.50）、21 條（1.0.53）、24 條（1.0.54）。
+
+**Poolside 的 `model` 是三段**：供應商名 `poolside` ＋ 模型 id `poolside/laguna-s-2.1`（模型 id 本身就含斜線），不是寫錯。
+
+**全取條目表時會混進非文字生成的條目**：kind `api-typesafe-systemone`（決策模型，輸入是待評估狀態、輸出是型別化答案，呼叫時必須另給 `questions`）在 1.0.54 有 2 條（`typesafe:jev-latest`、`zen:jev-1.13-free`；後者之 `baseURL` 於 1.0.46 之後改為 `https://opencode.ai/inference/v1`）。它的輸出形狀與文字生成完全不同，**不可與文字生成條目混在同一條遞補鏈**；全取時它會因缺 `questions` 以 `params` 錯誤在 0ms 失敗後換下一家，不影響其他家，但要它就得用 `pick` 單獨取出。
+
+### Zen 免費層閘門：REST 直呼免費模型一律 403，只能走 CLI
+
+**2026-09-17 起**，OpenCode 對免費層加了反濫用政策（維護者於 issue #49580 明示：免費層只准在 opencode 本體內使用，付費模型不受限）。症狀是 HTTP 403 `FreeTierError`，訊息為 `OpenCode's free tier can only be used from within OpenCode`。
+
+套件於 2026-09-18 以矩陣實測（opencode 1.18.31）定出三條判準：
+
+| 路徑 | 結果 |
+|---|---|
+| REST 直呼（任何金鑰）之 `/chat/completions` 與 `/responses` | 免費模型**一律 403** → 該類 `zen:` 條目自此為政策性失效，故大量退場 |
+| opencode CLI（匿名或帶金鑰） | **通過**——但注入的設定若把 bash 工具 deny 掉，即被判定非 opencode 而 403 |
+| 帶金鑰時 | 另受該金鑰所屬工作區之模型開關影響（實測第 1 把金鑰對免費模型回 `Model access is disabled` 且耗 76s） |
+
+閘門的指紋之一是**請求的工具清單是否含 bash**，之二是 User-Agent 的版本字串（非正式版 build 會被拒）。例外：`/systemone` 端點的決策模型不受此閘門（2026-09-22 實測帶金鑰或匿名皆 200），所以那條 REST 條目仍然可用。
+
+**所以 REST 側的失敗有兩種成因，處置完全不同**：
+
+| REST 失敗長相 | 真正的成因 | 處置 |
+|---|---|---|
+| HTTP 500 | **端點型別錯配**：zen 的端點依模型家族而異，例如已下架的 muse-spark 系走 `/responses` 不走 `/chat/completions`（回 500 而非 404，極易被誤判成暫時故障而反覆重試） | 改用對的 kind，或改走 `oc:` 版 |
+| HTTP 403 `FreeTierError` | **政策性阻擋**：免費層只開放 opencode 客戶端 | **只能收 `oc:` 版**，再等再試也不會通 |
+
+### 免費模型走匿名：`useStoredAuth: false`
+
+`dispatchOpencode()` 於 1.0.34 有一個 `useStoredAuth` 選項（預設 `true`）。給 `false` 時會注入 `OPENCODE_AUTH_CONTENT='{}'`（空憑證），令本次**不讀 `auth.json`**、改以匿名免費存取。
+
+**為什麼免費模型要刻意匿名**：未注入金鑰時 opencode 會自動沿用 `auth.json` 的登入，而該帳號工作區若沒開某個免費模型就回 `Error: Model is disabled`——**同一個模型在「沒有 auth.json」的機器上卻匿名可用**，於是結果隨執行機器而異。套件以 `XDG_DATA_HOME` 指向含金鑰的暫存 `auth.json` 實測：不帶 key → `Model is disabled`；加 `'{}'` → 7.0s 成功；改注入 `''` → 仍 `Model is disabled`（**空字串無效，所以這個旗標不開放呼叫端自填內容**）；`auth.json` 前後 md5 一致。
+
+- 同時給 `key` 與 `provider` 時，金鑰注入本就整份取代 `auth.json`，此旗標**不再作用**。
+- 風險備忘（套件檔頭記載）：原始碼的 `Auth.set` 會以注入內容為底寫回 `auth.json`，但只在 OAuth 權杖刷新等寫入時發生；api 型金鑰與空憑證皆無刷新，實測未觸發。
+
+### 展開條目：`resolveProviders` 的五個回傳欄位
+
+```javascript
+import providers from 'w-dispatch-ai/src/providers.mjs';
+import resolveProviders from 'w-dispatch-ai/src/resolveProviders.mjs';
+import readEnvFile from 'w-dispatch-ai/src/readEnvFile.mjs';
+
+// 金鑰放 .env（OPENCODE_KEYS / AGNES_KEYS / POOLSIDE_KEYS，逗號分隔多把）
+// 用 readEnvFile 而非 process.loadEnvFile：後者會把金鑰塞進 process.env，多專案並行時互相覆蓋
+let env = readEnvFile('./.env');
+
+let { providers: ps, table, skipped, missing, hints } = resolveProviders(providers, {
+    env,
+    pick: ['oc:opencode/deepseek-v4.1-flash-free', 'oc:agnes-ai/agnes-3.0-flash'],
+});
+
+// pick 打錯字會「靜默少一條」，鏈比你以為的短——一律先擋下來
+if (missing.length > 0) {
+    throw new Error(`unknown provider id(s): ${missing.map((id) => `${id} (did you mean ${hints[id]}?)`).join(', ')}`);
+}
+```
+
+| 回傳欄位 | 內容 |
+|---|---|
+| `providers` | 展開後之條目陣列，直接餵 `dispatchAiFallback`；`pick` 的順序即遞補優先序 |
+| `table` | id 對條目之物件，直接餵 `dispatchAiWkf` |
+| `skipped` | 缺對應環境變數而**自動停用**的條目（不中斷、不 throw），形如 `{ id, envVar }` |
+| `missing` | `pick` 查無之 id |
+| `hints` | `missing` 之拼寫提示（最接近的可用 id），僅相似度最高者非保證正解 |
+
+**`skipped` 與 `missing` 都要看**：前者是「金鑰沒給」、後者是「id 打錯」，兩種都讓鏈默默變短，而症狀都是「遞補很快就走完卻沒成功」。
+
+### 展開後的後處理：`exes` 與 `patch`
+
+兩者都在 `resolveProviders` 內施作，故 `providers` 與 `table` 同源產出、必然一致——**不要拿回傳的陣列自己 map**（套件檔頭記載之殷鑑：逐條 timeout 只加在陣列版，工作流走 table 版全部落回預設而不自知）。
+
+```javascript
+let r = resolveProviders(providers, {
+    env,
+    pick: ['oc:opencode/deepseek-v4.1-flash-free'],
+    exes: { opencode: '<opencode 執行檔絕對路徑>' },                  // 逐 kind 注入；條目自帶 exe 者不覆寫
+    patch: {                                                          // 逐 id 淺合併，於 exes 之後施作
+        'oc:opencode/deepseek-v4.1-flash-free': {
+            timeoutMs: 14_400_000,
+            extraArgs: ['--variant', 'max'],
+            config: { permission: { edit: 'allow', write: 'allow', bash: 'allow' } },
+        },
+    },
+});
+```
+
+- **`exes` 解的是 `ENOENT`**：作業系統排程於 session 0 執行時 `PATH` 可能不含 npm 全域目錄，靠指令名會找不到執行檔。
+- **`patch` 是逐條覆寫任意欄位的正規入口**：本技能要的 `max`、4 小時逾時、放開權限鎖，三件事都在這裡補，不必改套件也不必自建條目表。
+- **`config` 是整個覆寫不是深層合併**：`patch` 為淺合併，給了 `config` 就會整顆換掉——第三方條目的 `provider` 定義也在 `config` 內，覆寫時要連同定義一起寫回，否則注入的設定少了 provider 定義，會以 `UnknownError` 收場。
+
+### 自帶條目與 id 命名
+
+新模型上線快於套件發版時，把自訂條目**合併進輸入**再傳進去即可（同 id 時以自訂者覆蓋內建）；**動輸入、不要動回傳**——把條目 push 進回傳的 `providers` 陣列不會同步進 `table`，兩者當場分歧。
+
+```javascript
+let extra = [{ id: 'oc:opencode/<新模型>', model: 'opencode/<新模型>', kind: 'opencode', envVar: 'OPENCODE_KEYS', provider: 'opencode' }];
+let merged = [...providers.filter((p) => !extra.some((e) => e.id === p.id)), ...extra];
+```
+
+- **`id` 務必明給且唯一**：省略時會回退為陣列索引字串，日後插入條目會讓後續條目繼承他人的遞補游標進度。命名要區分到「模型」而非只到「廠商」，同一模型經不同路徑取得時要帶上路徑前綴（`oc:` 走 CLI、`zen:`／`agnes:`／`poolside:` 走 REST）。
+- **自有欄位一律放 `meta`**：條目除 `id`、`keys`、`meta` 外的鍵**一律原樣轉傳**給轉接器，自己加的分類、標籤、註記若不放 `meta`，會被當成 `execCli` 的選項送出去。`meta` 是保證永不轉傳的保留鍵。
+
+不經條目表、直接呼叫時長這樣（供應商定義取自同一份表）：
+
+```javascript
+await wda.dispatchOpencode(prompt, {
+    model: 'agnes-ai/agnes-3.0-flash',
+    provider: 'agnes-ai',
+    key: agnesKeys[0],
+    config: {
+        provider: {
+            'agnes-ai': {
+                npm: '@ai-sdk/openai-compatible',
+                name: 'Agnes',
+                options: { baseURL: 'https://apihub.agnes-ai.com/v1' },
+                models: { 'agnes-3.0-flash': { name: 'Agnes 3.0 Flash' } },
+            },
+        },
+        permission: { edit: 'deny', bash: 'ask' },   // 見「權限」一節；bash 用 ask 不用 deny
+    },
+    timeoutMs: 14_400_000,   // 正式派工一律 4 小時；須照〈逾時與等待〉以 detached 執行，不可在工具呼叫內直接 await
+});
+```
+
+Poolside 同形，換成 `provider: 'poolside'`、baseURL `https://inference.poolside.ai/v1`、`models: { 'poolside/laguna-s-2.1': { name: 'Laguna S 2.1' } }`。
+
+**同一個模型經不同路徑＝不同的供應商**，條目 id 的前綴就是在區分這件事：`oc:` 走 opencode CLI，**有工具能力、能讀寫檔案**，但較慢；`agnes:`／`poolside:`／`zen:` 走 REST 直呼（`dispatchApiOpenaiCompat`／`dispatchApiOpenaiResponses`），免 CLI 免登入且快，但**沒有工具能力**——本套件遇模型回 `tool_calls` 一律以 `TOOL_CALLS_UNSUPPORTED`（`errorType: 'tool-unsupported'`）回報失敗，不假裝成功。兩者的額度池與故障域也各自獨立。**要派審計、寫測試這類需要讀寫檔案的任務，只能走 `oc:` 版。**
+
+## 輸出與附件
+
+```javascript
+// JSONL 事件流
+await wda.dispatchOpencode(prompt, {
+    model: 'opencode/deepseek-v4.1-flash-free',
+    extraArgs: ['--variant', 'max', '--format', 'json'],
+    useStoredAuth: false,
+});
+
+// 附加檔案（deepseek-v4.1-flash-free 可收文字與圖片；影片、PDF 等改用型錄標示可輸入該類附件的模型）
+await wda.dispatchOpencode('分析附件', {
+    model: 'opencode/deepseek-v4.1-flash-free',
+    extraArgs: ['--variant', 'max', '--file', './input.txt'],
+    useStoredAuth: false,
+});
+```
+
+`--format json` 會輸出 JSONL 事件，因此不可使用只接受單一 JSON 文件的 `validate: 'json'`。
+
+## 權限：先定能力下限，再往下收斂
+
+派工前先回答一個問題：**這個任務少了哪一項能力就做不出來？** 那是下限。安全考量只能在下限之上收斂範圍（專案目錄），不能低於下限——低於下限不是比較安全，是拿不到結果。
+
+| 任務類型 | 能力下限 | OpenCode 的給法 |
+|---|---|---|
+| 純生成、翻譯、改寫（素材全在提示詞內） | 無 | 提示詞自帶素材，`cwd` 不指向專案 |
+| 探索、調研、讀碼回答 | 讀檔 | `cwd`（或 `--dir`）指向待查專案；跨專案要查的目錄也得在裡面 |
+| 審計、複審、調查 | 讀檔 ＋ 寫檔（報告落檔）＋ 唯讀查證指令 | 同上，且**報告產出路徑必須落在同一個專案目錄內**；若沿用條目表的唯讀鎖，要把 `config.permission.edit` 放開 |
+| 寫測試、驗證猜想、重現問題 | 讀檔 ＋ 寫測試檔 ＋ 執行測試 | 同上；維持轉接器預設的 `build` 代理，且 `config.permission.bash` 須為 `allow`（條目表預設是 `ask`，等同拒絕）才跑得了測試 |
+| 修改、實作 | 讀 ＋ 寫 ＋ 執行 | 同上 |
+
+- **審計必須自己讀檔**。把檔案內容貼進提示詞不算獨立審計：被派對象只看得到你挑給它的片段，找不出你漏掉的地方，而那正是複審的唯一價值。
+- **驗證猜想必須能寫檔並執行**。不能寫測試就只剩推論；「我認為可能是 X」沒有可重現的執行結果，不是結論。
+- **不想放權時，換的是任務或環境，不是砍權限**。把目標複製或 `git worktree` 出一份到獨立目錄，`cwd` 指向該處，讓被派對象在裡面有完整讀寫執行，事後自己審 diff。
+
+### 第四層權限：提示詞前綴（走工作流時預設禁止寫檔）
+
+權限共有四層，前三層在你手上、第四層在套件手上：①CLI 旗標與代理規則（`--agent`／`--auto`）②轉接器選項（`config.permission`）③`providers.mjs` 條目自帶的唯讀鎖 ④**提示詞前綴**。
+
+`w-dispatch-ai` 的工作流層（`dispatchAiWkf` 之 `callAi`／`runFanout`／`runRolePipeline`／`runFanoutPipeline`）**預設會在提示詞前掛上 `NO_SIDE_EFFECT`**，其內文明寫「禁止建立、修改或刪除任何檔案…任何寫入磁碟的動作都不會被採用」（唯讀查閱不在此限）。
+
+**後果**：`config.permission` 全開、`--dir` 也對，模型仍會照提示詞不寫檔——exit 0、回覆看似正常、報告與測試檔一個都沒有。**症狀與 `config.permission` 被鎖完全同型**，但照權限那條路排查永遠修不好。
+
+**要落檔就必須顯式關閉**：傳 `promptPrefix: ''`。注意**只有空字串才算關閉**，傳 `null`／`undefined`／省略都會回退成掛上。直接呼叫 `dispatchOpencode()` 不受影響——該前綴只在工作流層自動掛。
+
+**反過來說，前綴是「請求」不是「強制」**：它靠模型願意遵守，真正擋得住寫入的是第②③層的 `config.permission`。所以①要唯讀就照樣上鎖，別只靠前綴；②要落檔則兩邊都得放行，缺一即為空手而回。該前綴本身為單一來源、亦由頂層匯出（`NO_SIDE_EFFECT`），直接呼叫 `dispatchAiFallback` 而想要同一約束時自行前綴即可，不要另抄一份措辭——措辭含「唯讀查閱不在此限」的豁免，抄舊版會讓某些 CLI 連讀檔都被禁掉。
+
+### 有效權限來自代理的規則，不是旗標——用 `opencode agent list` 實查
+
+`opencode agent list` 會印出每個代理的**實際生效規則**。2026-09-08 於 OpenCode 1.18.29 本機查得（節錄，`build` 代理）：
+
+```text
+*                   | allow | *
+doom_loop           | ask   | *
+external_directory  | ask   | *
+external_directory  | allow | <過去互動時核准過的目錄，逐條累積>
+```
+
+由此得出三件事：
+
+- **專案目錄內的讀寫執行，在 `build` 代理下不需要 `--auto`**。2026-09-08 實測：`opencode run --agent build`（未加 `--auto`）讀到檔並成功建立檔案，離開碼 0。
+- **跨出專案目錄的存取屬 `external_directory`，預設是 `ask`**；無介面模式沒有人可以回答，就會被擋住。所以派工的關鍵不是加不加 `--auto`，而是 `--dir`／`cwd` 是否涵蓋任務要讀寫的**全部**路徑——包含報告與測試產物的落點。
+- **這些規則含本機累積的核准紀錄，會隨機器不同**。同一段派工在別台機器上可能被擋，因此判斷權限一律以 `opencode agent list` 實查，不要用代理名稱或旗標推測（本機查得 `plan` 代理同樣是 `*: allow`，所以「換 plan 代理就等於唯讀」並不成立）。
+
+需要跨出專案目錄時，優先把目錄範圍調對（改 `cwd`／`--dir`，或把待讀資料複製進來）。只有在使用者已授權無人值守修改、且執行環境可信時，才加 `--auto`；依 help 原文它會自動核准「未被明確拒絕」的權限，也就是連上表的 `ask` 檔位一併放行。
+
+### 收斂權限用 `config.permission`，不是在預設與 `--auto` 之間二選一
+
+轉接器的 `config` 會注入該次程序的 `OPENCODE_CONFIG_CONTENT`，其中的 `permission` 可逐項給 `allow`／`ask`／`deny`：
+
+```javascript
+config: { permission: { edit: 'deny', bash: 'ask' } }   // 1.0.34 起之唯讀鎖
+```
+
+**`bash` 是 `ask` 不是 `deny`，這是刻意的**：免費層閘門以「請求的工具清單是否含 bash」當指紋之一，`deny` 會把 bash 自清單移除而被判定非 opencode 客戶端，直接回 403 `FreeTierError`（見「Zen 免費層閘門」）；`ask` 則工具仍在清單內。而 `opencode run` 是非互動的，`ask` 一律自動拒絕（stderr 會出現 `The user rejected permission`），套件金絲雀實測寫檔與 shell 建檔皆未落地——**所以 `ask` 在這裡仍是機械鎖，不是「可能被放行」**。
+
+**但這把鎖有一個前提：呼叫端不可另傳 `--auto`**。`--auto` 會自動核准未被明確拒絕的權限，等於把 `ask` 整個放行，鎖就沒了。
+
+`w-dispatch-ai/src/providers.mjs` 內建的**十二個** opencode 條目都帶這把唯讀鎖（套件內以 `OC_READONLY` 常數單一來源管理）——因為那些條目是給純文字生成與遞補用的。**派審計、寫測試時要把對應項目放開**（`edit` 給 `allow`，要跑測試把 `bash` 也給 `allow`），否則就是本技能「權限」開頭講的那種下限不足。走條目表時，放開的正規作法是 `resolveProviders` 的 `patch`（見「展開後的後處理」），且因 `patch` 為淺合併，覆寫 `config` 要把第三方條目原本的 `provider` 定義一起寫回。
+
+### 權限不足是 exit 0 的假成功，連轉錄都會顯示完成
+
+2026-09-08 於 OpenCode 1.18.29 實測，同一段提示詞（讀 `probe.txt` 第一行 ＋ 於同目錄建立 `out.txt`）：
+
+| 條件 | stdout | 離開碼 | `out.txt` |
+|---|---|---:|---|
+| `--agent build`，未加 `--auto`（本機代理規則 `*: allow`） | `READ=… WRITE=DONE` | 0 | 已建立 |
+| 同上，加 `config.permission = { edit:'deny', write:'deny', bash:'deny' }`（**當時之舊鎖**） | `READ=… WRITE=FAILED` | 0 | **未建立** |
+
+上表是 2026-09-08 以舊鎖做的。1.0.34 起唯讀鎖改為 `{ edit:'deny', bash:'ask' }`（免費層閘門會因 bash 被 deny 而回 403，見「權限」一節），套件以金絲雀重測確認寫檔與 shell 建檔同樣未落地——**鎖的寫法變了，但「exit 0 卻沒落地」這個症狀完全一樣**，判成敗一律看產物。
+
+被鎖擋下時的回覆長相**因模型而異**：上表是模型照實回 `WRITE=FAILED`；套件 2026-10-18 對 `beam-free`、`deepseek-v4.1-flash-free` 的寫檔金絲雀則是**回空字串而 `ok: true`**（write 工具不在清單、bash 自動拒絕）。所以除了驗產物，`validate: 'nonempty'` 也要一直掛著，至少讓空回覆判為失敗、在遞補鏈中換家。
+
+第二列的轉錄裡甚至出現 `✓ Create out.txt file`（它把建檔轉交子代理，子代理回報成功）——**畫面上打勾、檔案不存在、離開碼 0**。判成敗只能看產物是否落地，不能看有沒有回話、更不能看轉錄的勾。
+
+### 派工前的能力探測
+
+正式派工前，以**與正式派工相同的目錄與代理選項**跑一次最小探測：
+
+```javascript
+const probe = await wda.dispatchOpencode(
+    '讀取 <目標檔絕對路徑> 並原文輸出第 1 行；'
+    + '再於 <產出目錄絕對路徑> 建立 probe-out.txt，內容為 OK；'
+    + '最後只回一行：READ=<第1行> WRITE=<DONE 或 FAILED>',
+    { model, cwd, timeoutMs: 100_000, validate: 'nonempty' },   //探測維持短逾時、前景執行（壓在前景預設 120000 之內）；正式派工改走〈逾時與等待〉
+);
+// 只看 stdout 不算數：要確認 probe-out.txt 真的落地
+```
+
+探測失敗時先修目錄範圍與代理權限，不要改提示詞重試。
+
+## 逾時與等待：正式派工一律 4 小時，以 detached 行程執行
+
+**轉接器預設 300000（5 分鐘）遠遠不夠**：審計要把模組讀完、複審要逐格核對、寫測試還得把測試跑起來；本供應商的免費模型實測快慢差距極大（同一句話有的數秒回、有的要數分鐘，名為 lightning 的那支實測反而最慢），單次派工超過 1 小時已是常態。被逾時砍掉時 token 早就燒完卻拿不到任何結果——**逾時砍掉的不是等待時間，是整批已經付過錢的工作**，重派還要再付一次。
+
+**正式派工一律 `timeoutMs: 14_400_000`（4 小時）。逾時是上限不是固定等待**——提早做完就提早回，給大不吃虧；給小才會兩頭空。適用於所有正式派工：審計、複審、調查、寫測試、跑測試、多檔重構、產長報告，以及任何要求逐項核對者。**唯一例外是能力探測與單問一句**：維持 1–3 分鐘、前景執行——探測本來就要快失敗。
+
+### 為何不能在工具呼叫裡直接等
+
+Claude Code 對每一種工具呼叫都有時限，到期即終止整個行程，`timeoutMs` 給多大都沒用：
+
+| 呼叫方式 | 預設 | 上限 |
+|---|---|---|
+| Bash 前景 | 120000（2 分鐘） | 600000（10 分鐘） |
+| Bash `run_in_background: true` | 1800000（30 分鐘） | 7200000（2 小時） |
+| `Monitor` | 300000（5 分鐘） | 1800000（30 分鐘） |
+
+2026-10-03 實測：`run_in_background` 設 `timeout: 60000` 的指令於 60 秒整被終止、沒給 `timeout` 的指令於 30 分鐘整被終止（通知皆為 stopped after reaching its background time limit）；同日以 `nohup … &` 自前景 Bash 啟動的 node 行程，在該次工具呼叫結束後照常跑完並寫出結果檔。所以 4 小時派工必須**脫離工具呼叫**：派工腳本以 detached 行程執行、過程與結果落檔，等待則用背景指令分段進行。
+
+### 執行步驟（正式派工一律照做）
+
+**步驟 1：寫派工腳本。** 提示詞先寫進 `./tmp/<案名>/prompt.md`，再寫 `./tmp/<案名>/dispatch.mjs`：
+
+```javascript
+// ./tmp/<案名>/dispatch.mjs —— 由步驟 2 以 detached 啟動；過程與結果一律落檔
+import fs from 'fs';
+import path from 'path';
+import { createRequire } from 'module';
+
+const dir = path.resolve('./tmp/<案名>');
+const out = (name) => path.join(dir, name);
+const skillsRoot = path.resolve('<本技能目錄之絕對路徑>', '..');
+const wda = createRequire(import.meta.url)(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'));
+
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(out('node.pid'), String(process.pid));   //步驟 3 判斷存活、中止時樹狀終止都靠它
+let result;
+try {
+    result = await wda.dispatchOpencode(fs.readFileSync(out('prompt.md'), 'utf8'), {
+        model: 'opencode/deepseek-v4.1-flash-free',
+        extraArgs: ['--variant', 'max'],
+        useStoredAuth: false,
+        cwd: '<被派對象工作目錄之絕對路徑>',   //權限依〈權限〉一節之能力下限以 config.permission 收斂
+        timeoutMs: 14_400_000,
+        validate: 'nonempty',
+        onStdout: (chunk) => fs.appendFileSync(out('stdout.log'), chunk),   //失敗結果只留 500 字元，過程靠這份
+    });
+}
+catch (err) {
+    result = { ok: false, error: `dispatch.mjs 例外：${err?.stack || err}` };
+}
+fs.writeFileSync(out('result.json'), JSON.stringify(result, null, 2));
+```
+
+走遞補鏈或工作流時，同樣用這支腳本包住整個呼叫（把 `dispatchOpencode` 換成 `dispatchAiFallback` 或工作流函數，`onEvent` 一併落檔，見下節「觀測點」），步驟 2、3 不變。
+
+**步驟 2：以 detached 啟動。** 用前景 Bash 執行，立即返回；**不要**用 `run_in_background` 跑派工本身，那會讓它受上表時限約束：
+
+```bash
+nohup node ./tmp/<案名>/dispatch.mjs > ./tmp/<案名>/run.log 2>&1 &
+sleep 3; cat ./tmp/<案名>/node.pid   # 印得出 PID 才算啟動成功；印不出來先讀 run.log
+```
+
+**步驟 3：分段等待。** 用背景 Bash，`timeout` 必須明給 `7200000`（不給就是 30 分鐘）；迴圈在第 6900 秒自行結束，趕在上限之前回報：
+
+```text
+Bash({ run_in_background: true, timeout: 7200000,
+  description: '等待派工 <案名>（本段至多 115 分鐘）',
+  command: 'd=./tmp/<案名>; end=$(( $(date +%s) + 6900 )); while [ ! -f "$d/result.json" ] && node -e "process.kill(+process.argv[1],0)" "$(cat "$d/node.pid")" 2>/dev/null && [ "$(date +%s)" -lt "$end" ]; do sleep 30; done; if [ -f "$d/result.json" ]; then echo "DONE $(date +%H:%M:%S)"; elif [ "$(date +%s)" -ge "$end" ]; then echo "STILL-RUNNING $(date +%H:%M:%S)"; else echo "CRASHED $(date +%H:%M:%S)"; tail -20 "$d/run.log"; fi' })
+```
+
+通知回來後依輸出的第一個字處置：
+
+| 輸出 | 意義 | 處置 |
+|---|---|---|
+| `DONE` | `result.json` 已寫出 | 讀它，**再驗產物**——exit 0、非空輸出、轉錄裡的勾都不是成功判準（見〈權限〉） |
+| `STILL-RUNNING` | 本段到期，派工仍在跑 | 原指令重掛下一段。累計超過派工應有的最長總時長（單次嘗試為 4 小時；遞補鏈與工作流依下節公式）仍未結束，才視為異常回報 |
+| `CRASHED` | 行程已結束卻沒有 `result.json`（被外力終止、機器休眠、node 崩潰） | 讀 `run.log` 與 `stdout.log` 找原因；**找到原因前不要重派** |
+
+**session 中斷或重開後**：派工照跑，不受影響（2026-10-03 實測：由 `claude -p` 的 Bash 工具以 `nohup` 啟動的行程，在該 `claude` 行程結束後照常跑完）；只有機器重開會中斷它。接手時先看 `./tmp/<案名>/`：有 `result.json` → 直接驗收；沒有、但 `node.pid` 的行程仍存活 → 重掛步驟 3；兩者皆無才考慮重派。**不要因為換了 session 就重派**——那正是浪費 token 的主因。
+
+**中止**：Windows 用 `cmd //c "taskkill /F /T /PID <node.pid 之值>"`（`/T` 連同 opencode 子行程一起結束）；其他平台以 `kill` 終止該 PID 及其子行程。中止前先徵詢使用者。
+
+### 逾時分層：五層都要放行
+
+**任一層先到就被截斷**（套件 README 之「Timeout 總覽」明訂②④⑤的數值須嚴格遞增）：
+
+| 層 | 誰在殺 | 預設 | 正式派工怎麼設 |
+|---|---|---|---|
+| ①呼叫端（Claude Code 的工具呼叫時限） | harness 終止整個行程 | 見上節表格，最長 2 小時 | 派工照〈執行步驟〉detached 執行，此層即不作用；只有等待受它約束，所以等待要分段 |
+| ②轉接器 `timeoutMs`（單次嘗試） | 逾時終止程序樹 | 300000 | `14_400_000` |
+| ③CLI 自身內層逾時 | — | `opencode run` **旗標表上沒有**此類旗標 | 不適用（只有 agy 有 `--print-timeout`） |
+| ④單一名額之遞補鏈 `budgetMs` | 預算用盡即停止遞補 | `null`（不限） | 要嘛不給，要嘛 ≥ `鏈組數 K × 14_400_000`；給小了會把第②層壓下去 |
+| ⑤工作流總時長 | 無獨立參數，由結構推導 | 無（刻意） | `runRolePipeline` 最壞 ≈ M×K×`timeoutMs`。K=4、M=3 配 4 小時就是 **48 小時**——先算再決定要不要拆階段 |
+
+**最常見的假象**：`timeoutMs` 明明給了 4 小時，派工卻在 2 分鐘、10 分鐘、30 分鐘或 2 小時整斷掉——全是第①層砍的：派工掛在前景，或掛在 `run_in_background` 上（沒給 `timeout` 是 30 分鐘，給滿也只有 2 小時）。**只改 `timeoutMs` 沒用，派工一定要照〈執行步驟〉detached 執行**。
+
+**單次派工還會乘上去的**：`timeoutMs` 是**每次嘗試**的上限，不是總時長；自訂 `validate` 的等待也算在同一次嘗試內（`src/runExecCli.mjs`）。`maxRetries: N` 時總時長約 `timeoutMs × (1+N)`，再加重試間隔（`retryDelayMs` 預設 5000，實際間隔為 `retryDelayMs × 已嘗試次數`、單次上限 15000）；**`TIMEOUT` 會被重試，每次耗滿 `timeoutMs`，且不受 `budgetMs` 約束**。不重試、立即中止的只有確定性失敗：`ENOENT`（命令不存在、不存在的 `.cmd`／`.bat`、npm shim 的入口檔缺失——opencode 經 npm 全域安裝，套件被部分移除時就是這種）、exit code 2（參數錯誤）、`cwd` 不存在，以及子進程根本起不來的同步錯誤（命令列過長、權限不足、非有效執行檔、參數含空字元；這類結果 `code` 為 `null`、`errorType` 為 `spawn`）。
+
+**走遞補鏈或工作流時，三個值必須成套設，缺一即壞**（以下皆為 `w-dispatch-ai/src/dispatchAiFallback.mjs` 之實際行為）：
+
+```javascript
+{ timeoutMs: 14_400_000, minAttemptMs: 14_400_000, budgetMs: K * 14_400_000 }  // K＝遞補鏈之組數
+```
+
+| 選項 | 預設 | 實際行為與陷阱 |
+|---|---|---|
+| `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**；給得比 `timeoutMs` 小，4 小時等於白設 |
+| `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
+| `cooldownMs` | `0`（關閉） | 內建觸發只有 HTTP 429 與逾時，**429 僅 REST 類（`zen:`／`agnes:`／`poolside:`）偵測得到**；`oc:` 這類 CLI 條目的限流埋在 stderr 文字裡，內建規則抓不到。觸發後該條目**只被移到鏈尾不被移除**（前面全敗時仍會被試到，任一次成功立即解除），啟用期間「providers 順序即優先序」會被暫時重排。套件記載之實測：一次 107 秒請求中 72 秒耗在重複踩同一家，開冷卻後降至 15 秒。**只對有明給 `id` 的條目生效** |
+| `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /FreeUsageLimitError/i.test(r.stderr \|\| '')`。注意 opencode 1.18.32 遇 Zen 免費層 429 時 `run` **不會結束**、stderr 只有 session 標頭，直到逾時才以 `TIMEOUT` 回報（內建逾時觸發已涵蓋）；要讓字樣出現在 stderr 須於 `extraArgs` 加 `--print-logs --log-level ERROR`（套件 2026-09-23 實測） |
+| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
+
+遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `config` 不可序列化、`env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰——第三方兩條有多把金鑰時，依 `next-key`／`skip-group` 計數的數字會因此變小。
+
+**`budgetFor()` 有陷阱，不要照抄**：它**只累加條目自己的 `timeoutMs`**（未帶者以統一預設 300000 計），讀不到你寫在 opt／`defaults` 的那一個；而套件內建的 providers 條目**刻意一條都不帶 `timeoutMs`**（1.0.54 實查 24 條皆無），所以 `budgetFor(內建條目)` 恆為「條目數 × 300000」（24 條就是 120 分鐘）——比你的 4 小時還小，反而把它壓下去。**本技能教的「直接引用 `providers.mjs`」正好踩中這一點**：要用 `budgetFor()` 就得先把 `timeoutMs: 14_400_000` 逐條寫進每個條目（用 `resolveProviders` 的 `patch` 逐 id 覆寫，別自己 map 回傳值），否則直接寫 `K × 14_400_000`。
+
+**4 小時派工要留觀測點**：`dispatchAiFallback` 的 `onEvent` 會逐步回報 `'try'`／`'ok'`／`'next-key'`／`'skip-group'`／`'budget-out'`／`'aborted'`／`'cooled'`，以及一組試完仍無成交時的 `'group-exhausted'`（1.0.39 起，帶 `attempted`／`by`／`errorTypes`），失敗事件另帶 `errorType`、被拒回覆與 stderr。沒掛它的話，四小時內看不出是卡在哪一家、還是早就跳完整條鏈在空轉。detached 執行時把事件一併落檔，等待期間隨時可讀：`onEvent: (ev) => fs.appendFileSync(out('events.log'), JSON.stringify(ev) + '\n')`（事件皆為純欄位物件；回呼拋出例外或回傳被 reject 的 Promise 都不影響主流程，也不會被等待）。
+
+**工作流層的覆寫順序**（細者覆蓋粗者）：`dispatchAiWkf` 的 `defaults` → 各工作流 `callOpt` → 階段／名額規格 → provider 條目。把 4 小時寫在 `defaults`、而某條目自帶較小的 `timeoutMs` 時，**條目會贏**。另外 1.0.49 起呼叫層的 `validate`（含寫在 `defaults` 者）會與工作流的 `parse`／`check` **取交集**，兩者皆過才算過——此前被靜默忽略，舊設定升版後可能開始擋下回覆而換家。
+
+**與套件內建規劃的關係**：`w-dispatch-ai/src/providers.mjs` 檔頭的 timeout 規劃以「單一 AI 工作約 15 分鐘」估出 `timeoutMs: 1_200_000`，那是一般複雜任務的估法；**正式派工以本節的 4 小時為準**，不要照抄 20 分鐘把它調回去。套件內部四層（②～⑤）的權威整合說明在套件 README 的「Timeout 總覽」一節；第①層是呼叫端的事，README 不涵蓋。
+
+**被砍時要保住已完成的部分**：失敗結果的 `stdout` 只會留 500 字元（`wsemi/src/execCli.mjs`；驗證失敗者同，見 `src/runExecCli.mjs`），所以正式派工一律掛 `onStdout` 邊跑邊落檔——〈執行步驟〉的範本已寫入 `stdout.log`，不要拿掉，否則被砍就真的什麼都不剩。
+
+**逾時與假成功是兩回事**：逾時被殺時 `errorType` 為 `timeout`；權限被擋、或提示詞層被禁止寫檔則是 `ok: true`／exit 0，**根本不會產生 `errorType`**——除非掛了 `validate` 而回覆恰為空字串（見〈權限不足是 exit 0 的假成功〉），才會轉成 `validation` 失敗。看到「沒有結果但也沒有錯誤」先分清是哪一種，別互相誤診。
+
+## 額度查詢沒有 opencode 版，別去找
+
+套件自 `src/quota/` 提供三支額度查詢函數：`getQuotaClaude`、`getQuotaCodex`、`getQuotaAntigravity`。**沒有 `getQuotaOpencode`，也不該期待有**——那三家查的是「本機該 CLI 當前登入帳號」的訂閱額度窗口（5 小時／7 天等），而 OpenCode 這條路走的是免費型錄與 API 金鑰，不是訂閱窗口，沒有對應的可查端點。
+
+所以 opencode 的限流只能事後從失敗結果判讀：CLI 類的限流字樣埋在 stderr，`errorType` 一律是 `exec`（不細分），要偵測就自己給 `coolDetect`（見〈逾時與等待〉）。**不要為了「先查額度再決定派不派」去翻 `src/quota/`**，那裡沒有你要的東西。
+
+## 轉接器契約（w-dispatch-ai 1.0.54）
+
+| 選項 | 轉接器預設值 | 行為 |
+|---|---:|---|
+| `exe` | `opencode` | 執行檔名稱或絕對路徑 |
+| `model` | 省略 | 展開為 `-m <provider/model>` |
+| `agent` | `build` | 展開為 `--agent build` |
+| `key`、`provider` | 省略 | 兩者同時存在時建立單次程序用的 `OPENCODE_AUTH_CONTENT` |
+| `useStoredAuth` | `true` | **1.0.34 新增**。`false` 時注入空憑證 `{}`，令本次不讀 `auth.json` 而以匿名免費存取；已同時給 `key` 與 `provider` 時不作用。只接受布林值，**不開放自填內容**（實測空字串無效） |
+| `config` | 省略 | 將物件／字串注入為 `OPENCODE_CONFIG_CONTENT`；不可序列化（BigInt、循環參照）或不可讀時回 `errorType: 'params'`（1.0.48 起，此前 reject） |
+| `env` | 省略 | 額外子程序環境變數，與轉接器注入的 `OPENCODE_AUTH_CONTENT`／`OPENCODE_CONFIG_CONTENT`／`PWD` 合併後交出；物件不可讀（拋錯之 getter 等）時於啟動前回 `errorType: 'params'` |
+| `extraArgs` | `[]` | 接在 OpenCode 固定參數之後 |
+| `timeoutMs` | `300000` | 逾時時終止程序樹 |
+| `cwd` | 目前目錄 | 傳給子程序的工作目錄；其絕對路徑同步注入 `PWD`（opencode 以繼承的 `PWD` 優先於真實 cwd 決定 session 目錄），呼叫端 `env` 內的 `PWD` 會被覆寫 |
+| `validate` | 省略 | 由套件自身判定（`src/runExecCli.mjs`；1.0.49 起不交 `execCli`）：規則字串或自訂函數，函數可回傳 Promise，等待時間算在同一次嘗試的 `timeoutMs` 內；拋錯、reject、逾時皆為 `OUTPUT_VALIDATION_FAILED`（`errorType: 'validation'`） |
+| `maxRetries`、`retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
+
+提示詞透過 stdin 傳入。結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`；必須檢查 `ok`。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`（1.0.48 起回結果物件，此前部分情形會 reject）；`durationMs` 含驗證時間。
+
+請使用 UMD 預設匯出：`import wda from 'w-dispatch-ai'`。
+
+### 表以外的細節一律查原始碼（當前安裝版）
+
+上表只列常用鍵。**細部設定、權限、實際可用的模型與供應商、錯誤分類等只要不確定，就去讀當前安裝版的原始碼，不要憑記憶或猜測**——技能寫的是查核當日的狀態，套件、CLI 與型錄都會滾動。
+
+原始碼就在**技能根的 `node_modules/w-dispatch-ai/src/`**（見「套件裝在哪」一節）。**不要用 `npm ls` 或 `require.resolve` 查**——那兩者從當前專案解析，可能指到另一份。
+
+| 想知道 | 讀哪個檔 |
+|---|---|
+| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchOpencode.mjs`（固定旗標順序為 `run` → `--agent <值>` → `-m` → `extraArgs`；`exe`／`model`／`key`／`provider`／`useStoredAuth`／`agent`／`config`／`extraArgs`／`input`／`env` 為自用鍵，`env` 由轉接器與憑證、設定、`PWD` 注入合併後再交出；其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`，`validate` 除外、由該檔自行判定） |
+| **實際可用、已實測過的模型與供應商條目**（含第三方 provider 的完整 `config`、金鑰環境變數、權限鎖、實測耗時與失敗碼） | `src/providers.mjs`——**本技能所有模型資訊的上游**，改模型前先讀它 |
+| 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
+| `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。validate 字串要逐字核對，或直接傳自訂函數 |
+| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽。CLI 類（本轉接器）用得到的只有 `params`／`timeout`／`spawn`／`validation`／`exec`（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`），**其餘失敗一律歸 `exec` 不再細分**（各家 CLI 字樣隨版本漂移，套件刻意不維護簽章表）；`http`／`fetch`／`tool-unsupported`／`invalid-response`／`incomplete` 只出現於 REST 類，`aborted`／`budget` 只出現於遞補層。要細分 CLI 失敗就自己用 `coolDetect` 式注入判斷 |
+| 額度查詢（**無 opencode 版**）之函數、結構與詞彙 | `src/quota/`；其 `errorType` 是另一套詞彙，與上列轉接器的不共用 |
+| 條目展開、`pick`／`exes`／`patch`、拼寫提示 | `src/resolveProviders.mjs`（檔頭記載「後處理收進本函數」之理由與單邊套用殷鑑） |
+| 工作流配套工具 | `src/wkf/`：`createFileStore`（跨行程持久化遞補游標與冷卻狀態，排程任務每次都是新行程故記憶體版每次歸零）、`createUsageCounter`（逐日用量計帳，純觀測不據以節流）、`salvageTruncatedArray`（截斷 JSON 陣列之前段搶救，刻意不併入預設解析） |
+| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭 |
+| 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
+| 多供應商遞補、金鑰輪替、條目 id 命名規則（`oc:`／`zen:`／`agnes:`…之意義） | `src/dispatchAiFallback.mjs` 檔頭 |
+
+**檔頭註解是實測紀錄，不是設計說明**：`src/dispatchOpencode.mjs` 檔頭記著三條實測結論——①`OPENCODE_AUTH_CONTENT` 會**完全覆蓋** `auth.json` 但不改寫該檔（實測前後 md5 一致），屬 process 層級，可與其他專案並行；②`OPENCODE_API_KEY` 在 `auth.json` 已有憑證時不生效，故一律走 `OPENCODE_AUTH_CONTENT`；③**第三方 provider 只注入金鑰無效**，未給 `config` 定義時 `opencode models` 不列出該 provider，直接指定模型回 `UnknownError／Unexpected server error`——與本技能「認證與單次程序注入」一節記載的錯誤長相一致。與本技能所述不一致時，以原始碼與其實測註記為準，並回頭修技能。
+
+## 型錄驗證：查型錄之外還要實跑
+
+OpenCode 型錄會動態變更，而且**型錄狀態與供應商實際服務狀態不同步**——已下線的模型照樣列在型錄裡（見「不可再用的舊預設值」）。所以固定任何 ID 或 variant 前，兩步都要做：
+
+```bash
+opencode --version
+opencode auth list                          # 有哪些供應商可用
+opencode models opencode --refresh          # 重抓型錄
+opencode models opencode --verbose          # status / capabilities / variants / limit
+```
+
+查型錄要看四個欄位，缺一就可能派了做不了事的模型：
+
+| 欄位 | 為什麼要看 |
+|---|---|
+| `status` | 非 `active` 者不要用 |
+| `capabilities.toolcall` | **`false` 就不能讀寫檔案**，只能當純文字生成，審計與測試類任務一律不合格 |
+| `capabilities.reasoning` 與 `variants` | 決定有沒有推理檔位、最深的一檔叫什麼（不是每個模型都有 `max`） |
+| `limit.context` / `limit.output` | 長脈絡審計與長篇產出是否放得下 |
+
+第二步是**實跑一次最小任務**（見「派工前的能力探測」），確認該 ID 真的回得了話、且真的能用工具。只查型錄不算驗證。
+
+**第三步：確認 variant 真的生效**。回覆正確只代表模型跑了，不代表跑的是你指定的檔位。opencode 的工作階段紀錄會記下實際的模型與 variant；工作階段依目錄區分，所以要在派工時的那個工作目錄（`cwd`）下查：
+
+```bash
+opencode session list -n 2 --format json   # 取最近的工作階段 id（在派工的 cwd 下執行）
+opencode export <工作階段 id>               # 在輸出的 JSON 找 "modelID" 與 "variant"
+```
+
+不要用 `cd` 切過去查；從程式以子行程執行並把 `cwd` 與環境變數 `PWD` 都設成那個目錄（轉接器派工時也是這樣同步 `PWD` 的）。
+
+截至 2026-10-19，本機 OpenCode 1.19.3 之型錄顯示 `opencode/deepseek-v4.1-flash-free` 為 `status: active`、`reasoning: true`、`toolcall: true`、variant `low`／`high`／`max`、脈絡窗 200,000、最大輸出 32,000、費用 0；以 `--variant max`、匿名實跑讀寫兩次通過，工作階段紀錄兩次皆為 `deepseek-v4.1-flash-free`／`max`，依使用者指示訂為必要預設值。同日 `opencode` 供應商之免費模型共 10 項：`beam-free`、`big-pickle`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`longcat-2.5-preview-free`、`mimo-v2.6-flash-free`、`minimax-m3.1-flash-free`、`nemotron-3-ultra-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`，皆 `toolcall: true`（`space-bunny-free` 已不在型錄）。
+
+## 派什麼、怎麼驗收：審計／複審／規劃審核類派工先審表，再審方案
+
+本技能只管「怎麼呼叫 OpenCode」與「給到任務所需的能力」；本節是把設計複審、架構審查、規劃審核派給任何對象時「派什麼、怎麼驗收」（四個 dispatch-* 技能本節內容相同，改一處要四處同步）。所稱「表」是輸入空間表：先列軸，每軸成員以 grep 自系統取得，軸與軸做笛卡兒積，每格填「現況／應然／處置」，建法見 skill[role-coder-for-validate]〈Step 1〉。
+
+- **被派對象必須能自行讀檔**：不能讀檔就不是獨立審查，先解決讀檔（見〈權限：先定能力下限，再往下收斂〉），不得改成把檔案內容貼進提示詞充數。派長任務前先以「讀某檔並原文引用第 N 行」做最小探測；`validate` 須要求回覆引用指定內容，不只驗非空。
+- **複審的價值在找出我漏掉的格**，不在評價我已列的方案——方案再好也補不了輸入空間的漏格。提示詞必依序要求：①挑戰表的完整性（缺軸、缺格、格內現況不屬實者，附 `file:line`）；②審對標（同類成熟產品之作法與本系統之差異）與對稱性（同型元素之規則是否一致）；③最後才審方案與步驟。
+- **表還沒建好就先建表，不派工**：沒有表就派人審方案，等於把漏格帶進實作。
+- **收回後逐格核對原始碼**（`file:line`）才採納，不整批接受，也不整批駁回；採納／駁回逐條附理由。
+- **自審的表一定有洞**：曾有一張自認完整的互動矩陣，交外部複審後仍被找出 30 格缺口，且全部屬實。所以派工不是「請你確認我對」，是「請你找我漏的格」；自己檢查過也不能跳過複審。
+
+## 安裝檢查
+
+```bash
+npm install -g opencode-ai@latest
+opencode --version
+opencode run --help
+```
+
+`w-dispatch-ai` 裝在技能根、由使用者統籌更新（見「套件裝在哪」），**不要在專案裡 `npm install w-dispatch-ai`**。
+
+2026-10-19 查核：技能根實裝 `w-dispatch-ai` **1.0.54**，本機 opencode 為 **1.19.3**。
+
+| 項目 | 結果 |
+|---|---|
+| **必要預設值更換（使用者指示）** | `opencode/beam-free` ＋ `max` 改為 **`opencode/deepseek-v4.1-flash-free` ＋ `--variant max` ＋ 匿名**；型錄確認 `status: active`、`toolcall: true`、variants `low`／`high`／`max`、脈絡窗 200,000、輸出 32,000；以 1.0.54 實跑讀中文檔＋寫檔兩次皆通過（21.8 秒、18.2 秒，檔案落地），`opencode export` 之工作階段紀錄兩次皆為 `deepseek-v4.1-flash-free`／variant `max` |
+| 脈絡限制 | 套件條目註解（同日實測）：伺服器實收約 239K、本機約 168K 起自動壓縮且 stdout 混入摘要仍 `ok: true`；長提示詞控制在約 160K 以下（見〈必要預設值〉） |
+| `providers.mjs` | 全表由 21 條增為 **24 條**；`kind: 'opencode'` 者由 9 條增為 **12 條**、自家條目由 7 條增為 **10 條**：新增 `nemotron-3-ultra-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`（排在 opencode 免費條目之末），`space-bunny-free` 以原位改為 `minimax-m3.1-flash-free`（同一模型恢復真名，舊 id 呼叫回 `UnknownError`） |
+| `dispatchOpencode()` | 固定參數與自用鍵不變（README 行為變更紀錄第 38、39 條只涉及條目） |
+
+2026-10-18 查核：技能根實裝 `w-dispatch-ai` **1.0.53**，本機 opencode 為 **1.19.3**。以 `opencode models opencode --verbose` 重查型錄，並讀 1.0.53 原始碼核對（未重跑旗標表）：
+
+| 項目 | 結果 |
+|---|---|
+| **必要預設值更換** | `opencode/muse-spark-1.3-contributor-free` ＋ `--variant xhigh` **已失效**（不在型錄、套件移除條目），改為 **`opencode/beam-free` ＋ `--variant max` ＋ 匿名**；型錄確認 `status: active`、`toolcall: true`、variants `low`／`medium`／`high`／`xhigh`／`max`；以 1.0.53 實跑讀中文檔＋寫檔兩次皆通過（8.3 秒、11.4 秒，檔案落地） |
+| `dispatchOpencode()` 固定參數與自用鍵 | 不變（`run` → `--agent <值>` → `-m` → `extraArgs`），**呼叫方式不變** |
+| `providers.mjs` | 全表 **21 條**；`kind: 'opencode'` 者由 7 條增為 **9 條**，自家條目由 5 條增為 **7 條**且仍全為匿名：新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`；有檔位者仍帶 `--variant high`，唯讀鎖仍為 `{ edit:'deny', bash:'ask' }` |
+| REST 側 | `zen:space-bunny-free` 已移除（免費層閘門之例外收回、REST 一律 403）；`zen:jev-1.13-free` 之 `baseURL` 改為 `https://opencode.ai/inference/v1` |
+| 被擋下的回覆長相 | beam-free、deepseek-v4.1-flash-free 寫檔被唯讀鎖擋下時回空字串而 `ok: true`（套件金絲雀），須掛 `validate: 'nonempty'` |
+| `validate` | 1.0.49 起由套件自行判定（`src/runExecCli.mjs`）：可回傳 Promise、與子進程共用 `timeoutMs`，拋錯與逾時回 `validation`；規則名打錯仍被靜默忽略 |
+| 啟動失敗與參數 | 1.0.48 起子進程未能啟動一律回結果物件（`spawn`），不重試、遞補鏈整組跳過；`config` 不可序列化或 `env` 不可讀回 `params`（此前 reject） |
+| 控制回調 | `coolDetect`／`shouldStop` 為同步契約（回傳 Promise 視同 `false`）；`coolDetect` 宜先排除 `validation`；`onEvent` 的 rejection 被承接 |
+
+2026-09-08 於本機 `opencode-ai` 1.18.29 查核：`opencode run` 之旗標（`--agent`、`-m`、`--variant`、`--dir`、`--auto`、`--format`、`--file`）皆與本技能所載一致。
+
+2026-09-30 查核：本機 opencode 為 **1.18.33**、`w-dispatch-ai` 最新為 **1.0.40**（技能根實裝 1.0.39）。以 `opencode models opencode --verbose` 重查預設模型之型錄，並讀 1.0.40 原始碼核對（未重跑旗標表）：
+
+| 項目 | 結果 |
+|---|---|
+| 必要預設值 | `opencode/muse-spark-1.3-contributor-free` ＋ `--variant xhigh` 維持不變；型錄重查確認 `status: active`、`reasoning: true`、`toolcall: true`、variants 仍為 `minimal`／`low`／`medium`／`high`／`xhigh`（**最深是 `xhigh`，沒有 `max`**） |
+| 以預設值實跑 | `opencode run --agent build -m opencode/muse-spark-1.3-contributor-free --variant xhigh` 回覆正確 |
+| `providers.mjs` | 全表由 15 條增為 **17 條**；`kind: 'opencode'` 者由 6 條增為 **7 條**（新增 `oc:opencode/space-bunny-free`），自家條目由四條增為五條且仍全為匿名 |
+| **條目新增自帶 variant** | 有檔位的三條（muse-spark 1.2／1.3、space-bunny）帶 `['--variant','high']`；`big-pickle`、`mimo` 與第三方兩條無檔位故不帶。**是 `high` 不是本技能的 `xhigh`** |
+| REST 側 | 新增 `zen:space-bunny-free`（`api-openai-compat`），是對話型免費模型中少數 REST 可通者——免費層閘門對它未套用（匿名與帶金鑰皆 200），**但套件註解明寫此例外可能隨時收回**；其 `max_tokens` 刻意設 32768 而非慣例的 8192，因推理 token 計入該上限，8192 易截斷 |
+| 唯讀鎖 | 仍為 `{ edit:'deny', bash:'ask' }`，未再變動 |
+
+以下為 2026-09-23 於 opencode 1.18.31 ＋ 套件 1.0.34 之查核（部分項目已被上表取代，保留以對照沿革）：
+
+| 項目 | 結果 |
+|---|---|
+| `dispatchOpencode()` 固定參數 | 與 1.0.17 起各版相同（`run` → `--agent <值>` → `-m` → `extraArgs`），**呼叫方式不變**；自用鍵多一個 `useStoredAuth` |
+| 必要預設值 | `opencode/muse-spark-1.3-contributor-free` ＋ `--variant xhigh` 維持不變；型錄重查確認 `status: active`、`toolcall: true`、variants 仍為 `minimal`／`low`／`medium`／`high`／`xhigh`（**最深是 `xhigh`，沒有 `max`**）、脈絡窗 1,048,576、費用 0 |
+| `providers.mjs` | 全表由 20 條縮為 **15 條**；`kind: 'opencode'` 者仍 6 條但內容換血（移除 deepseek 與 union-alpha，新增 big-pickle 與 mimo-v2.6-flash-free），四個自家條目改為匿名（`useStoredAuth: false`），全部不帶 `timeoutMs` |
+| **唯讀鎖改法** | 由 `{ edit:'deny', write:'deny', bash:'deny' }` 改為 **`{ edit:'deny', bash:'ask' }`**——`deny` bash 會觸發免費層閘門而 403，`ask` 在非互動下等同拒絕仍是機械鎖（前提：呼叫端不可加 `--auto`） |
+| `resolveProviders()` | 回傳為 `{ providers, table, skipped, missing, hints }`，另有 `exes`／`patch` 後處理選項 |
+| `src/quota/` | 三支訂閱額度查詢函數，**不含 opencode** |
+| `errorType` | CLI 類實際用得到的仍只有 `params`／`timeout`／`spawn`／`validation`／`exec` 五種 |
+| 條目之版本漂移 | 1.0.25 把 Agnes 由 2.5 換成 3.0；1.0.26 新增 union-alpha；**1.0.34 移除 union-alpha 與 deepseek、新增 big-pickle 與 mimo-v2.6-flash-free、自家條目全改匿名**。**轉接器不動、條目一直動**，故 id 一律對安裝版核對 |
