@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "@cantoo/pdf-lib": "^2.11.1",
-    "@napi-rs/canvas": "^1.0.11",
+    "@napi-rs/canvas": "^1.0.13",
     "@officecli/officecli": "^1.0.158",
     "fontkit": "^2.0.4",
     "mupdf": "^1.28.1",
@@ -10,9 +10,9 @@
     "w-dispatch-ai": "^1.0.55",
     "w-dwdata-hub": "^1.0.22",
     "w-fetch-web": "^1.0.27",
-    "w-orm-lmdb": "^1.0.42",
-    "w-zip": "^1.0.47",
-    "wsemi": "^1.9.22"
+    "w-orm-lmdb": "^1.0.44",
+    "w-zip": "^1.0.48",
+    "wsemi": "^1.9.25"
   },
   "allowScripts": {
     "@askjo/camofox-browser": true,
