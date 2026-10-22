@@ -12,6 +12,7 @@
 | `skills/` | 全域技能原稿(每個技能一個資料夾,含 `SKILL.md`)與其 `package.json` | `~/.claude/skills/`(其後 `npm i` 與 `npm update`) |
 | `sync.bat` | 同步腳本 | — |
 | `script.txt` | 原稿修改後推上 GitHub 之指令 | — |
+| `tools/check-skills.mjs` | 原稿自檢:技能 frontmatter、連結與 `skill[名]` 引用、`sync.bat` 編碼與換行、公開庫衛生(`node tools/check-skills.mjs`,有錯誤離開碼 1) | 不同步 |
 | `.gitattributes` | `.bat` 以 CRLF 原樣入庫(cmd.exe 對 LF 批次檔之 `goto` 標籤不可靠) | — |
 | `skillsOld/`、`skillsTemp/`、`CLAUDE_temp*.md`、`g_*.md` | 舊版、暫存、草稿與筆記 | 不同步 |
 
