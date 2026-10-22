@@ -273,4 +273,4 @@ http://100.120.70.67:3000/semi/opensrcOper
   - 處理要點、規則帳本:依類型拆為 `process_<類型>.md`、`rulebook_<類型>.md`(類型依專案自訂),主檔只留「哪類查哪檔」之索引.
   - 狀態:依功能類型拆為 `state_<類型>.md`,`state.md` 只留索引.
   - 整理時節號與標題不變,既有引用才對得上;不刪內容,只搬移.
-- **版控與發布**:`CLAUDE.md` 與 `sgud/` 納入 git 版控,**不入 npm 包**(`.npmignore` 列 `CLAUDE*.md` 與 `sgud`;原無 `.npmignore` 者以原 `.gitignore` 內容為底建立,維持既有打包範圍).repo 為公開庫時,內容不得含金鑰、權杖、內網位址或帳號資訊.
+- **版控與發布**:**只有 `sgud/` 納入 git 版控**;`CLAUDE.md`(給 agent 之進入點)與 `CLAUDE_settings.md` 等 `CLAUDE*.md` **維持不入版控**——`.gitignore` 保留 `CLAUDE*.md`,**不得加 `!CLAUDE.md`**,也不得排除 `sgud`.`sgud/` 不入 npm 包(`.npmignore` 列 `CLAUDE*.md` 與 `sgud`;原無 `.npmignore` 者以原 `.gitignore` 內容為底建立,維持既有打包範圍).repo 為公開庫時,`sgud/` 內容不得含金鑰、權杖、內網位址或帳號資訊.
