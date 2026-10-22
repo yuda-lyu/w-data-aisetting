@@ -1,5 +1,8 @@
 
 cd skills
+ncu
+
+cd skills
 ncu -u
 npm i
 
