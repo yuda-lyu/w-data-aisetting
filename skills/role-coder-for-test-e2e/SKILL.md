@@ -21,7 +21,7 @@ description: |
 | 服務拓撲？ | setup 內 spawn 什麼：前端 dev server + 後端，或後端 serve build；port 是否與他專案錯開 | 契約 C2 模式 |
 | 語系與資料來源？ | 有無 i18n（語系迴圈）；seed 腳本、mock 開關、fixture log | C4 / C5 是否需要、§10 場景 |
 | 時間戳從哪層寫入？ | grep schema 預設值、ORM 服務層、Worker、前端暫態；另 grep 產製／打包腳本寫入之時間與畫面上之耗時、即時數值 | 執行期寫入者：假時鐘錨點放哪層（§8.2）；建置時寫入、耗時、即時數值：列入不可固定之值盤點（unfixable-values-masking §1～§2） |
-| 專案映射表存在嗎？ | `CLAUDE_rulebook.md` 之 e2e 映射節 | 缺 → 先依範本補，再寫 case |
+| 專案映射表存在嗎？ | 規則帳本(`sgud/rule/rulebook.md`;舊制為 `CLAUDE_rulebook.md`)之 e2e 映射節 | 缺 → 先依範本補，再寫 case |
 | 姊妹專案有先例嗎？ | Grep 同組織其他專案 `test/` 之 helper 名與註解 | 沿用，不自創 |
 
 ## 1. 交付物與完成判準
