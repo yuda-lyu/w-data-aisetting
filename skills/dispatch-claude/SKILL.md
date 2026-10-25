@@ -5,7 +5,7 @@ description: 當任務需要委派給 Claude，或需要把 Claude 納入多代�
 
 # dispatch-claude
 
-使用 `w-dispatch-ai` 的 `dispatchClaude()` 執行 Claude Code（本技能對照 1.0.56；`dispatchClaude()` 之固定旗標自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉；1.0.56 起可帶 Anthropic Console 之 API 金鑰改走 API 額度計費，見〈以 Anthropic Console API 額度派工〉）。轉接器會呼叫 `claude -p`、透過 stdin 傳入提示詞、管理逾時與程序樹清理，並一律回傳結果物件，不會因一般 CLI 失敗而 reject。
+使用 `w-dispatch-ai` 的 `dispatchClaude()` 執行 Claude Code（本技能對照 1.0.57；`dispatchClaude()` 之固定旗標自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉；1.0.56 起可帶 Anthropic Console 之 API 金鑰改走 API 額度計費，見〈以 Anthropic Console API 額度派工〉；1.0.57 起帶金鑰之失敗結果多帶 `failureKind`，沒額度與上下文過長分開處置，見〈失敗判讀：以 API 回應為準，不查餘額〉）。轉接器會呼叫 `claude -p`、透過 stdin 傳入提示詞、管理逾時與程序樹清理，並一律回傳結果物件，不會因一般 CLI 失敗而 reject。
 
 需要變更 CLI 旗標、排查版本差異或改用非預設模型時，讀取 [references/claude-flags.md](references/claude-flags.md)。
 
@@ -102,7 +102,33 @@ const r = await wda.dispatchClaude(prompt, {
 
 **在 Claude Code 工作階段內派工時，只用 `env` 選項傳 `ANTHROPIC_API_KEY` 無效**（2026-10-25 實測，Claude Code 2.1.302）：子程序會繼承父工作階段之 `CLAUDE_CODE_*`、`CLAUDE_AGENT_SDK_*`、`CLAUDECODE`、`CLAUDE_PID` 等連結變數而沿用父之登入，`apiKeySource` 為 `none`。**一律用 `key` 選項**——它會自動從繼承之環境移除這些變數（保留 `CLAUDE_CODE_GIT_BASH_PATH` 與呼叫端以 `env` 明確傳入者）。副作用：帶金鑰時，殼層繼承之 `CLAUDE_CODE_*` 使用者設定（如 `CLAUDE_CODE_EFFORT_LEVEL`）不再傳入，需要者以 `env` 明確傳。
 
-**模型與強度依使用者指定**：API 額度依量計費，單價（每百萬 token 輸入／輸出，2026-10-06）Opus 5.5 $4／$20、Sonnet 5.5 $2／$10、Haiku 5.5 $0.10／$0.50、Fable 5.1 $10／$50。使用者未指定時沿用〈必要預設值〉，但派工前先告知使用者所選模型之單價。遞補時 `claude-api:` 與 `anthropic:` 六條排在清單末端，**仍建議以 `pick` 自選，不要全取**（全取且 `.env` 有 `ANTHROPIC_KEYS` 時會進入遞補鏈耗用 API 額度）。額度不足或限流之錯誤字樣與冷卻設定，見套件 README〈Claude以API金鑰計費〉。
+**一律不加 `--bare`**（2026-10-25 實測）：以 `env` 傳金鑰再加 `--bare` 時，`apiKeySource` 雖為 `ANTHROPIC_API_KEY`，CLI 卻回 `Credit balance is too low`（離開碼 1、費用 0）；同一把金鑰經 `key` 選項與 REST 皆正常。這是呼叫方式錯誤，不是沒額度——曾因此誤判「API 額度用盡」。
+
+### 失敗判讀：以 API 回應為準，不查餘額（1.0.57 起）
+
+**查不到剩餘額度**：Anthropic 沒有查餘額之端點（Usage and Cost Admin API 只報用量與花費，且需 Admin 金鑰、個人帳號不可用；2026-10-25 查證）。使用者 2026-10-25 裁示「不查剩餘額度，以 api 回應為判識基準」。斷線與沒額度靠回應本身就分得出來。
+
+帶金鑰之失敗結果（REST 全部；CLI 只在帶 `key` 時）多帶 `failureKind`／`failureDetail`，`errorType`／`error` 不變。遞補（`dispatchAiFallback`）依此內建處置，不必自寫 `coolDetect`：
+
+| `failureKind` | API 回應 | 遞補處置 |
+|---|---|---|
+| `no-credit` | 400，訊息含 `credit balance is too low`（CLI 之同字樣須經 REST 交叉確認） | 換下一把；本次呼叫內同端點之條目略過該把；**全組皆沒額度才回 `quotaExhausted`**；給 `cooldownMs` 則冷卻後再探，不永久停用（官方曾於儲值延遲生效時誤報此錯） |
+| `context-too-long` | 400，`prompt is too long: N tokens > M maximum` | **立即結束整個呼叫，不換金鑰、不試後續條目**（換金鑰結果相同）；`error` 以 `CONTEXT_TOO_LONG:` 開頭。要嘛縮短提示詞，要嘛呼叫端自行改派更大上下文之模型 |
+| `rate-limit` | 429 | 既有冷卻與重試 |
+| `overloaded` | 529 | 既有冷卻與重試 |
+| `key-invalid`／`no-permission` | 401／403 | 換下一把，不冷卻他把 |
+| `network` | 沒有 HTTP 回應（連線拒絕、DNS、逾時） | 依 `maxRetries` 重試；整組跳過（換金鑰無用）；不判額度 |
+| `env-error` | CLI 稱沒額度，但 REST 以同金鑰成功 | 不換金鑰、不判額度：呼叫方式錯誤（多半是加了 `--bare`，或只以 `env` 傳金鑰） |
+| `other` | 其餘 | 既有處置 |
+
+- **CLI 稱沒額度不直接採信**：`dispatchClaude` 分類為 `no-credit` 時，自動以同一把金鑰對 REST 送 `max_tokens: 1` 之極小請求（預設 `claude-haiku-5-5`，費用極小）；REST 亦沒額度才維持 `no-credit`，REST 成功即判 `env-error`。結果另帶 `crossCheck: { done, restKind, restStatus }`。`crossCheck: false` 可關（誤判風險自負）。
+- **探測**：`wda.probeAnthropicKeys(keys)` 對每把送極小請求，回每把「此刻能否呼叫」（`ok`／`no-credit`／`key-invalid`／`no-permission`／`rate-limit`／`overloaded`／`network`）與每分鐘限額標頭；只回序號與長度，不含金鑰。**它不是查餘額。**
+- `ANTHROPIC_KEYS` 遇分號視同逗號並回 `warnings`。
+- CLI 之 `maxRetries` 重試發生在分類**之前**：沒額度、上下文過長等決定性失敗在 `maxRetries>0` 時仍會重送，帶金鑰派工維持預設 0。
+
+2026-10-25 以兩把真實金鑰實測 15 項全過：真實 400 `prompt is too long: 689000 tokens > 200000 maximum` 判 `context-too-long`、遞補只試 1 次；`env`＋`--bare` 重現之 `Credit balance is too low`（離開碼 1）經 REST 交叉確認判 `env-error`；探測兩把皆 `ok`。真正餘額為零之金鑰未實測。
+
+**模型與強度依使用者指定**：API 額度依量計費，單價（每百萬 token 輸入／輸出，2026-10-06）Opus 5.5 $4／$20、Sonnet 5.5 $2／$10、Haiku 5.5 $0.10／$0.50、Fable 5.1 $10／$50。使用者未指定時沿用〈必要預設值〉，但派工前先告知使用者所選模型之單價。遞補時 `claude-api:` 與 `anthropic:` 六條排在清單末端，**仍建議以 `pick` 自選，不要全取**（全取且 `.env` 有 `ANTHROPIC_KEYS` 時會進入遞補鏈耗用 API 額度）。額度不足、上下文過長或限流之判讀與遞補處置，見下節〈失敗判讀：以 API 回應為準，不查餘額〉與套件 README〈失敗細分類 failureKind〉。
 
 ## 權限：先定能力下限，再往下收斂
 
@@ -325,11 +351,12 @@ await wda.dispatchClaude(prompt, {
 
 若需限制結構，再透過 `--json-schema` 傳入 JSON Schema 字串。`stream-json` 會產生 JSONL 事件，不能使用只接受單一 JSON 文件的 `validate: 'json'`。
 
-## 轉接器契約（w-dispatch-ai 1.0.56）
+## 轉接器契約（w-dispatch-ai 1.0.57）
 
 | 選項 | 轉接器預設值 | 行為 |
 |---|---:|---|
 | `key` | 省略 | 1.0.56 起：Anthropic Console 之 API 金鑰。給了即只在該次子程序設 `ANTHROPIC_API_KEY` 並移除繼承之父工作階段連結變數，改走 API 額度；省略即沿用訂閱登入（行為與舊版相同）。見〈以 Anthropic Console API 額度派工〉 |
+| `crossCheck` | `true` | 1.0.57 起：帶金鑰之 CLI 回沒額度字樣時，以同金鑰對 REST 送極小請求確認（REST 成功即判 `env-error`）；`crossCheckBaseURL`／`crossCheckModel` 可改端點與模型。見〈失敗判讀：以 API 回應為準，不查餘額〉 |
 | `exe` | `claude` | 執行檔名稱或絕對路徑 |
 | `model` | 省略 | 有值時展開為 `--model <value>` |
 | `skipPermissions` | `true` | 加入 `--dangerously-skip-permissions` |
@@ -396,6 +423,8 @@ claude --help
 2026-10-18 查核：技能根實裝 `w-dispatch-ai` **1.0.53**，本機 Claude Code 為 **2.1.302**。
 
 2026-10-25 查核：`w-dispatch-ai` **1.0.56** 新增 `key`（CLI）與 kind `api-anthropic`（REST）；於 Claude Code 2.1.302 以 `claude-haiku-5-5` 實測 CLI 帶 `key` 之 `apiKeySource` 為 `ANTHROPIC_API_KEY`、不帶為 `none`，REST 兩條皆成功。技能根 `package.json` 之相依升為 `^1.0.56`。
+
+2026-10-25 追加：`w-dispatch-ai` **1.0.57** 新增 `failureKind`／`failureDetail`、CLI 沒額度之 REST 交叉確認（`crossCheck`、`crossCheckBaseURL`、`crossCheckModel`）、`probeAnthropicKeys`、`*_KEYS` 分號處置（見〈失敗判讀：以 API 回應為準，不查餘額〉）；未帶金鑰之訂閱路徑與其他 kind 不變。技能根 `package.json` 之相依升為 `^1.0.57`。
 
 | 項目 | 結果 |
 |---|---|
