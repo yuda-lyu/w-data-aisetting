@@ -7,7 +7,7 @@
     "mupdf": "^1.28.1",
     "opencc-js": "^1.4.2",
     "unpdf": "^1.9.1",
-    "w-dispatch-ai": "^1.0.55",
+    "w-dispatch-ai": "^1.0.56",
     "w-dwdata-hub": "^1.0.22",
     "w-fetch-web": "^1.0.27",
     "w-orm-lmdb": "^1.0.44",

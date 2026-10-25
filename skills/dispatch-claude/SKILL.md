@@ -5,7 +5,7 @@ description: 當任務需要委派給 Claude，或需要把 Claude 納入多代�
 
 # dispatch-claude
 
-使用 `w-dispatch-ai` 的 `dispatchClaude()` 執行 Claude Code（本技能對照 1.0.53；`dispatchClaude()` 之固定旗標與自用鍵自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。轉接器會呼叫 `claude -p`、透過 stdin 傳入提示詞、管理逾時與程序樹清理，並一律回傳結果物件，不會因一般 CLI 失敗而 reject。
+使用 `w-dispatch-ai` 的 `dispatchClaude()` 執行 Claude Code（本技能對照 1.0.56；`dispatchClaude()` 之固定旗標自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉；1.0.56 起可帶 Anthropic Console 之 API 金鑰改走 API 額度計費，見〈以 Anthropic Console API 額度派工〉）。轉接器會呼叫 `claude -p`、透過 stdin 傳入提示詞、管理逾時與程序樹清理，並一律回傳結果物件，不會因一般 CLI 失敗而 reject。
 
 需要變更 CLI 旗標、排查版本差異或改用非預設模型時，讀取 [references/claude-flags.md](references/claude-flags.md)。
 
@@ -63,6 +63,46 @@ console.log(result.stdout);
 ```
 
 不可依賴使用者帳號的 Claude 預設值；為確保派工結果固定，必須明確指定 Fable 5.1 與 `max`。
+
+## 以 Anthropic Console API 額度派工（金鑰計費，1.0.56 起）
+
+使用者另持有 Anthropic Console 之 API 額度時（與 Claude Pro／Max **訂閱額度分開計費**），可讓派工改吃 API 額度。**只在使用者或專案明示要用 API 額度時才走這條**；未帶金鑰時一切照舊（沿用訂閱登入）。
+
+**金鑰由各專案自行提供，不放共用位置**（使用者 2026-10-24 定，避免濫用）：
+
+- 放在**呼叫端專案自己的 `./.env`**，變數名固定為 **`ANTHROPIC_KEYS`**（逗號分隔多把），以 `readEnvFile('./.env')` 讀成物件，不寫進 `process.env`。沒有放金鑰的專案就用不到 API 額度，這是刻意的。
+- **不要**放技能根或其他每台共用之位置，**不要**設成全域環境變數 `ANTHROPIC_API_KEY`，也**不要**拿 `ANTHROPIC_API_KEY` 當 `.env` 變數名——Claude Code 會優先採用環境中的 `ANTHROPIC_API_KEY`，載入後本機**全部** Claude Code（含你自己的工作階段與訂閱派工）都會改走 API 計費。
+- 金鑰不得印出、寫檔、寫進報告或證據檔；`.env` 必須在 `.gitignore` 內。
+
+| 需求 | 用法 | 內建條目（`resolveProviders` 之 `pick`） |
+|---|---|---|
+| 要工具（讀檔、搜尋、跑指令）之代理派工 | `wda.dispatchClaude(prompt, { key, model, extraArgs, ... })` | `claude-api:opus-5.5`／`claude-api:sonnet-5.5`／`claude-api:haiku-5.5` |
+| 純文字生成（素材都在提示詞內） | `wda.dispatchApiAnthropic(prompt, { key, model, effort, ... })`（直呼 Messages API，免 CLI） | `anthropic:opus-5.5`／`anthropic:sonnet-5.5`／`anthropic:haiku-5.5` |
+
+```javascript
+//金鑰從呼叫端專案自己的 .env 讀(ANTHROPIC_KEYS), 不污染 process.env
+const readEnvFile = wda.readEnvFile;
+const env = readEnvFile('./.env');
+const key = String(env.ANTHROPIC_KEYS || '').split(',').map((s) => s.trim()).filter(Boolean)[0];
+if (!key) {
+    throw new Error('本專案 .env 未提供 ANTHROPIC_KEYS, 不能使用 API 額度'); //不要改去別處找金鑰
+}
+const r = await wda.dispatchClaude(prompt, {
+    key,                                   //給了才走 API 額度; 不給即沿用訂閱
+    model: 'claude-opus-5-5',
+    extraArgs: ['--tools', 'Read,Glob,Grep', '--strict-mcp-config', '--effort', 'xhigh', '--output-format', 'stream-json', '--verbose'],
+    cwd, timeoutMs: 14_400_000,
+});
+```
+
+**驗收計費來源，一律看 `apiKeySource`，不看呼叫是否成功**：
+
+- CLI：加 `--output-format stream-json --verbose`，讀 `type: 'system', subtype: 'init'` 事件之 `apiKeySource`——`ANTHROPIC_API_KEY` 才是走 API 額度；`none` 表示仍走訂閱登入（呼叫照樣成功，看不出來）。
+- REST：回傳之 `usage` 有 token 數即走 API 金鑰；另可在 Console 之用量頁核對。
+
+**在 Claude Code 工作階段內派工時，只用 `env` 選項傳 `ANTHROPIC_API_KEY` 無效**（2026-10-25 實測，Claude Code 2.1.302）：子程序會繼承父工作階段之 `CLAUDE_CODE_*`、`CLAUDE_AGENT_SDK_*`、`CLAUDECODE`、`CLAUDE_PID` 等連結變數而沿用父之登入，`apiKeySource` 為 `none`。**一律用 `key` 選項**——它會自動從繼承之環境移除這些變數（保留 `CLAUDE_CODE_GIT_BASH_PATH` 與呼叫端以 `env` 明確傳入者）。副作用：帶金鑰時，殼層繼承之 `CLAUDE_CODE_*` 使用者設定（如 `CLAUDE_CODE_EFFORT_LEVEL`）不再傳入，需要者以 `env` 明確傳。
+
+**模型與強度依使用者指定**：API 額度依量計費，單價（每百萬 token 輸入／輸出，2026-10-06）Opus 5.5 $4／$20、Sonnet 5.5 $2／$10、Haiku 5.5 $0.10／$0.50、Fable 5.1 $10／$50。使用者未指定時沿用〈必要預設值〉，但派工前先告知使用者所選模型之單價。遞補時 `claude-api:` 與 `anthropic:` 六條排在清單末端，**仍建議以 `pick` 自選，不要全取**（全取且 `.env` 有 `ANTHROPIC_KEYS` 時會進入遞補鏈耗用 API 額度）。額度不足或限流之錯誤字樣與冷卻設定，見套件 README〈Claude以API金鑰計費〉。
 
 ## 權限：先定能力下限，再往下收斂
 
@@ -285,10 +325,11 @@ await wda.dispatchClaude(prompt, {
 
 若需限制結構，再透過 `--json-schema` 傳入 JSON Schema 字串。`stream-json` 會產生 JSONL 事件，不能使用只接受單一 JSON 文件的 `validate: 'json'`。
 
-## 轉接器契約（w-dispatch-ai 1.0.53）
+## 轉接器契約（w-dispatch-ai 1.0.56）
 
 | 選項 | 轉接器預設值 | 行為 |
 |---|---:|---|
+| `key` | 省略 | 1.0.56 起：Anthropic Console 之 API 金鑰。給了即只在該次子程序設 `ANTHROPIC_API_KEY` 並移除繼承之父工作階段連結變數，改走 API 額度；省略即沿用訂閱登入（行為與舊版相同）。見〈以 Anthropic Console API 額度派工〉 |
 | `exe` | `claude` | 執行檔名稱或絕對路徑 |
 | `model` | 省略 | 有值時展開為 `--model <value>` |
 | `skipPermissions` | `true` | 加入 `--dangerously-skip-permissions` |
@@ -322,7 +363,7 @@ await wda.dispatchClaude(prompt, {
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
 | 多供應商遞補、金鑰輪替、條目 id 命名規則 | `src/dispatchAiFallback.mjs` 檔頭 |
 
-**檔頭註解是實測紀錄，不是設計說明**：踩過什麼坑、為什麼刻意不做某件事，都寫在那裡，而且通常比技能新。本轉接器檔頭另記載一條容易誤解的事——Claude Code 沿用帳號層級登入態，**沒有逐次注入金鑰的概念，故無 `key` 參數**；做供應商輪替時它是「另一個供應商」，不是「另一把金鑰」。與本技能所述不一致時，以原始碼與其實測註記為準，並回頭修技能。
+**檔頭註解是實測紀錄，不是設計說明**：踩過什麼坑、為什麼刻意不做某件事，都寫在那裡，而且通常比技能新。本轉接器原載「Claude Code 沿用帳號層級登入態、無 `key` 參數」——**1.0.56 起已有 `key`**（API 額度計費，見〈以 Anthropic Console API 額度派工〉）；不帶 `key` 時仍沿用登入態，做供應商輪替時訂閱條目是「另一個供應商」，`claude-api:` 條目則可在多把 `ANTHROPIC_KEYS` 之間輪替。與本技能所述不一致時，以原始碼與其實測註記為準，並回頭修技能。
 
 ## 失敗處理
 
@@ -353,6 +394,8 @@ claude --help
 ```
 
 2026-10-18 查核：技能根實裝 `w-dispatch-ai` **1.0.53**，本機 Claude Code 為 **2.1.302**。
+
+2026-10-25 查核：`w-dispatch-ai` **1.0.56** 新增 `key`（CLI）與 kind `api-anthropic`（REST）；於 Claude Code 2.1.302 以 `claude-haiku-5-5` 實測 CLI 帶 `key` 之 `apiKeySource` 為 `ANTHROPIC_API_KEY`、不帶為 `none`，REST 兩條皆成功。技能根 `package.json` 之相依升為 `^1.0.56`。
 
 | 項目 | 結果 |
 |---|---|
