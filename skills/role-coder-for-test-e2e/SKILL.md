@@ -402,10 +402,10 @@ headless Chromium 預設 GPU 光柵化 + subpixel AA 非決定性（拉丁字偶
 
 測試本體永遠 Playwright；w-screenctl 只探索。①health → ②第一個動作 navigate + screenshot（JSON wrapper 先取出 `image` 再 `base64 -d`——`jq -r .image` 或下方 `sed` 寫法，Git Bash 預設無 jq；`file` 驗 magic number；偽圖檔 Read 進 API 會讓 session 永久 400）→ ③視覺確認後才 evaluate → ④試互動 → ⑤selector 寫回。連續 evaluate 三次沒截圖＝立刻截圖。不傳 `viewport`（傳了無法 resize 驗 RWD）。探索用之常駐 REPL 亦可（開一次登入頁、以 HTTP 接程式碼），但要掛 unhandledRejection 處理器。
 
-**啟動與認證（w-screenctl 1.0.27 起）**：預設只綁 `127.0.0.1`，除 `/health` 外每個請求都要帶 `Authorization: Bearer <token>`（否則 401）；`/chrome/evaluate` 須以 `--evaluate` 啟動（否則 `403 EVALUATE_DISABLED`）；探索只用 Chrome，加 `--no-system` 關掉系統級滑鼠鍵盤與桌面截圖（`/chrome/*` 不受影響）。token 檔與操作紀錄導到 `./tmp/`，結束一併清掉：
+**啟動與認證（w-screenctl 1.0.27 起）**：預設只綁 `127.0.0.1`，除 `/health` 外每個請求都要帶 `Authorization: Bearer <token>`（否則 401）；`/chrome/evaluate` 須以 `--evaluate` 啟動（否則 `403 EVALUATE_DISABLED`）；探索只用 Chrome，加 `--no-system` 關掉系統級滑鼠鍵盤與桌面截圖（`/chrome/*` 不受影響）。token 檔、操作紀錄與 Chrome 使用者資料夾（`CHROME_USER_DATA`；不設則建在工作目錄下之 `./user_data`，殘留於專案根）一律導到 `./tmp/`，結束一併清掉：
 
 ```bash
-export PORT=7000 SCREENCTL_TOKEN_FILE=./tmp/screenctl.token SCREENCTL_AUDIT_LOG_FILE=./tmp/screenctl-audit.jsonl
+export PORT=7000 SCREENCTL_TOKEN_FILE=./tmp/screenctl.token SCREENCTL_AUDIT_LOG_FILE=./tmp/screenctl-audit.jsonl CHROME_USER_DATA=./tmp/screenctl-user-data
 nohup node node_modules/w-screenctl/g.mjs --evaluate --no-system > ./tmp/screenctl.log 2>&1 &
 until curl -sf http://127.0.0.1:$PORT/health > /dev/null; do sleep 0.5; done
 AUTH="Authorization: Bearer $(cat ./tmp/screenctl.token)"; H=http://127.0.0.1:$PORT
@@ -416,7 +416,7 @@ curl -s -H "$AUTH" -X POST $H/chrome/evaluate -H 'Content-Type: application/json
 curl -s -H "$AUTH" -X DELETE $H/chrome
 ```
 
-token 檔不存在時由服務自動產生（啟動輸出不印全文）；一律用 `127.0.0.1`，不用 `localhost`；啟動輸出之 `[security] capabilities:` 一行可確認 evaluate／system／audit-log 之狀態。結束時以埠號取 PID 樹狀停止服務並回驗埠已釋放，再刪 `./tmp/screenctl.token` 與紀錄檔（以上範例於 1.0.27 逐行實跑通過：capabilities 一行、open／navigate／screenshot 得 PNG／evaluate 回標題、系統級端點 403、無 token 401、停止後埠釋放）。1.0.26 以前無 token、對所有網卡開放之舊版已淘汰，專案若仍鎖舊版先升級（自有套件之安裝來源見全域設定 §5.1）。
+token 檔不存在時由服務自動產生（啟動輸出不印全文）；一律用 `127.0.0.1`，不用 `localhost`；啟動輸出之 `[security] capabilities:` 一行可確認 evaluate／system／audit-log 之狀態。結束時以埠號取 PID 樹狀停止服務並回驗埠已釋放，再刪 `./tmp/screenctl.token`、紀錄檔與 `./tmp/screenctl-user-data/`（以上範例於 1.0.27 逐行實跑通過：capabilities 一行、open／navigate／screenshot 得 PNG／evaluate 回標題、系統級端點 403、無 token 401、停止後埠釋放）。1.0.26 以前無 token、對所有網卡開放之舊版已淘汰，專案若仍鎖舊版先升級（自有套件之安裝來源見全域設定 §5.1）。
 
 ### 11.4 探測腳本（Playwright 直跑）紀律
 

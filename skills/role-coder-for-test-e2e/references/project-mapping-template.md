@@ -11,7 +11,7 @@
 |---|---|
 | 後端 | `node srv.mjs`（port NNNNN，≥ 8000、與他專案錯開、寫死不隨機） |
 | 前端 | (a) `npm run serve`（port NNNN，≥ 8000 且與他專案錯開）/ (b) 先 `npm run build`，由後端 serve `dist` |
-| w-screenctl | `SCREENCTL_TOKEN_FILE=./tmp/screenctl.token node node_modules/w-screenctl/g.mjs --evaluate --no-system`（port 7000，被佔用以 `PORT` 另選；1.0.27 起除 `/health` 外須帶 `Authorization: Bearer <token>`，見 SKILL.md §11.3） |
+| w-screenctl | `SCREENCTL_TOKEN_FILE=./tmp/screenctl.token CHROME_USER_DATA=./tmp/screenctl-user-data node node_modules/w-screenctl/g.mjs --evaluate --no-system`（port 7000，被佔用以 `PORT` 另選；1.0.27 起除 `/health` 外須帶 `Authorization: Bearer <token>`，見 SKILL.md §11.3） |
 | seed 腳本 | `g_initialTestData.mjs`（hermetic：e2e 進場先刪 DB 目錄再跑；偵測 stdout `finish.`） |
 | e2e 執行 | 單獨跑某檔：`npx mocha test/e2e-<flow>.test.mjs --reporter list --timeout NNNNNN` / 逐檔隔離（獨立程序）：`node test/tools/run-e2e-isolated.mjs` |
 | 共用實作 | `test/tools/e2eLib.mjs` 單一橋接 → `w-package-tools-e2e/src/`（devDependency，寫明版號）；`e2e-setup.mjs` 只留組態與專案專屬原語 |
