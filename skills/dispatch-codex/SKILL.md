@@ -136,7 +136,7 @@ await wda.dispatchCodex(prompt, {
 
 **它不是型錄的 priority 1**：2026-10-27 之型錄中 `gpt-6.1-terra` 排 priority 3、描述僅 `GPT-6.1 Terra Codex model.`，脈絡 500K（與 `gpt-6.1-sol` 同）；priority 1 仍為 `gpt-6.1-sol`、2 為 `gpt-6-astra`。選 terra 是使用者之成本取捨：同日報導（kocpc）引 OpenAI 定價 Terra 輸入／輸出每百萬 token US$1／US$5，為 Sol 之半；Artificial Analysis 綜合指數 Terra（Max）與 Sol（Medium）同為 48；最複雜之程式任務該報導仍建議 Sol 或 Astra。任務明顯超出 terra 能力時可改派 `gpt-6.1-sol`（或 `gpt-6-astra`），但須在回報說明換了模型。
 
-**條目表沒有 terra，且強度是 `high` 不是本節的 `max`**：`providers.mjs`（1.0.55～1.0.57）之 codex 條目只有 `codex:gpt-5.6-luna` 與 `codex:gpt-6.1-sol`，皆自帶 `['--config','model_reasoning_effort="high"']`（套件 2026-09-30 起把各家條目的思考強度統一設為 `high`）。沿用條目時要自己把 `model` 覆寫為 `gpt-6.1-terra`、強度覆寫為 `max`，且**覆寫 `extraArgs` 時必須把該條目原本的參數一併帶回**（否則連強度都掉回 CLI 預設）。
+**條目表的強度是 `high`，不是本節的 `max`**：`providers.mjs` 自 1.0.59 起有 `codex:gpt-6.1-terra`，codex 條目依序為 `codex:gpt-5.6-luna` → `codex:gpt-6.1-terra` → `codex:gpt-6.1-sol`（1.0.55～1.0.58 無 terra），三條皆自帶 `['--config','model_reasoning_effort="high"']`（套件 2026-09-30 起把各家條目的思考強度統一設為 `high`）。沿用 terra 條目時要自己把強度覆寫為 `max`（例：`resolveProviders` 之 `pick: ['codex:gpt-6.1-terra']` 配 `patch` 覆寫 `extraArgs`）；codex 條目之唯讀鎖在獨立的 `sandbox` 欄位，覆寫 `extraArgs` 不影響它，但**覆寫時仍須把該條目 `extraArgs` 原本的其他參數一併帶回**。全取遞補時 luna 仍排第一，外審要用 terra 就明確 `pick`，不要依賴全取順序。
 
 ```javascript
 import wda from 'w-dispatch-ai';
@@ -173,7 +173,7 @@ console.log(result.stdout);
 - **審計必須自己讀檔**。把檔案內容貼進提示詞不算獨立審計：被派對象只看得到你挑給它的片段，找不出你漏掉的地方，而那正是複審的唯一價值。
 - **驗證猜想必須能寫檔並執行**。不能寫測試就只剩推論；「我認為可能是 X」沒有可重現的執行結果，不是結論。
 - **不想放權時，換的是任務或環境，不是砍權限**。把目標複製或 `git worktree` 出一份到獨立目錄，以 `-C` 指向該處並用 `workspace-write`，讓被派對象在裡面有完整讀寫執行，事後自己審 diff。給半套權限硬派，是拿「看起來安全」換掉任務本身。
-- **沿用 `w-dispatch-ai/src/providers.mjs` 的條目要先看鎖**：表內兩條 codex 條目（`codex:gpt-5.6-luna`、`codex:gpt-6.1-sol`）都帶 `sandbox: 'read-only'`，那是給純文字生成與遞補用的唯讀檔位；照抄去派審計落檔或寫測試必然做不成，要改成 `workspace-write`（表內尚無 terra 條目，模型另見〈必要預設值〉）。
+- **沿用 `w-dispatch-ai/src/providers.mjs` 的條目要先看鎖**：表內三條 codex 條目（`codex:gpt-5.6-luna`、`codex:gpt-6.1-terra`〔1.0.59 起〕、`codex:gpt-6.1-sol`）都帶 `sandbox: 'read-only'`，那是給純文字生成與遞補用的唯讀檔位；照抄去派審計落檔或寫測試必然做不成，要改成 `workspace-write`（強度另見〈必要預設值〉）。
 
 只有在使用者任務確實需要，而且執行環境已妥善隔離時，才可使用 `danger-full-access`。
 
@@ -477,13 +477,15 @@ codex exec --help
 ls ~/.codex/.sandbox/setup_marker.json   # Windows：存在才代表 elevated 沙箱設定已完成
 ```
 
+2026-10-28 追加：`w-dispatch-ai` **1.0.59** 新增條目 `codex:gpt-6.1-terra`（`sandbox: 'read-only'`、強度 `high`，排在 luna 之後、sol 之前；欄位比照 sol）。`dispatchCodex()` 未變。唯讀沙箱金絲雀未對 terra 重測（沿用 sol 條目之實測）。
+
 2026-10-27 查核：本機 Codex CLI **0.163.0**，技能根實裝 `w-dispatch-ai` **1.0.55**（npm 最新 1.0.57；`dispatchCodex()` 未變）。
 
 | 項目 | 結果 |
 |---|---|
 | 必要預設模型 | `gpt-6.1-sol` → **`gpt-6.1-terra`**（使用者指定；OpenAI 同日發表）。`-m gpt-6.1-terra -c model_reasoning_effort="max"` 實跑通過，CLI 標頭回報 `model: gpt-6.1-terra`／`reasoning effort: max`；`dispatchCodex`＋`workspace-write` 以 `rg` 讀中文檔並寫檔通過（29 秒） |
 | 型錄 | 10 支；`gpt-6.1-terra` 為 priority 3、預設 effort `low`、脈絡 500K（見「模型驗證」） |
-| `providers.mjs` | 尚無 terra 條目，codex 仍為 `codex:gpt-5.6-luna`、`codex:gpt-6.1-sol`；沿用條目須自行覆寫 `model` 與強度 |
+| `providers.mjs` | 當時尚無 terra 條目（1.0.59 起才有，見上段），codex 為 `codex:gpt-5.6-luna`、`codex:gpt-6.1-sol` |
 
 本次未重驗旗標表、沙箱與 Windows 讀非 ASCII 檔案之實測表（除上列 `rg` 讀中文外）。
 
