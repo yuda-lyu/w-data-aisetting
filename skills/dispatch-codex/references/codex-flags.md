@@ -9,6 +9,8 @@
 - [Codex 官方設定參考](https://learn.chatgpt.com/docs/config-file/config-reference)
 - [Codex 官方模型頁面](https://learn.chatgpt.com/docs/models)
 
+2026-10-27 於本機 **0.163.0** 追加查核並改寫模型章節：型錄新增 `gpt-6.1-terra`，使用者指定為必要預設值（取代 `gpt-6.1-sol`）；以 `-m gpt-6.1-terra -c model_reasoning_effort="max"` 實跑通過。**旗標表未於 0.163.0 逐項重驗**，沿用下列各次查核結果。
+
 2026-09-30 於本機 **0.159.2** 追加查核並改寫模型章節：`codex debug models` 之完整型錄（GPT-6.1 世代上線且升為 priority 1，見下表）、以 `-m gpt-6.1-sol -c model_reasoning_effort="max"` 實跑通過。**旗標表未於 0.159.2 逐項重驗**，沿用下列各次查核結果。
 
 2026-09-23 於本機 **0.156.1** 追加查核並改寫模型章節：`codex debug models` 之完整型錄（GPT-6 世代已上線，見下表）、`codex exec --help`（`-m`／`-c`／`--sandbox`／`--skip-git-repo-check` 等派工相關旗標與下方表格一致）、以 `gpt-6-sol` 配 `high`／`xhigh`／`max` 各實跑一次，以及以無效 effort 值取得 API 之權威值域。**下方旗標表未於 0.156.1 逐項重驗**，沿用 0.152.1／0.153.4 之查核結果。
@@ -29,27 +31,27 @@ codex exec [OPTIONS] <COMMAND> [ARGS]
 ## 必要模型與推理強度
 
 ```text
--m gpt-6.1-sol --config model_reasoning_effort="max"
+-m gpt-6.1-terra --config model_reasoning_effort="max"
 ```
 
-0.159.2 執行期型錄（`codex debug models`，**2026-09-30 實查**）之 `visibility: list` 模型共 8 支，依 priority 排序：
+0.163.0 執行期型錄（`codex debug models`，**2026-10-27 實查**）之 `visibility: list` 模型共 8 支，依 priority 排序：
 
 | slug | priority | 型錄描述 | 預設 effort | 支援 effort |
 |---|---|---|---|---|
-| **`gpt-6.1-sol`** | **1** | Latest workhorse model for coding and everyday work. | **`low`** | low、medium、high、xhigh、max、ultra |
+| `gpt-6.1-sol` | 1 | Latest workhorse model for coding and everyday work. | `low` | low、medium、high、xhigh、max、ultra |
 | `gpt-6-astra` | 2 | Frontier intelligence for the most demanding work. | `low` | low、medium、high、xhigh、max、ultra |
-| `gpt-6-sol` | 3 | Previous generation workhorse model. | `medium` | low、medium、high、xhigh、max、ultra |
-| `gpt-6-luna` | 4 | （快速廉價檔） | `medium` | low、medium、high、xhigh、max |
-| `gpt-5.6-sol` | 5 | 前一世代旗艦 | `low` | low、medium、high、xhigh、max、ultra |
-| `gpt-5.6-terra` | 8 | 均衡日常工作 | `medium` | low、medium、high、xhigh、max、ultra |
-| `gpt-5.6-luna` | 9 | 快速廉價 | `medium` | low、medium、high、xhigh、max |
-| `gpt-5.5` | 13 | 前代 | `medium` | low、medium、high、xhigh |
+| **`gpt-6.1-terra`** | **3** | GPT-6.1 Terra Codex model. | **`low`** | low、medium、high、xhigh、max、ultra |
+| `gpt-6-sol` | 4 | Previous generation workhorse model. | `medium` | low、medium、high、xhigh、max、ultra |
+| `gpt-6-luna` | 5 | Fast and affordable model for easier tasks. | `medium` | low、medium、high、xhigh、max |
+| `gpt-5.6-sol` | 6 | Older generation workhorse model. | `low` | low、medium、high、xhigh、max、ultra |
+| `gpt-5.6-terra` | 8 | Older balanced model for straightforward work. | `medium` | low、medium、high、xhigh、max、ultra |
+| `gpt-5.6-luna` | 9 | Older fast and efficient model. | `medium` | low、medium、high、xhigh、max |
 
-另有 `gpt-reserve`（priority 4）與 `codex-auto-review`（priority 43）兩支 `visibility: hide`，非派工用。
+另有 `gpt-reserve`（priority 4）與 `codex-auto-review`（priority 43）兩支 `visibility: hide`，非派工用。`gpt-5.5`（2026-09-30 時 priority 13）已自型錄移除。
 
-**本技能之必要預設值是 `gpt-6.1-sol`（2026-09-30 使用者指定）**，它同時也是當前 priority 1；要更強可改派 astra 並於回報說明。`gpt-6-luna` 與 `gpt-5.6-luna` 是不支援 `ultra` 者。
+**本技能之必要預設值是 `gpt-6.1-terra`（2026-10-27 使用者指定，取代 `gpt-6.1-sol`）**；它不是 priority 1，選它是成本取捨（單價為 Sol 之半）。任務明顯超出其能力時可改派 `gpt-6.1-sol` 或 `gpt-6-astra`，並於回報說明。`gpt-6-luna` 與 `gpt-5.6-luna` 是不支援 `ultra` 者。
 
-**型錄一週就重排過一次**：2026-09-23 查核時共 7 支、priority 1 為 astra、無 6.1 世代；2026-09-30 已成上表。固定 slug 前一律重跑 `codex debug models`。
+**型錄幾週內就重排**：2026-09-23 查核時共 7 支、priority 1 為 astra、無 6.1 世代；2026-09-30 6.1 世代上線；2026-10-27 新增 `gpt-6.1-terra`、`gpt-5.5` 移除。固定 slug 前一律重跑 `codex debug models`。
 
 各 effort 之執行期說明：
 
@@ -62,7 +64,7 @@ codex exec [OPTIONS] <COMMAND> [ARGS]
 | `max` | 最大推理深度；本技能預設值 |
 | `ultra` | 最大推理加上自動任務委派（以子代理平行拆解，非更深的單任務推理） |
 
-「最深思考」應使用 `max`。只有在明確需要巢狀自動委派時才使用 `ultra`。**`gpt-6.1-sol` 的預設 effort 是 `low`，不明確傳入就跑最淺推理。**（前代 `gpt-6-sol` 為 `medium`，換世代時預設值也跟著變，不能沿用舊記憶。）
+「最深思考」應使用 `max`。只有在明確需要巢狀自動委派時才使用 `ultra`。**`gpt-6.1-terra`（與 `gpt-6.1-sol`）的預設 effort 是 `low`，不明確傳入就跑最淺推理。**（前代 `gpt-5.6-terra`、`gpt-6-sol` 為 `medium`，換世代時預設值也跟著變，不能沿用舊記憶。）
 
 **值域以 API 為準，查法是故意傳錯**：`-c model_reasoning_effort="bogusvalue"` 會回 HTTP 400，訊息直接列出全部合法值——2026-09-23 實測得到 `'none'`、`'minimal'`、`'low'`、`'medium'`、`'high'`、`'xhigh'`、`'max'`。注意 **CLI 端不驗這個值**（傳任意字串都會照印 `reasoning effort: <你傳的>` 然後才被 API 拒絕），所以不能靠 CLI 沒報錯就認定值有效。
 
@@ -119,7 +121,7 @@ extraArgs: [
 等效的持久化設定如下：
 
 ```toml
-model = "gpt-6.1-sol"
+model = "gpt-6.1-terra"
 model_reasoning_effort = "max"
 sandbox_mode = "workspace-write"
 
@@ -157,4 +159,4 @@ codex debug models | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end'
 
 注意 `codex debug models` 不接受 `--strict-config`（要驗設定鍵須用 `codex exec --strict-config`）。
 
-若 `gpt-6.1-sol` 或 `max` 失敗，應檢查 CLI 版本、認證、帳號可用性與即時型錄。不可在使用者明確指定模型時靜默退回其他模型。**本機 codex 過舊而型錄無 GPT-6 者先跑 `codex update`**：`w-dispatch-ai` 之條目註解記載，上游 issue #47420 稱 `gpt-6-sol`「僅 alpha 版可用」是 0.154.0 使用者的回報，於 0.156.1 已不成立。
+若 `gpt-6.1-terra` 或 `max` 失敗，應檢查 CLI 版本、認證、帳號可用性與即時型錄（型錄無 `gpt-6.1-terra` 者先 `codex update`）。不可在使用者明確指定模型時靜默退回其他模型。**本機 codex 過舊而型錄無 GPT-6 者先跑 `codex update`**：`w-dispatch-ai` 之條目註解記載，上游 issue #47420 稱 `gpt-6-sol`「僅 alpha 版可用」是 0.154.0 使用者的回報，於 0.156.1 已不成立。
