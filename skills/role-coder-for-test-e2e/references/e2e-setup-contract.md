@@ -53,7 +53,7 @@ const chromiumLaunchArgs = [
 export async function launchBrowser() { return await chromium.launch({ headless: true, args: chromiumLaunchArgs }) }
 ```
 
-測試端、regen 端、探查腳本全部走 wrapper。旗標組改動＝全量重產，先授權。
+測試端、regen 端、探查腳本全部走 wrapper。旗標組改動＝全量重產，先授權（範圍為全部之定點重產，不是全量執行之重產趟，SKILL §7.9 ①）。
 
 ## C2 startServersOnce / cleanup
 
@@ -82,6 +82,8 @@ process.on('exit', cleanup); process.on('SIGINT', () => { cleanup(); process.exi
 
 前端服務模式二選一並寫進映射表：(a) dev server（port 與他專案錯開）+ proxy `/api`；(b) 先 `npm run build`，由後端同時 serve `dist` 與 API（server 注入語系類測試須此模式）。api 測試層若第三方 client 無法 close（內部 `setInterval`）→ root `after` 註冊 `process.exit()` 並註解原因。hermetic seed：初始化腳本為 upsert 時先刪整個 DB 目錄再跑，偵測 stdout 完成訊號（如 `finish.`）才視為 ready。
 
+**埠與路徑可位移（建議）**：埠之預設值寫死、不隨機（C14），同時接受**整體位移**——由設定或環境變數給一個位移量（名稱由專案定並登錄映射表；位移機制待共用層支援，未支援前依本節之專案層作法：專案 setup 自行讀取位移量），前端、後端、探測網址、seed 內之 redirect 等由 `baseUrl`／`apiBaseUrl` 衍生者一併位移；資料庫目錄、上傳夾、`test/_tmp/` 等可寫路徑一律以 `projRoot` 解析，不寫絕對路徑。如此建臨時實例（[full-run-and-instances.md](full-run-and-instances.md) §5）只需給位移量，不必以文字取代改碼（文字取代易誤改資料目錄內之數值）。位移是決定性的，不違反「不隨機」。
+
 ## C3 restartBackend + genTempSettings（條件式）
 
 ```js
@@ -104,7 +106,7 @@ export async function restartBackend(pathSettings = './settings.json', envOverri
 
 用法：`before: await restartBackend(genTempSettings({ language: 'cht' }))`；`after`（`try/finally`）：`await restartBackend('./settings.json')`。
 
-## C4 DB 重置（條件式，兩種合法作法）
+## C4 DB 重置（條件式，三種合法作法）
 
 ```js
 export async function resetToBaseSeed() { await clearTables([...]); await insertBaseSeed() }          //(a) 直接 DB API
@@ -117,6 +119,12 @@ export async function resetDb(browser, seed) {                                  
 ```
 
 `resetDb` 須放 setup 模組共用（七個測試檔各自複製一份＝補丁堆積）。
+
+(c) 快照目錄複製（SKILL §6）：建庫時（以種子錨點假時鐘）建一次快照，之後每案複製回資料庫目錄。**快照不含之實體檔**（上傳檔夾、附件、匯出產物等由資料庫以路徑或檔名引用者）：
+
+- 須有**清單**（相對路徑與大小，可加雜湊），與快照同存；清單與實體檔之備份位置登錄映射表。
+- **全量執行前後各核對一次**（SKILL §7.11 第 0、5 步），缺檔即中止並自備份複製回來。缺檔之症狀分散而不直指根因（下載逾時、重複檔提示消失、依實體檔計算之比對結果少項），易被當成偶發或環境問題。
+- **不得在快照所依之專案根單獨執行會改寫該等實體檔之種子腳本**——它會換掉實體檔（例如換成一組新的隨機檔名），快照之引用自此全部落空；建臨時實例時之種子腳本一律以實例根為 cwd（明給 `cwd`，不靠呼叫端之目前目錄）。重建快照時快照、實體檔、清單三者一起重建。
 
 ## C5 openApp / setLang（條件式）
 
@@ -223,7 +231,7 @@ export async function captureStableWithBox(page, target, opts = {}) {
 }
 ```
 
-表格整列紅框需聯集 center + pinned 兩容器（**順序不中性**：只有第一個目標會被捲入視窗，改順序可能改變截圖；套件 `rowBoxSel` 以 `order` 指定）；對話框內的列 scope 到 modal。從 DOM 注入版遷移：幾何一致（±6、M=3、5px 內縮），煙霧截圖目視後，與既有 baseline 交叉比對 0 差異即免重產（但若同時加旗標或 strict 等，屬全量重產，見 SKILL §7.9）。
+表格整列紅框需聯集 center + pinned 兩容器（**順序不中性**：只有第一個目標會被捲入視窗，改順序可能改變截圖；套件 `rowBoxSel` 以 `order` 指定）；對話框內的列 scope 到 modal。從 DOM 注入版遷移：幾何一致（±6、M=3、5px 內縮），煙霧截圖目視後，與既有 baseline 交叉比對 0 差異即免重產（但若同時加旗標或 strict 等，屬全量重產——範圍為全部之定點重產、須先授權，見 SKILL §7.9 ①）。
 
 ## C8 遮罩（條件式）
 
@@ -384,14 +392,20 @@ else { for (let lang of langs) describe(`<flow> [${lang}]`, function() { for (le
 
 (b) mocha REGEN（同一個 `it()` 在 `--baseline`／`E2E_REGEN=1` 時寫圖）：`it()` 內同樣呼叫 `runBaselineCase({ mode: REGEN ? 'regen' : 'compare', gate: REGEN ? createBaselineGate({ langs, cases }) : null, ... })`——**不可**在流程中逐階段「比對函式兼寫檔」（先寫圖後斷言，後面斷言失敗時已寫入半套新圖）；兩案共用同一張圖者其一宣告 `compareOnly`（否則同一張被兩案重寫）。個別檔不得自行 spawn / 判讀 REGEN。
 
-**篩選語意（`createBaselineGate`）**：`--names` 每項可帶 `<語系>-` 前綴；解析順序①完全等於已宣告之階段圖鍵→只寫該張 ②案例鍵之完全或**邊界**前綴（`E2E-005` 命中 `E2E-005-x`、不命中 `E2E-0051-x`）→該案全部階段 ③階段圖鍵之邊界前綴 ④案例未宣告 stages 時依編號執行、執行後未產出由 `finalize()` 拋錯；命中只比對之案例、不符任何鍵、旗標缺值或值以 `--` 開頭一律拋錯並列出可用鍵；`--langs` 完全比對；`--write-mode all｜missing｜changed`（missing＝追加案例只補缺圖；changed＝只寫超過容差或尺寸不同者，機械化「不重寫已審過之圖」）；`E2E_BASELINE_OUT_DIR` 只改寫出路徑（等價驗證用），比對端讀取不受影響。自檢：`node test/e2e-<flow>.test.mjs --baseline --names __none__` 須於啟動任何服務之前報錯並列出可用鍵。
+**篩選語意（`createBaselineGate`）**：`--names` 每項可帶 `<語系>-` 前綴；解析順序①完全等於已宣告之階段圖鍵→只寫該張 ②案例鍵之完全或**邊界**前綴（`E2E-005` 命中 `E2E-005-x`、不命中 `E2E-0051-x`）→該案全部階段 ③階段圖鍵之邊界前綴 ④案例未宣告 stages 時依編號執行、執行後未產出由 `finalize()` 拋錯；命中只比對之案例、不符任何鍵、旗標缺值或值以 `--` 開頭一律拋錯並列出可用鍵；`--langs` 完全比對；`--write-mode all｜missing｜changed`（missing＝追加案例只補缺圖；changed＝只寫差異超過差異上限（預設＝比對容差，見下段）或尺寸不同者，機械化「不重寫已審過之圖」）；`E2E_BASELINE_OUT_DIR` 只改寫出路徑（等價驗證用），比對端讀取不受影響。自檢：`node test/e2e-<flow>.test.mjs --baseline --names __none__` 須於啟動任何服務之前報錯並列出可用鍵。
+
+**有變更才改寫與差異上限（必備）**：產製端寫檔前，以比對端同一套覆蓋（C8）與同參數 pixelmatch 判定新截圖與現有標準圖之差異，pixelmatch 計數 ≤ **差異上限**者保留原檔不寫（套件 `--write-mode changed`；自寫者以旗標或環境變數開關，名稱登錄映射表）。上限預設＝比對容差 `maxDiffPixels`；全量重產趟設 0，使計數 > 0 者皆寫出交審（SKILL §7.11；取捨與建議值見 [full-run-and-instances.md](full-run-and-instances.md) §3 第 2 步）——計數 0 而 RGBA 不同者（低於 `threshold` 之均勻色差、被忽略之反鋸齒像素）仍不寫出。缺此能力者重產一趟就改寫全部標準圖，`git diff --stat test/pics` 失去判斷變更範圍之能力（SKILL §7.9），只能靠對本輪副本還原。可設之上限待共用層支援（共用層之 `changed` 目前以容差為界）；未支援前依本節之專案層作法：專案自寫之開關支援上限 0 者照用，否則全量重產趟改用**隔離輸出**（`--write-mode all` 加 `E2E_BASELINE_OUT_DIR`，審差異後才把採用者複製進 `test/pics`；[full-run-and-instances.md](full-run-and-instances.md) §3 第 2 步），不以容差為上限替代——容差內之有效改變既不寫出，`[baseline-headroom]` 也只告警逾容差一半者。
+
+**逐案例續跑（全量重產趟用，建議）**：上方直跑骨架之迴圈直接 `await runCase`，一案拋錯即中止整個流程，其後案例與 `finalize()` 都不執行。全量重產趟需要每案皆有狀態：產製入口宜逐案例捕捉失敗並續跑其餘案例，結束時列出寫出／保留／失敗／pending／未執行，`finalize()` 照跑，有任一失敗即以非零離開碼結束。逐案例續跑待共用層支援；未支援前依本節之專案層作法：專案之產製入口自行逐案捕捉失敗並續跑，或失敗後以 `--names` 指定其餘案例續跑。
+
+**比對端遇第一張不符即拋錯者**（流程中逐階段比對，或管線逐張比對而不續比），該案其後各張不比對、不 dump，流程中比對者連截圖都沒有；`./testPending/` 之 capture 不得複製為標準圖（只有第一張，且繞過本管線之斷言與覆蓋），補齊靠重產趟（SKILL §7.7、§7.11）。收集模式（不符時記錄並續比、案例末才判失敗）待共用層支援；未支援前依本節之專案層作法（以重產趟補齊）。
 
 regen 入口硬 guard：`if (REGEN && (env.E2E_BARE || env.E2E_DIAG)) throw`（套件 `getE2eMode()`）。
 
 ## C14 端點
 
 ```js
-const BACKEND_PORT = 11006, FRONTEND_PORT = 8090   //≥ 8000、與他專案錯開、寫死不隨機；映射表載明
+const BACKEND_PORT = 11006, FRONTEND_PORT = 8090   //≥ 8000、與他專案錯開、寫死不隨機；映射表載明；建議另接受整體位移量（C2〈埠與路徑可位移〉）
 export const apiBaseUrl = `http://127.0.0.1:${BACKEND_PORT}`, baseUrl = `http://127.0.0.1:${FRONTEND_PORT}`
 export const projRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..')   //本模組位於 test/tools/，上兩層為專案根；相對路徑一律由此解析
 export const testDir = join(projRoot, 'test')                                        //test/_tmp、test/pics 由此衍生，不用 __dir（那是 test/tools）

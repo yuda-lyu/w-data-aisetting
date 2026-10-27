@@ -16,6 +16,19 @@
 | e2e 執行 | 單獨跑某檔：`npx mocha test/e2e-<flow>.test.mjs --reporter list --timeout NNNNNN` / 逐檔隔離（獨立程序）：`node test/tools/run-e2e-isolated.mjs` |
 | 共用實作 | `test/tools/e2eLib.mjs` 單一橋接 → `w-package-tools-e2e/src/`（devDependency，寫明版號）；`e2e-setup.mjs` 只留組態與專案專屬原語 |
 
+### 全量執行與臨時實例（技能 §7.11、§1.5；full-run-and-instances）
+
+| 項目 | 值 |
+|---|---|
+| 重產趟 | 各流程之產製指令（含 `--write-mode changed` 或專案自訂之「有變更才改寫」開關名、差異上限之給法） |
+| 審差異 | 分類工具（腳本位置或套件 `compareImageDirs`）、並排裁圖之產出位置、本輪副本位置（`./tmp/<本輪>/pics-before/`） |
+| 比對趟 | 逐檔隔離 runner；結果檔之位置與命名（以流程為單位） |
+| 實體檔清單 | 快照不含之實體檔夾、清單檔位置、核對與修復指令（contract C4 (c)） |
+| 埠位移 | 機制（設定鍵或環境變數名；無則寫「文字取代，白名單：…」）、位移單位（例：+100×N） |
+| 臨時實例 | 來源樹複製之排除清單、以目錄連結指回之項目（`node_modules`、`test/pics`）、資料庫之建立方式、建立與移除之腳本 |
+| 須留正式實例之流程 | 逐條列出與理由（畫面或期望值含主機與埠、外部登錄之固定網址、共用外部資源） |
+| 導入驗證 | 首次採用之三項驗證結果與日期（full-run-and-instances §6） |
+
 ### 契約映射
 
 | 契約 | 本專案實名 / 模式（括號內為套件模組與選項） | 偏離與依據 |
@@ -23,7 +36,7 @@
 | C1 launch wrapper | `launchBrowser()`；旗標組：六旗標 / 四旗標（列出） | 例：四旗標含 `--font-render-hinting=none`，依據＝本專案 2026-xx 字形重畫症狀；尚未升級六旗標因需全量重產 |
 | C2 server lifecycle | `startServersOnce({ backendOnly })` / `cleanup()`；root `after` + 直跑顯式 cleanup | |
 | C3 換設定重啟 | `restartBackend(path, envOverride)` / `genTempSettings(overrides)` → `test/_tmp/settings-e2e-*.json`（cleanup 刪除；絕不放 `./tmp/`） | |
-| C4 DB 重置 | `resetToBaseSeed()`（直接 DB）/ `resetDb(browser, seed)`（throwaway page） | |
+| C4 DB 重置 | `resetToBaseSeed()`（直接 DB）/ `resetDb(browser, seed)`（throwaway page）/ 快照複製（快照位置；快照不含之實體檔清單見〈全量執行與臨時實例〉） | |
 | C5 進站與語系 | `openApp(browser)`（`?token=sys`）/ `setLang(page, lang)` | |
 | C6 截圖 | `captureStable(page, { initialWaitMs: 1500 })`；截圖範圍：全頁 / 視窗（含重排原因，見技能 §8.5） | 例：某流程改視窗截圖，依據＝全頁截圖觸發 resize 使抽屜翻面／圖片瀏覽器重排（探測 log 路徑） |
 | C7 紅框 | `captureStableWithBox`：sharp 合成 / **DOM 注入（缺口，待遷移）** | |
@@ -32,7 +45,7 @@
 | C10 輸入 | `typeIntoInput(page, locator, value)`；表格 `typeIntoCell` / `fillAgGridCell` | |
 | C11 偵測等待 | `waitUntilExist(page, label, fn, { timeout, arg })` | |
 | C12 settle 訊號 | `waitDrawerReady`（`[state]`）/ `waitMutationSettled`（簽章） | |
-| C13 regen 入口 | (a) `node test/e2e-x.test.mjs --baseline [--names] [--langs] [--write-mode]` + `generateBaseline()` 末尾 `cleanup()` / (b) `npx mocha … --baseline` 或 `E2E_REGEN=1`；兩端皆 `runBaselineCase`、篩選 `createBaselineGate`、等價驗證 `E2E_BASELINE_OUT_DIR` | 例：某檔仍手寫篩選或兩份流程＝缺口，列入已知缺口 |
+| C13 regen 入口 | (a) `node test/e2e-x.test.mjs --baseline [--names] [--langs] [--write-mode]` + `generateBaseline()` 末尾 `cleanup()` / (b) `npx mocha … --baseline` 或 `E2E_REGEN=1`；兩端皆 `runBaselineCase`、篩選 `createBaselineGate`、等價驗證 `E2E_BASELINE_OUT_DIR`；有變更才改寫（`--write-mode changed` 或專案開關名）與差異上限 | 例：某檔仍手寫篩選或兩份流程＝缺口，列入已知缺口；支援專案缺「有變更才改寫」＝缺口 |
 | C14 端點 | `baseUrl` / `apiBaseUrl`（127.0.0.1） | |
 
 ### 專案特有機制

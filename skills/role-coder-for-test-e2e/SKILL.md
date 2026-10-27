@@ -1,8 +1,8 @@
 ---
 name: role-coder-for-test-e2e
 description: |
-  E2E 測試建構與審查規範。主要適用 Playwright 驅動真瀏覽器 + mocha runner + pixel baseline 之專案（Vue / React 皆可）；其他 runner（Cypress、Playwright Test）只採通用原則（§2 case 推導、§4 act、§5 assert、§6 隔離）。內容：專案勘查與契約選型；作業模式（單人 vs 主代理派工：探測先行、計畫檔、單鏈排程與旗標閘門、逐張審圖）；從 spec 推導 case（完整度 rubric 含資料與內容變體覆蓋、獨立情境 vs 承接式 journey、6 步真實 user path、按鈕與鍵盤 affordance 全清單比對）；落地契約分「核心必備」與「條件式 adapter」（launch wrapper、server lifecycle、captureStable、紅框後合成、遮罩、baseline 比對、真人輸入、偵測等待、regen 入口）；act 走 L1–L3 與 Pattern A–D；assert 走使用者觀察；每 case fresh browser + DB 重置；標準圖同時是操作手冊用圖（每步兩張、一圖一框、框反應內容本身、已知缺陷不凍結、產完逐張目視並以圖文對照之審圖報告交審才跑 mocha、下游手冊同輪更新）；截圖穩定性（settle 訊號、mouse park、假時鐘、確定性渲染旗標、非決定性畫布之「標準圖覆蓋＋DOM 貼回」、建置時寫入之產製時間與耗時等不可固定之值之比對端覆蓋——標準圖只因有效內容改變而重產、全頁 vs 視窗截圖）；lifecycle 對稱性與逐檔隔離；場景手冊（含地圖／三維畫布、全畫面圖片瀏覽器、編輯器鍵盤觸發之提示區、彈窗多分頁、以真實收件匣驗證信件往返與模板改版之三處同步）；mocha 執行慣例；探測腳本紀律與 w-screenctl 探索；完成前勾選。深入內容在 references/：baseline-as-manual（紅框決定表、量測 helper 設計、已知缺陷協定、假時鐘樣板、產製與目視紀律）、e2e-setup-contract（參考實作 + 最小可執行骨架 + audit）、pixel-mismatch-diagnosis（超容差七步、守門、認證）、research-review-discipline（調研紀律、外部複審、業主裁示、反模式）、project-mapping-template（專案規則帳本 `sgud/rule/rulebook.md`，舊制為 `CLAUDE_rulebook.md`，之 e2e 映射表範本）、dispatch-and-review-workflow（多系統批量產製：主代理探測、計畫檔、單鏈排程與旗標閘門、逐張審圖與退件、審圖報告與回報）、mail-roundtrip-verification（寄信點盤點、收件匣服務、假時鐘與 Date 標頭、逐行純文字斷言、模板設計與檢視器頁、改版三處同步）、unfixable-values-masking（不可固定之值之分類、盤點、比對端覆蓋、差異分流與重產門檻）。
-  觸發條件：凡接觸 e2e 測試檔（檔名含 `e2e-`）的任務——寫/改/審/拆/移除/重構/完整度盤查/flake 排查/標準圖產製或重產——必先調用本技能，整篇入 context 逐項比對；看到 e2e 工件即觸發。分工：spec 之撰寫與複審走 role-coder-for-spec，本技能只把現成 spec 轉成 case 與標準圖；各層共通之測試規則走 role-coder-for-test。
+  E2E 測試建構與審查規範。主要適用 Playwright 驅動真瀏覽器 + mocha runner + pixel baseline 之專案（Vue / React 皆可）；其他 runner（Cypress、Playwright Test）只採通用原則（§2 case 推導、§4 act、§5 assert、§6 隔離）。內容：專案勘查與契約選型；作業模式（單人 vs 主代理派工：探測先行、計畫檔、實例內單鏈與旗標閘門、逐張審圖）；從 spec 推導 case（完整度 rubric 含變體覆蓋、獨立情境 vs 承接式 journey、6 步真實 user path、按鈕與鍵盤 affordance 全清單比對）；落地契約分「核心必備」與「條件式 adapter」（launch wrapper、server lifecycle、captureStable、紅框後合成、遮罩、baseline 比對、真人輸入、偵測等待、regen 入口）；act 走 L1–L3 與 Pattern A–D；assert 走使用者觀察；每 case fresh browser + DB 重置；標準圖同時是操作手冊用圖（每步兩張、一圖一框、框反應內容本身、已知缺陷不凍結、產完逐張目視並以審圖報告交審才跑 mocha 比對（全量執行改事後檢視）、下游手冊同輪更新）；全量執行（重產趟→審差異→比對趟）與臨時實例多開；截圖穩定性（settle 訊號、mouse park、假時鐘、確定性渲染旗標、非決定性畫布之「標準圖覆蓋＋DOM 貼回」、不可固定之值（產製時間、耗時）之比對端覆蓋——標準圖只因有效內容改變而重產、全頁 vs 視窗截圖）；lifecycle 對稱性與逐檔隔離；場景手冊（地圖／三維畫布、全畫面圖片瀏覽器、編輯器鍵盤觸發之提示區、彈窗多分頁、信件往返與模板改版）；mocha 執行慣例；探測腳本紀律與 w-screenctl 探索；完成前勾選。深入內容在 references/：baseline-as-manual（紅框決定表、量測 helper 設計、已知缺陷協定、假時鐘樣板、產製與目視紀律）、e2e-setup-contract（參考實作 + 最小可執行骨架 + audit）、full-run-and-instances（全量執行三趟、審差異分類、臨時實例建立與移除）、pixel-mismatch-diagnosis（超容差七步、守門、認證）、research-review-discipline（調研紀律、外部複審、業主裁示、反模式）、project-mapping-template（專案規則帳本之 e2e 映射表範本）、dispatch-and-review-workflow（多系統批量產製：主代理探測、計畫檔、實例內單鏈與旗標閘門、逐張審圖與退件、審圖報告）、mail-roundtrip-verification（寄信點盤點、收件匣、Date 標頭、逐行斷言、模板與檢視器頁、改版三處同步）、unfixable-values-masking（不可固定之值之分類、盤點、比對端覆蓋、差異分流與重產門檻）。
+  觸發條件：凡接觸 e2e 測試檔（檔名含 `e2e-`）的任務——寫/改/審/拆/移除/重構/完整度盤查/flake 排查/標準圖產製或重產/全量執行——必先調用本技能，整篇入 context 逐項比對；看到 e2e 工件即觸發。分工：spec 之撰寫與複審走 role-coder-for-spec，本技能只把現成 spec 轉成 case 與標準圖；各層共通之測試規則走 role-coder-for-test。
 ---
 
 # E2E 測試建構規範
@@ -11,7 +11,7 @@ description: |
 
 **與其他技能之分工**：spec 本身（含 `E2E-NNN` case 之 title／description／flow、〈已知落差〉）之撰寫、改寫與複審走 skill[role-coder-for-spec]；本技能只把**現成的 spec** 轉成 case 與標準圖，case 需要而 spec 沒寫或與實機不符之事實回 spec 補或改（§2.5）。各層測試共通之規則（斷言是 spec 之翻譯、語意斷言為主與 pixel baseline 補強之雙向約束、`e2e-`／`api-`／`unit-` 分層、目錄配置、mocha 與 port、測試數據真實性）走 skill[role-coder-for-test]；本技能只寫 e2e 專屬部分。
 
-**閱讀順序**：§0 勘查 → §1 交付物 → §1.5 作業模式（單人或派工）→ §2 從 spec 到 case → §3 契約 → §4 act → §5 assert → §6 隔離 → §7 標準圖（操作手冊用圖）→ §8 穩定性 → §9 lifecycle → §10 場景 → §11 執行、探索與探測腳本 → §12 勾選。深入：[references/baseline-as-manual.md](references/baseline-as-manual.md)、[references/dispatch-and-review-workflow.md](references/dispatch-and-review-workflow.md)、[references/e2e-setup-contract.md](references/e2e-setup-contract.md)、[references/pixel-mismatch-diagnosis.md](references/pixel-mismatch-diagnosis.md)、[references/unfixable-values-masking.md](references/unfixable-values-masking.md)、[references/research-review-discipline.md](references/research-review-discipline.md)。
+**閱讀順序**：§0 勘查 → §1 交付物 → §1.5 作業模式（單人或派工）→ §2 從 spec 到 case → §3 契約 → §4 act → §5 assert → §6 隔離 → §7 標準圖（操作手冊用圖）→ §8 穩定性 → §9 lifecycle → §10 場景 → §11 執行、探索與探測腳本 → §12 勾選。深入：[references/baseline-as-manual.md](references/baseline-as-manual.md)、[references/dispatch-and-review-workflow.md](references/dispatch-and-review-workflow.md)、[references/e2e-setup-contract.md](references/e2e-setup-contract.md)、[references/full-run-and-instances.md](references/full-run-and-instances.md)、[references/pixel-mismatch-diagnosis.md](references/pixel-mismatch-diagnosis.md)、[references/unfixable-values-masking.md](references/unfixable-values-masking.md)、[references/research-review-discipline.md](references/research-review-discipline.md)。
 
 ## 0. 動手前的專案勘查（5 分鐘，寫進回報）
 
@@ -32,10 +32,10 @@ description: |
 | 2 | 按鈕覆蓋清單 | production 可點元素全清單 vs 測試點過的（§2.4） |
 | 3 | rubric 逐維度判定 | §2.1 六維，每維「達 / 缺（哪些 case）」 |
 | 4 | 標準圖目視紀錄 | 每張圖對照 spec 視覺項「框住…」之核對結果（§7.6）；同類問題已全掃 |
-| 5 | 執行紀錄 | mocha passing / failing / pending（已知缺陷）/ 耗時；regen 時 `git diff --stat test/pics` |
+| 5 | 執行紀錄 | mocha passing / failing / pending（已知缺陷）/ 耗時；regen 時 `git diff --stat test/pics`；全量執行時附重產趟、審差異、比對趟三者之對帳表（§7.11） |
 | 6 | 使用者視角驗收 | 至少一個 case `--grep` 單跑與全跑各一次，結果一致 |
 
-完成四件缺一不可：①既有 e2e 全綠（已知缺陷為 pending 且各附〈已知落差〉）②rubric 六維無缺 ③標準圖經逐張目視並**經使用者審圖認可** ④baseline 變更經授權且 diff 僅限預期——差異只落在不可固定之值者不是 baseline 變更，是遮蔽缺口（§7.9）。沒有對照表不得寫「全覆蓋 / 完成」；標準圖產完先交審、未認可前不跑 mocha 比對（§7.6）。勾選清單見 §12。
+完成四件缺一不可：①既有 e2e 全綠（已知缺陷為 pending 且各附〈已知落差〉）②rubric 六維無缺 ③標準圖經逐張目視並**經使用者審圖認可**（全量重產趟之採用改為事後檢視，§7.9 ②） ④baseline 變更經授權（定點重產逐次授權；全量重產趟依 §7.9 ②）且 diff 僅限預期——差異只落在不可固定之值者不是 baseline 變更，是遮蔽缺口（§7.9）。沒有對照表不得寫「全覆蓋 / 完成」；標準圖產完先交審、未認可前不跑 mocha 比對（§7.6）。勾選清單見 §12。
 
 ## 1.5 作業模式：單人做完，或主代理派工
 
@@ -44,9 +44,11 @@ description: |
 | 模式 | 適用 | 流程 |
 |---|---|---|
 | 單人 | 一個流程、案例數十以內 | §0 → §2 → §3 → 實作 → §7.6 產製與交付門 |
-| 主代理派工 | 多個子系統、多批案例、或同骨架系統成組 | 主代理：**探測**（實機事實、可行性、DOM 可點層、互動語意）→ **計畫檔**（決定表填滿才派）→ 每系統一個全新 context 的子代理，**序列**產製（共用後端與資料庫時只能一條鏈）→ **逐張審圖**、退一張退一類 → 回報交審。前一系統的成品即下一系統的範本。完整流程、計畫檔段落、閘門機制、審圖清單與失敗對策見 [references/dispatch-and-review-workflow.md](references/dispatch-and-review-workflow.md) |
+| 主代理派工 | 多個子系統、多批案例、或同骨架系統成組 | 主代理：**探測**（實機事實、可行性、DOM 可點層、互動語意）→ **計畫檔**（決定表填滿才派）→ 每系統一個全新 context 的子代理，**序列**產製（同一實例內只能一條鏈；要並行改建臨時實例，見下）→ **逐張審圖**、退一張退一類 → 回報交審。前一系統的成品即下一系統的範本。完整流程、計畫檔段落、閘門機制、審圖清單與失敗對策見 [references/dispatch-and-review-workflow.md](references/dispatch-and-review-workflow.md) |
 
-派工模式三條不可省：①**探測先於計畫**——計畫檔裡每個事實（版次、筆數、分頁清單、可點層、平移後主體位置）來自實機探測，不來自 spec 或讀碼；②**單鏈排程**——第二條鏈以主代理建立的旗標檔為閘門，不以 log 出現 EXIT 為閘門；③**主代理逐張看圖並對物核實子代理的主張**——掃描只回答有沒有框，子代理說「既有圖也如此」「此為元件既有行為」要自己開圖或探測後才採信。
+派工模式三條不可省：①**探測先於計畫**——計畫檔裡每個事實（版次、筆數、分頁清單、可點層、平移後主體位置）來自實機探測，不來自 spec 或讀碼；②**實例內單鏈排程**——同一實例之第二條鏈以主代理建立的旗標檔為閘門，不以 log 出現 EXIT 為閘門；跨實例可並行（見下）；③**主代理逐張看圖並對物核實子代理的主張**——掃描只回答有沒有框，子代理說「既有圖也如此」「此為元件既有行為」要自己開圖或探測後才採信。
+
+**同一實例內單鏈；跨實例可並行**（單人與派工皆適用）。**實例**＝一組專屬之服務程序（前端、後端）、埠、資料庫目錄、可寫之實體檔夾、`test/_tmp/` 與 `./testPending/`；正式專案本身是一個實例（正式實例），以埠整體位移複製出者是臨時實例。同一實例內，重產、mocha、探測共用後端與資料庫，同一時間只能一條鏈（§7.6 第 2 步）；兩個實例除以目錄連結共用之標準圖夾（流程互斥分配，故不寫同一檔）外不共用任何可寫狀態，即可各跑一條鏈。**不得多開之情形**：①畫面或期望值含主機與埠之流程（分享連結、網址控制、API 網址、轉址欄、瀏覽網址等）只能在正式實例跑——在臨時實例跑會寫出帶錯誤埠之標準圖；②同一趟內同一流程只分配給一個實例（標準圖夾以目錄連結共用）；③臨時實例未通過首次等價驗證前不得寫正式標準圖；④共用外部資源（同一真實收件匣、外部額度）而不能確認互不干擾者排在同一實例。建法（來源樹複製之排除清單、只有 `node_modules` 與標準圖夾以目錄連結指回、埠整體位移只改白名單路徑、dev server 不指定 `localhost`、資料庫自基礎快照建立）、流程分配、結果分檔，以及**實例內尚有連結時絕不可遞迴刪除**（robocopy 鏡像空目錄與 `dir /AL /S` 皆會穿過 junction 到正式專案；以不跟進連結之方式列出並逐一拆除、回驗正式專案完好後才刪）見 [references/full-run-and-instances.md](references/full-run-and-instances.md) §5。
 
 ## 2. 從 spec 到 case
 
@@ -90,13 +92,13 @@ description: |
 | # | 能力 | 要求 |
 |---|---|---|
 | C1 | `launchBrowser()` | 全專案唯一 `chromium.launch` 出口，內含確定性渲染旗標組（§8.4） |
-| C2 | `startServersOnce()` / `cleanup()` | port 偵測 reuse-or-spawn（health 回專案識別才 reuse）；有多服務時 once 旗標依服務分拆；cleanup 只殺自己 spawn 的、exit 備援走同步指令；兩條觸發來源（§9） |
+| C2 | `startServersOnce()` / `cleanup()` | port 偵測 reuse-or-spawn（health 回專案識別才 reuse）；有多服務時 once 旗標依服務分拆；cleanup 只殺自己 spawn 的、exit 備援走同步指令；兩條觸發來源（§9）；建議埠與可寫路徑可由設定或環境變數整體位移（供臨時實例，§1.5） |
 | C6 | `captureStable(page, opts)` | 所有 pixel 截圖唯一入口；retry-until-stable；`strict` 時未 settle 即 throw（regen 用） |
 | C7 | `captureStableWithBox(page, target, opts)` | 紅框 #f26 / 5px / 圓角 4，**截圖後 sharp 合成**，不注入 DOM；多個 target 取聯集畫**一個**框；接受直接給定之矩形 |
 | C9 | `assertBaselineMatch(buf, baselinePath, label, opts)` | pngjs + pixelmatch（`includeAA:false`, `threshold:0.1`, `maxDiffPixels` 100）；fail-dump 三聯組永不覆蓋；尺寸不同直接 fail；缺檔 throw |
 | C10 | `typeIntoInput(page, locator, value)` | Pattern D 真人輸入 |
 | C11 | `waitUntilExist(page, label, fn, opts)` | 偵測 driven 等待 |
-| C13 | regen 入口 | 直跑 `--baseline` + `generateBaseline()` 末尾 `cleanup()`，或 mocha `--baseline` / `E2E_REGEN=1`；**截圖前 gate**、**產製端 / 測試端同管線**、寫檔前語意斷言先過、未 settle 不寫、已知缺陷跳過該步（§7.5） |
+| C13 | regen 入口 | 直跑 `--baseline` + `generateBaseline()` 末尾 `cleanup()`，或 mocha `--baseline` / `E2E_REGEN=1`；**截圖前 gate**、**產製端 / 測試端同管線**、寫檔前語意斷言先過、未 settle 不寫、已知缺陷跳過該步（§7.5）；**有變更才改寫**（`--write-mode changed`）且差異上限可設（全量重產趟設 0，§7.11） |
 | C14 | 端點常數 | `127.0.0.1`；seed 內 redirect URL 由 `baseUrl` 衍生 |
 
 **條件式 adapter**（專案有該特徵才需要；映射表註明「不適用」即可）：
@@ -104,7 +106,7 @@ description: |
 | # | 能力 | 何時需要 |
 |---|---|---|
 | C3 | `restartBackend(settingsPath, envOverride?)` + `genTempSettings(overrides)` | 有 case 需不同 server 設定（語系注入、mock 開關、SMTP 失敗） |
-| C4 | DB 重置（直接 DB API 或 throwaway page） | 有持久資料 |
+| C4 | DB 重置（直接 DB API、throwaway page 或快照複製；快照不含之實體檔須有清單，全量執行前後各核對） | 有持久資料 |
 | C5 | `openApp(browser)` / `setLang(page, lang)` | 需登入態 / i18n |
 | C8 | 遮罩：比對端覆蓋 / 填黑 / 錨右緣 | 有凍不到之值：建置時寫入之產製時間、耗時、即時使用率、非決定性畫布等（執行期由程式取當下時間寫入之時間戳不在此列，用假時鐘 §8.2；分類見 unfixable-values-masking §1） |
 | C12 | settle 訊號 helper（抽屜 `[state]`、mutation 簽章） | 有動畫式容器 / 表格 mutation |
@@ -175,9 +177,9 @@ description: |
 ## 6. 每 case 隔離：fresh browser + DB 重置
 
 - `beforeEach` `launchBrowser()` + `newContext()` + `newPage()`；`afterEach` `browser.close()`。換 case 或換語系都重新 new；regen 端同樣 per-case（每語系共用一個 browser 跑多 case＝與 mocha 不同管線，列缺口）。fresh launch ~1–2s，不為省時間共用。
-- DB：`beforeEach` 重置為 base seed；會異動資料的檔於 `afterEach` 或檔尾清本檔特化資料；唯讀 flow 於 `before` 重置一次作守門（防日常以真時鐘重建之資料庫讓整檔假紅）。作法 (a) DB API 清表 + 插 seed；(b) throwaway page 以 UI RPC 送回整批 seed、等筆數符合後關 context——不在 case page 上做（後端 late 廣播會把已新增列洗掉）；(c) 快照目錄複製（建庫時以種子錨點假時鐘建一次，之後每 case 複製）。hermetic seed 若初始化腳本為 upsert，須刪整個 DB 目錄再重建並偵測完成訊號。
+- DB：`beforeEach` 重置為 base seed；會異動資料的檔於 `afterEach` 或檔尾清本檔特化資料；唯讀 flow 於 `before` 重置一次作守門（防日常以真時鐘重建之資料庫讓整檔假紅）。作法 (a) DB API 清表 + 插 seed；(b) throwaway page 以 UI RPC 送回整批 seed、等筆數符合後關 context——不在 case page 上做（後端 late 廣播會把已新增列洗掉）；(c) 快照目錄複製（建庫時以種子錨點假時鐘建一次，之後每 case 複製；快照不含之實體檔——上傳、附件等——須有清單並於全量執行前後各核對一次，不得在快照所依之專案根單獨執行會改寫實體檔之種子腳本，contract C4 (c)）。hermetic seed 若初始化腳本為 upsert，須刪整個 DB 目錄再重建並偵測完成訊號。
 - 語系：外層 `for (lang of LANGS) describe(...)`；`setLang` 對預設語系也補等量 settle（治收斂不對稱）；純 UI 無語系差異的 case 可單輪並註明。
-- browser 與 DB 都 per-case 仍見跨 case 殘留 → 查服務層：多個 backend 同連一個 DB（restartBackend 留孤兒、手動多開、中途砍 mocha、另一條 regen 並行），先確認只剩一個 backend。
+- browser 與 DB 都 per-case 仍見跨 case 殘留 → 查服務層：多個 backend 同連一個 DB（restartBackend 留孤兒、同一實例內手動多開、中途砍 mocha、同一實例內另一條 regen 並行），先確認只剩一個 backend。臨時實例各有自己之 DB 與埠，不在此列（§1.5）。
 
 ## 7. 標準圖：同時是操作手冊的圖
 
@@ -236,13 +238,13 @@ description: |
 
 結果畫面出現產品缺陷（未捕捉例外、空白表格、開發伺服器錯誤覆蓋層）時：①先以未注入任何測試 hook 的環境重現，確認不是測試環境造成；②寫進 spec〈已知落差〉附 `檔案:行號`；③案例走到缺陷徵狀即拋帶 `knownDefect` 標記的錯誤，mocha 端 `this.skip()` 標 pending、regen 端跳過該步並印原因；④缺陷修好後徵狀消失 → 因缺標準圖而失敗 → 才補產。不用 `allowPageErrors` 放行、不寫「標準圖凍結的是現況畫面」——現況壞掉的部分不是規格。樣板見 reference §4。
 
-### 7.6 產製流程與交付門（順序不可調）
+### 7.6 產製流程與交付門（順序不可調；全量執行另依 §7.11）
 
 1. spec 視覺項寫好每張「框住什麼」→ 程式碼每個截圖旁註解同一句。
-2. 重產：**同一時間只有一條鏈在跑**（重產與 mocha 共用後端與資料庫）；啟動前列出 `baseline|mocha|後端` 程序，殺乾淨或等完；多批次串成一條序列背景鏈（明給 `timeout`；預估超過 115 分鐘改照 §11.1 以 detached 執行）；每次用**沒用過的 log 檔名**；等待用任務完成通知或本輪 log 的 EXIT。殷鑑：`until grep EXIT` 等到上一輪同名 log，第二條重產並行殺掉第一條的後端，剩餘案例逾時而圖仍是舊檔。異常結束以圖檔 mtime 對照本輪起訖判斷哪些真的重產了。
+2. 重產：**同一實例內同一時間只有一條鏈在跑**（重產與 mocha 共用該實例之後端與資料庫；跨實例並行之前提與限制見 §1.5）；啟動前列出 `baseline|mocha|後端` 程序並以監聽埠與命令列之路徑辨識所屬實例，本實例內者殺乾淨或等完（他實例之鏈不動；非自己啟動者依 §9.1 回報）；多批次串成一條序列背景鏈（明給 `timeout`；預估超過 115 分鐘改照 §11.1 以 detached 執行）；每次用**沒用過的 log 檔名**；等待用任務完成通知或本輪 log 的 EXIT。殷鑑：`until grep EXIT` 等到上一輪同名 log，第二條重產並行殺掉第一條的後端，剩餘案例逾時而圖仍是舊檔。異常結束以圖檔 mtime 對照本輪起訖判斷哪些真的重產了（`--write-mode changed` 保留之圖 mtime 不變——案例是否跑過以 `[write]`／`[keep]` 紀錄判定，mtime 只確認寫檔）。
 3. 無框掃描：以「長段紅線（同色連續 ≥ 20 px）」判定有框；統計紅像素會被頁面紅字假陽性。
 4. **逐張目視**：每張對照 spec 那句「框住…」核對（reference §6.3 清單）。使用者退回一張＝退回一個類別，把同類別的每張圖翻出來查，不只修被點名那張；殷鑑：八輪退圖，每輪只修被點名那張。
-5. **交使用者審圖**：使用者難以逐張開圖檔時，產一份圖文對照之審圖報告（md→docx，非交付文件、放暫存區）交審——只收本輪新增／變動之案例，每案例先列操作描述與手冊敘述，每張圖之圖說為「圖名（圖鍵）」再附 spec 那句「框住…」，另附本輪變動摘要與重產抽樣（作法見 dispatch-and-review-workflow §6）。已有下游手冊者，手冊之圖名、敘述、md 與 docx 於**同一輪**更新後一起交審，不留到認可之後（殷鑑：補了收信之標準圖卻未同輪補手冊，使用者反問「為何手冊還是沒看到收信截圖」）。未認可前不跑 mocha 比對。**例外**：業主已明文委任 agent 審圖之專案（記於該專案 process；2026-09-28 起已有專案採行），由 agent 依該 process 之審圖程序逐張審畢即可跑 mocha，審圖紀錄照常落檔供業主隨時查閱；產圖本身仍須授權（§7.9）。
+5. **交使用者審圖**：使用者難以逐張開圖檔時，產一份圖文對照之審圖報告（md→docx，非交付文件、放暫存區）交審——只收本輪新增／變動之案例，每案例先列操作描述與手冊敘述，每張圖之圖說為「圖名（圖鍵）」再附 spec 那句「框住…」，另附本輪變動摘要與重產抽樣（作法見 dispatch-and-review-workflow §6）。已有下游手冊者，手冊之圖名、敘述、md 與 docx 於**同一輪**更新後一起交審，不留到認可之後（殷鑑：補了收信之標準圖卻未同輪補手冊，使用者反問「為何手冊還是沒看到收信截圖」）。未認可前不跑 mocha 比對（全量執行之重產趟另依 §7.9 ②：審差異後即跑比對趟，採用由使用者事後檢視）。**例外**：業主已明文委任 agent 審圖之專案（記於該專案 process；2026-09-28 起已有專案採行），由 agent 依該 process 之審圖程序逐張審畢即可跑 mocha，審圖紀錄照常落檔供業主隨時查閱；產圖本身仍須授權（§7.9）。
 6. 認可後才跑全跑與 `--grep` 單跑一致性，再回報。
 
 ### 7.7 比對與失敗證據
@@ -250,6 +252,7 @@ description: |
 - 反鋸齒感知容差非 byte-exact：pixelmatch `includeAA:false` + `threshold:0.1` + 差異 ≤ `maxDiffPixels`（100）。why：SVG icon / 字型邊緣次像素跨 session 不決定性；真 regression 動輒數百 px 仍被抓。
 - 勿混淆：`captureStable` 內 `curr.equals(prev)` 是 settle 偵測的真 byte 比較。
 - 測試當次截圖以 Buffer 比對不落地；只有 regen 寫檔，且**只經同一案例管線**（套件 `runBaselineCase`，全部斷言通過才寫）——比對函式不得兼寫檔（套件 `assertBaselineMatch` 之 `regen` 旁路 2026-09-28 移除）。fail-dump `./testPending/<label>__<ms 時間戳>__{capture,baseline,diff}.png`，撞檔 `-N`，永不覆蓋，gitignore。
+- **比對失敗即拋錯者，該案其後各張沒有證據**：流程中逐階段比對、或管線逐張比對遇第一張不符即拋錯者，其後各張不比對、不 dump（流程中比對者連截圖都沒拍到）。`./testPending/` 之 capture 因此不是臨時標準圖——只有第一張，且繞過管線之語意斷言、覆蓋與 strict settle，不可複製進 `test/pics`；要一次看齊全部差異，用重產趟（§7.11）或定點重產。收集模式（不符時記錄並續比、案例末才判失敗）待共用層支援；未支援前依本節之專案層作法（以重產趟或定點重產補齊）。
 - **餘裕**：通過但計數逾 `maxDiffPixels` 一半＝零餘裕之 flake 源（套件印 `[baseline-headroom]` 告警），應查因，不是「通過就好」：差異只落在不可固定之值者補遮蔽（重產只會在下次建置或執行時再耗用容差，unfixable-values-masking §5），其餘依 pixel-mismatch-diagnosis 查成因後才談重產。殷鑑：07-23 之舊標準圖紅框為 DOM 注入之 CSS 框，改 sharp 合成後四角被計為真差異，每張耗用 2～100，兩張恰為 100。
 - 下「本專案沒有 pixelmatch」結論前先 grep，不憑他專案函式名落空即斷言。
 
@@ -259,9 +262,9 @@ description: |
 
 ### 7.9 重產政策
 
-- **重產之前提是有效內容改變**（業主裁示：「前提是隨機或確認為不可固定之時間戳已遮蔽；有遮蔽就代表有效內容不變，自然不用重產，e2e 也依然能過」）。任何差異——比對失敗、`[baseline-headroom]` 告警、`--write-mode changed` 自動寫出——先量差異範圍並對應到元素：只落在隨機或無法固定之值（建置時寫入之產製時間、耗時、即時使用率）者是遮蔽缺口，補遮蔽（同畫面同性質之值一併）、以版控取回原標準圖、以 changed 模式重跑須零寫出；**不重產，也不問使用者要不要重產**。不只落在該等值者才談授權與受影響範圍。流程文件、spec、規則帳本或記憶中寫著「X 之後重產 N 張」者是待根治之補丁，不當慣例照做。分類、盤點、作法與失敗形狀見 [references/unfixable-values-masking.md](references/unfixable-values-masking.md)。
-- UI 變更後重產先取得使用者授權；只產受影響者（`--names` / `--langs` 在截圖前 gate）；每語系都涵蓋。無差別重產＝把 bug 凍結為真理。
-- 篩選語意統一（套件 `createBaselineGate`，contract C13）：`--names` 之項為階段圖鍵→只寫該張；為案例鍵或其**邊界**前綴（`E2E-005` 不命中 `E2E-0051-x`）→寫該案全部階段；不符任何鍵、命中只比對之案例、旗標缺值一律於截圖前報錯並列可用鍵（不靜默略過）；`--langs` 完全比對；`--write-mode missing`（追加案例只補缺圖）／`changed`（只寫超過容差者，不重寫已審過之圖；其寫出之圖仍須逐張過上條之差異分流，自動寫出不等於應寫出）；`E2E_BASELINE_OUT_DIR` 把寫檔導到暫存目錄（改共用層或管線時之等價驗證，不動正式標準圖）。各檔手寫 `startsWith` 之篩選＝缺口。
+- **重產之前提是有效內容改變**（業主裁示：「前提是隨機或確認為不可固定之時間戳已遮蔽；有遮蔽就代表有效內容不變，自然不用重產，e2e 也依然能過」）。任何差異——比對失敗、`[baseline-headroom]` 告警、`--write-mode changed` 自動寫出——先量差異範圍並對應到元素：只落在隨機或無法固定之值（建置時寫入之產製時間、耗時、即時使用率）者是遮蔽缺口，補遮蔽（同畫面同性質之值一併）、以版控取回原標準圖（全量執行中一律自本輪副本取回，§7.11）、以 changed 模式重跑須零寫出；**不重產，也不問使用者要不要重產**。不只落在該等值者才談授權與受影響範圍。流程文件、spec、規則帳本或記憶中寫著「X 之後重產 N 張」者是待根治之補丁，不當慣例照做。分類、盤點、作法與失敗形狀見 [references/unfixable-values-masking.md](references/unfixable-values-masking.md)。
+- **重產之授權與範圍分情境，不混用**（[references/full-run-and-instances.md](references/full-run-and-instances.md) §2）：①**定點重產**（既有之單案例重產；UI 變更、helper 改動、追加案例等已知範圍）維持逐次授權；只產受影響者（`--names` / `--langs` 在截圖前 gate）；每語系都涵蓋。無差別重產＝把 bug 凍結為真理。受影響範圍即全部者（如下方「加 / 改 launch 旗標＝全量」）仍屬定點重產、逐次授權，不是②。②**全量重產趟**（§7.11）由該專案之主責 agent（或主控）自行發動，不必逐次請示——**全量重產趟之寫出不等於採用**。採用須經審差異（逐張分類；CHANGED 以改前改後並排圖目視裁定），並於回報中**逐張列出採用之變更**供使用者事後檢視；使用者可否決，否決即自本輪副本還原並重跑該流程之比對。③只取數字之全套（凍結碼上之最末全套等）只跑比對趟，不重產；失敗依 pixel-mismatch-diagnosis 查因並回報。
+- 篩選語意統一（套件 `createBaselineGate`，contract C13）：`--names` 之項為階段圖鍵→只寫該張；為案例鍵或其**邊界**前綴（`E2E-005` 不命中 `E2E-0051-x`）→寫該案全部階段；不符任何鍵、命中只比對之案例、旗標缺值一律於截圖前報錯並列可用鍵（不靜默略過）；`--langs` 完全比對；`--write-mode missing`（追加案例只補缺圖）／`changed`（只寫差異超過差異上限者——上限預設＝比對容差，全量重產趟設 0，contract C13——不重寫已審過之圖；其寫出之圖仍須逐張過上條之差異分流，自動寫出不等於應寫出）；`E2E_BASELINE_OUT_DIR` 把寫檔導到暫存目錄（改共用層或管線時之等價驗證，不動正式標準圖）。各檔手寫 `startsWith` 之篩選＝缺口。
 - 兩案共用一張圖（§7.8 ①）者，另一案宣告 `compareOnly`：產製時照跑流程與語意斷言但不寫圖，否則同一張被兩案輪流重寫。只比對案例**直接宣告其比對之共用圖鍵為 stages**、run 回傳 `{ 共用圖鍵: buf }`；篩選器於全部案例模式須把它交給產製端執行（套件 2026-09-28 修正前直跑型專案之產製端從不執行只比對案例，與 mocha REGEN 型不對稱）。
 - **孤兒**：改名後重產只寫新名、從不刪舊名，舊圖成為無人產出亦無人比對之孤兒（殷鑑：曾有 12 張孤兒圖活了 11 天）。套件 `findOrphanBaselines` 依案例宣告靜態比對標準圖目錄（與執行了哪些案例無關，`_` 開頭參考片段自然排除），`createBaselineGate().finalize()` 有孤兒即拋錯並列出；等價驗證之 `onlyInB`（去 `_` 前綴）須為 0。
 - 改了量測 helper、紅框合成、launch 旗標、假時鐘錨點＝受影響範圍重產，先授權；加 / 改 launch 旗標＝全量。**「交叉比對在容差內」不是免重產之判準**：pixelmatch 計數 > 0 者（耗用容差，見 §7.7 餘裕）應重產；計數 0 而 RGBA 不同者，以「登錄漂移點」（座標＋通道差上限＋成因證據，套件 `compareImageDirs` 之 `drift`）歸等價——不以「計數 0」本身為等價（threshold 0.1 下整片均勻 ≤ 約 26 級之亮度差不計，會掩蓋肉眼可見之全域變化）。
@@ -274,6 +277,19 @@ description: |
 regen 與 mocha 的 browser 取得、per-case fresh、DB 重置、假時鐘、`setLang`、settle、紅框、遮罩、語意斷言逐項對稱；任一分叉都製造「永遠對不起來」的 baseline。regen 順序與 mocha 順序一致。
 
 **作法：兩端呼叫同一個單一案例函數**（套件 `runBaselineCase`，contract C13），不是兩份「看起來一樣」的程式碼——2026-09 盤點四個姊妹專案：產製端 25/25 檔都不跑事後語意斷言、流程拓撲兩端各寫一份、產製端每語系共用瀏覽器、前置只在比對端等分叉並存，全都是「兩份碼」之產物。語意斷言在流程中每階段截圖後當場做（狀態仍在畫面上），DB／端到端不變式於寫檔或比對之前；**全部斷言通過才寫檔**，任一失敗該案一張都不寫。mocha REGEN 式專案亦同：不可在流程中逐階段「比對函式兼寫檔」。
+
+### 7.11 全量執行：重產趟 → 審差異 → 比對趟
+
+一次跑完一個或數個專案之全部流程（為報告取全量數字、套件或 Chromium 升版後之全面回歸）時，**不以比對趟起手**：比對趟起手遇標準圖過舊即「失敗 → 查因 → 逐案例重產 → 審 → 重跑」多輪人工介入，且比對失敗即中止之案例其後各張無證據（§7.7）。順序固定如下，不可調；授權依 §7.9 ②（主責 agent 或主控自行發動；寫出不等於採用）；**例外**：只取數字而標準圖不得變動之全套（§7.9 ③）不跑重產趟與審差異，只跑第 4 步。審差異分類表、對帳、臨時實例之作法見 [references/full-run-and-instances.md](references/full-run-and-instances.md)。
+
+0. **開跑前核對**：快照不含之實體檔依清單核對（contract C4 (c)），缺檔即中止並自備份複製回來；列出 `baseline|mocha|後端` 程序並辨識所屬實例；列出預期之流程與案例清單；本輪副本、log、審差異產物、臨時實例皆放 `./tmp/<本輪>/`，實例存續期間不得清理。
+1. **備份**：確認沒有任何鏈在跑；各專案 `test/pics` 疊加複製到全新之副本夾（Windows robocopy `/E`，離開碼 0～7 正常、≥ 8 才失敗；不用 `/MIR`）並核對逐檔雜湊；審查與還原一律對副本，不對版控 HEAD（常有未提交之標準圖）。e2e 所用之資料庫目錄即開發用者，先停開發服務並一併備份開發資料庫與實體檔。
+2. **重產趟**：全部流程以產製入口（直跑 `--baseline`／mocha `E2E_REGEN=1`，C13）之有變更才改寫模式（套件 `--write-mode changed`）執行、差異上限 0（pixelmatch 計數 > 0 即寫出交審；取捨與建議值見 full-run-and-instances §3 第 2 步；可設之上限待共用層支援，未支援前依該處之專案層作法，或要連計數 0 而 RGBA 不同者一併審時，改用 `--write-mode all` 加 `E2E_BASELINE_OUT_DIR` 之隔離輸出——不以比對容差為上限替代），strict settle；逐案例記錄寫出／保留／失敗／pending／未執行，失敗只記錄、不在本趟補救，入口遇一案失敗即中止者以 `--names` 續跑其餘案例，以預期清單核對「未執行」為 0。
+3. **審差異**：逐張分類 SAME／DRIFT（計數 0 而 RGBA 不同，§7.9 漂移點）／NOISE（≤ 比對容差，且以差異圖證明不落在內容變化上 → 自副本還原；逾容差一半者依 §7.7 查餘裕；不能證明者不歸此類）／CHANGED（並排目視：有效內容改變 → 採用；只在不可固定之值 → 還原並補遮蔽，§7.9；壞畫面 → 還原並依 §7.5 判成因）／NEW（§7.6 第 3～4 步）／MISSING（自副本還原），孤兒另欄（案例已廢止才刪）；分類表不留空格；審差異完成即進下一步，採用與刪除清單逐張列入回報（CHANGED 附改前改後並排圖）供使用者事後檢視，否決者自本輪副本還原並重跑該流程之比對。
+4. **比對趟**：逐檔隔離 runner 跑全部流程，結果以專案、流程、趟次、執行序號命名各寫一檔；**報告之數字只來自比對趟**；對帳：重產趟寫出數＝NOISE＋CHANGED＋NEW（隔離輸出另加 SAME 與 DRIFT），採用、還原、刪除分項記。
+5. **收尾**（順序不可調）：先停止本輪自己啟動之服務並以 PID／埠回驗；再自備份還原開發資料庫與實體檔、重啟開發服務（以新監聽 PID 驗證，不以健康檢查回 200 判定）；實體檔清單再核對；`test/pics` 以逐檔雜湊對副本核對，不同者恰為採用、新增與刪除清單（`git status` 只作輔助）；移除臨時實例（§1.5，先以不跟進連結之方式拆連結）；本輪副本保留至使用者完成事後檢視（否決之還原要用它）。
+
+多開時同一實例內仍單鏈、跨實例並行，畫面含主機與埠之流程留在正式實例（§1.5）。**實例放在 `./tmp/` 下時，結案清理 `./tmp/` 前必須先拆除其中之連結並回驗**，否則依全域之清理作法（如 robocopy 鏡像空目錄）會穿過連結刪到原專案（full-run-and-instances §5.5）。
 
 ## 8. 截圖穩定性
 
@@ -376,7 +392,7 @@ headless Chromium 預設 GPU 光柵化 + subpixel AA 非決定性（拉丁字偶
 
 ### 11.1 跑 mocha
 
-單獨跑某檔時指令自行編寫（如 `npx mocha test/e2e-<flow>.test.mjs --reporter list --timeout N`）；`--reporter list` 且不接 pipe；長跑 `run_in_background` + Read output，**`timeout` 一律明給**：背景指令沒給是 30 分鐘、最長 7200000（2 小時），到期即被終止（2026-10-01 觀察到約 30 分鐘中止，2026-10-03 實測確認那是未給 `timeout` 時的預設）；被終止後 runner 新開之 mocha／瀏覽器一律 exit 3221225794（0xC0000142）瞬間失敗、一案都沒跑卻像全部失敗。預估 ≤ 115 分鐘之鏈：`run_in_background` 並給大於預估時長之 `timeout`（≤ 7200000）。預估超過 115 分鐘之鏈：以 detached 執行——前景 Bash 下 `nohup bash -c '<鏈>; echo "EXIT $?"' > <本輪新 log> 2>&1 &`，立即返回，該行程不隨工具呼叫或 session 結束（`<鏈>` 內不可再含單引號，會截斷外層引號；複雜的鏈寫成腳本檔再呼叫）；再以背景等待迴圈分段盯（`timeout: 7200000`，每段至多 6900 秒）：`end=$(( $(date +%s) + 6900 )); until grep -q '^EXIT' <log> || [ "$(date +%s)" -ge "$end" ]; do sleep 30; done; grep '^EXIT' <log> || echo STILL-RUNNING`，`STILL-RUNNING` 時先查程序清單確認鏈還活著再重掛；結果以實際跑完之檔為準；`--timeout`（mocha 自己的逾時）依專案。`--grep` 與巢狀 `before` 之陷阱見 skill[role-coder-for-test] §5。標準圖尚未經使用者審圖認可前不跑比對（§7.6）。
+單獨跑某檔時指令自行編寫（如 `npx mocha test/e2e-<flow>.test.mjs --reporter list --timeout N`）；`--reporter list` 且不接 pipe；長跑 `run_in_background` + Read output，**`timeout` 一律明給**：背景指令沒給是 30 分鐘、最長 7200000（2 小時），到期即被終止（2026-10-01 觀察到約 30 分鐘中止，2026-10-03 實測確認那是未給 `timeout` 時的預設）；被終止後 runner 新開之 mocha／瀏覽器一律 exit 3221225794（0xC0000142）瞬間失敗、一案都沒跑卻像全部失敗。預估 ≤ 115 分鐘之鏈：`run_in_background` 並給大於預估時長之 `timeout`（≤ 7200000）。預估超過 115 分鐘之鏈：以 detached 執行——前景 Bash 下 `nohup bash -c '<鏈>; echo "EXIT $?"' > <本輪新 log> 2>&1 &`，立即返回，該行程不隨工具呼叫或 session 結束（`<鏈>` 內不可再含單引號，會截斷外層引號；複雜的鏈寫成腳本檔再呼叫）；再以背景等待迴圈分段盯（`timeout: 7200000`，每段至多 6900 秒）：`end=$(( $(date +%s) + 6900 )); until grep -q '^EXIT' <log> || [ "$(date +%s)" -ge "$end" ]; do sleep 30; done; grep '^EXIT' <log> || echo STILL-RUNNING`，`STILL-RUNNING` 時先查程序清單確認鏈還活著再重掛；結果以實際跑完之檔為準；`--timeout`（mocha 自己的逾時）依專案。`--grep` 與巢狀 `before` 之陷阱見 skill[role-coder-for-test] §5。標準圖尚未經使用者審圖認可前不跑比對（§7.6；全量執行之採用為事後檢視，§7.9 ②）。**全量執行**（為報告取全量數字、升版後全面回歸）不以 mocha 比對起手，依 §7.11 之重產趟 → 審差異 → 比對趟（標準圖不得變動之全套只跑比對趟，§7.9 ③）；要並行依 §1.5 建臨時實例。
 
 ### 11.2 Timing flake 自己修
 
@@ -426,16 +442,17 @@ token 檔不存在時由服務自動產生（啟動輸出不印全文）；一�
 - [ ] 改共用層或管線時已走等價驗證協定（暫存目錄重產 → compareImageDirs 分層 → write-mode changed 零寫出 → test/pics 快照與 git status 不變）；共用實作經 test/tools/e2eLib.mjs 單一橋接
 - [ ] 標準圖：每步兩張且每張有框；spec 視覺項與程式碼註解都寫「框住什麼」且一致；一圖一框；框反應內容本身不框空白；標籤/抽屜整顆；被蓋住改框上層；捲入後量；框不壓字（無邊界緊貼文字之目標以內容量並外擴墨跡，像素掃描＋放大目視確認）；框線不蓋框外內容（框線在與相鄰項可見範圍之間隙正中；浮層取浮層內容與浮層外內容之間隙正中，四周空白照常外擴；放大看框線兩側，自身文字與鄰項文字都不可貼線）；框任一側落在圖片邊緣者已逐列量框內緣至墨跡之像素距離（≤ 1px 依 §7.3-10 改框選目標，未改框幾何與產品）
 - [ ] 產品缺陷步驟走 knownDefect → pending，已以無 hook 環境重現並寫入已知落差；無 allowPageErrors 放行
-- [ ] 重產：同時只有一條鏈；log 檔名未重用；長段紅線**像素**掃描無框為 0（不以讀碼判定有框）；每張逐張目視並對照 spec；退回類別已全掃；已交使用者審圖並取得認可後才跑 mocha（已委任 agent 審圖之專案依其 process）
+- [ ] 重產：同一實例內同時只有一條鏈（跨實例並行者流程互斥分配、畫面含主機與埠者留正式實例）；log 檔名未重用；長段紅線**像素**掃描無框為 0（不以讀碼判定有框）；每張逐張目視並對照 spec；退回類別已全掃；已交使用者審圖並取得認可後才跑 mocha（已委任 agent 審圖之專案依其 process；全量執行依 §7.11，採用為事後檢視）
 - [ ] 孤兒檢查為 0（gate.finalize／等價驗證 onlyInB 去 `_` 前綴）；`[baseline-headroom]` 告警為 0 或已查因；等價以 RGBA／登錄漂移點判定，不以 pixelmatch 計數 0 判定
 - [ ] 不可固定之值已分類並登錄映射表，比對端覆蓋集中一處、有命中數自測與語意斷言；本輪標準圖差異（含 changed 模式自動寫出）已逐張分流，只落在該等值者已補遮蔽、取回原圖並零寫出重跑，未以重產處理，也未問使用者要不要重產
 - [ ] 每步兩張依 §7.1 粒度（一個操作一步、相鄰兼任、共通進場路徑一案記錄）；spec 以「非決定性」為由不拍者已改以假時鐘／遮罩處理
 - [ ] 交審形式：圖文對照之審圖報告只收本輪新增／變動案例、每圖附圖鍵與框住對象；下游手冊已同輪更新；涉信流程之寄信點已全盤點，模板／〈信件對照〉／測試期望三處一致
-- [ ] baseline 命名 <flow>-<lang>-E2E-NNN-<序>-…；regen 有授權；--names 截圖前 gate；strict settle；git diff --stat 僅預期；certify 通過
+- [ ] baseline 命名 <flow>-<lang>-E2E-NNN-<序>-…；regen 有授權（定點重產逐次授權；全量重產趟由主責 agent 或主控自行發動，寫出不等於採用，採用者已逐張列入回報供事後檢視）；--names 截圖前 gate；strict settle；git diff --stat 僅預期；certify 通過
 - [ ] 核心契約無缺口，條件式 adapter 已標適用/不適用；chromium.launch 只在 wrapper；紅框後合成；cleanup 兩來源；setup 與 runner 在 test/tools/；port ≥ 8000 且不隨機
 - [ ] --grep 單跑與全跑一致；testPending 無本輪殘留；./tmp 清乾淨；netstat 無殘留 server；非自己啟動的程序已回報
 - [ ] 變體覆蓋：資料型別、內容型別、鍵盤觸發入口各有 case；具名資料為結果最豐富者
-- [ ] 派工模式：計畫檔事實皆有探測產物；同時只一條產製鏈、閘門為旗標檔；主代理逐張看圖且子代理主張已對物核實；退一張已退一類
+- [ ] 全量執行（§7.11）：實體檔清單開跑前後各核對；本輪副本與開發資料庫已備份並核對；重產趟（有變更才改寫、差異上限 0 或隔離輸出；逐案例狀態「未執行」為 0）→ 審差異（分類表無空格、不能證明為雜訊者未還原、還原自副本並核對雜湊、只在不可固定之值者已補遮蔽）→ 比對趟；採用與刪除清單已逐張列入回報供使用者事後檢視（否決即自副本還原）；報告數字只取比對趟並附三趟對帳表；收尾先停服務再還原資料庫；臨時實例已以不跟進連結之方式拆連結、回驗正式專案完好後才刪除，`./tmp/<本輪>/` 下無殘留連結
+- [ ] 派工模式：計畫檔事實皆有探測產物；同一實例內只一條產製鏈、閘門為旗標檔；主代理逐張看圖且子代理主張已對物核實；退一張已退一類
 - [ ] 探測腳本 finally 關瀏覽器並 exit；覆蓋／貼回目標有命中數自測；追加案例後既有圖 mtime 未變；fullPage 選擇已依 §8.5 判別
 ```
 
