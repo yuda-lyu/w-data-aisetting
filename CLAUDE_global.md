@@ -38,7 +38,7 @@
 
 **觸發**:產生任何臨時,暫存,scratch 或探索 dump 檔時,含派工子代理.
 
-**臨時/暫存/scratch/探索 dump 檔一律落在主任務 cwd 下的 `./tmp/`**(錨點＝主 agent 啟動時的 `process.cwd()`;子代理在他處須用主 cwd 絕對路徑指向同一 `./tmp/`).不可用 `/tmp`,`$TMPDIR`,`$HOME`(Git Bash 的 `/tmp` 映射到使用者 Temp,檔案跑出專案外);cwd 根目錄雜檔(`./tmp_tree.txt`,`./debug.log`)與 `./.cache/` 也不行,集中單一 `./tmp/` 才能 `rm -rf tmp/` 一鍵結案.子代理探索禁用 `tree > 檔案` dump-to-disk,改 Glob/Grep/讀 stdout.**派工子代理時 prompt 須明文加上此守則**.任務結束前驗證 `./tmp/` 已清乾淨(須保留則說明).
+**臨時/暫存/scratch/探索 dump 檔一律落在主任務 cwd 下的 `./tmp/`**(錨點＝主 agent 啟動時的 `process.cwd()`;子代理在他處須用主 cwd 絕對路徑指向同一 `./tmp/`).不可用 `/tmp`,`$TMPDIR`,`$HOME`(Git Bash 的 `/tmp` 映射到使用者 Temp,檔案跑出專案外);cwd 根目錄雜檔(`./tmp_tree.txt`,`./debug.log`)與 `./.cache/` 也不行,集中單一 `./tmp/` 才能 `rm -rf tmp/` 一鍵結案.**清 `./tmp/`(或遞迴刪除任何目錄)前先確認其下沒有目錄連結**(junction/symlink,如臨時副本之 `node_modules` 連回原專案):有則先逐一拆除連結(`cmd //c rmdir <連結>` 只拆連結、不動目標)並回驗連結目標仍完好,才遞迴刪除;列連結之法與理由見 §8.7(1).子代理探索禁用 `tree > 檔案` dump-to-disk,改 Glob/Grep/讀 stdout.**派工子代理時 prompt 須明文加上此守則**.任務結束前驗證 `./tmp/` 已清乾淨(須保留則說明).
 
 ## 4. 撰寫程式碼之要點
 
@@ -185,7 +185,7 @@ kill 與 rm 皆**不保證成功**,執行後必回頭驗證,不可假設已成�
 
 ### 8.7 Windows 大量檔案操作(robocopy)與離開碼判讀
 
-**觸發**:Windows 下刪除或複製大量檔案(數萬以上),以 robocopy 部署/覆蓋目錄,或判讀 Windows 指令之離開碼時.
+**觸發**:Windows 下刪除或複製大量檔案(數萬以上),刪除可能含目錄連結(junction/symlink)之目錄,以 robocopy 部署/覆蓋目錄,或判讀 Windows 指令之離開碼時.
 
 #### (1) 大量刪檔:robocopy 鏡像空目錄清空,再刪空目錄
 
@@ -201,6 +201,8 @@ Remove-Item -LiteralPath $target -Recurse -Force -Confirm:$false
 ```
 
 `/MT:32` 多執行緒;`/NFL /NDL /NJH /NJS /NC /NS` 關閉輸出(印檔名會大幅拖慢);`/R:0 /W:0` 失敗不重試.**耗時取決於檔案數而非容量**(實測數百萬小檔約1小時,單檔大之 85 GB 約2分鐘).刪後依 §8.4 回驗.
+
+**目標內有目錄連結時,先拆連結再刪,不可直接用此法**:robocopy 鏡像會穿過 junction,把連結目標(他處之真實目錄)之內容一併刪光,加 `/XJ`、`/XJD` 亦同(實測 4 次皆然).動手前先以**不跟進連結**之方式列出連結——node 遞迴 `readdirSync` 配 `lstatSync().isSymbolicLink()`,遇連結不往下走;**不可用 `dir /AL /S`**,它同樣穿過連結,會列出連結目標內部之連結,照該清單拆會拆到原專案——逐一以 `rmdir <連結>`(目錄連結)或刪除連結檔本身拆除,回驗連結目標完好,再刪.Git Bash `rm -rf` 與 node `fs.rmSync(..., { recursive: true })` 實測不穿過 junction,但不以此為由略過先拆.**典型錯誤形狀**:臨時副本之 `node_modules` 以 junction 連回原專案,結案時以鏡像空目錄法清 `./tmp`,原專案之 `node_modules` 被清空.
 
 #### (2) robocopy 與 Remove-Item 不可寫在同一道指令
 
