@@ -44,7 +44,7 @@ assertion 必須是 spec 的可執行翻譯,不是[跟上次跑出來一樣]的�
 1. 語意斷言驗[特定資訊在/不在],pixel baseline 驗[整體畫面長相],抓的是不同類 regression;對有 stable visual state 的 case,baseline 是**必要補強層非 optional**.雙向約束:只有 pixel-equality 沒語意斷言不接受;modal/轉跳/UI 切換 case 只有 innerText/URL 不加 baseline 也不接受.
 2. 補強層之 pixel 比對採**反鋸齒感知容差**,非 byte-exact——白話:不要逐 byte 比整張圖(`buf.equals`),改用[允許少量像素不同]的比對:pixelmatch(`includeAA:false` 自動忽略反鋸齒邊緣像素)+ `maxDiffPixels` 容差.why:SVG icon/字型邊緣之次像素 raster 跨 browser session 不決定性,byte-exact 會把[肉眼等同的反鋸齒 noise]當失敗 → 無止境 flake.**典型錯誤形狀**:icon 全面改用 SVG 後,原本的 byte-exact 比對炸出大量次像素 flake.容差只放補強層,主驗證仍語意斷言(不違反第 1 條);真 regression(icon 換/版面位移/顏色變)量級遠超 maxDiffPixels 仍被抓.同業界 Playwright `toHaveScreenshot`(maxDiffPixels/threshold).
 3. 產 baseline 前,從 spec 自己列[每張預期看到什麼]清單;產實際 baseline → 比對 → 不吻合修系統/修 spec,不是改 baseline 將就;不把預期清單丟給使用者 review(skill[role-coder-for-spec] §2).
-4. 定點重產(既有之單案例重產)須先取得授權,且只產受影響者;無差別重產＝把 bug 凍結為真理.已審過的圖被重產等於換掉真理,即使內容看起來一樣.全量執行之重產趟由該專案之主責 agent(或主控)自行發動,不必逐次請示——寫出不等於採用:採用須經審差異(逐張分類;CHANGED 以改前改後並排圖目視裁定),並於回報中逐張列出採用之變更供使用者事後檢視(可否決,否決即還原).只取數字之全套只跑比對,不重產.細節見 skill[role-coder-for-test-e2e] §7.9,§7.11.
+4. 定點重產(既有之單案例重產)須先取得授權,且只產受影響者;無差別重產＝把 bug 凍結為真理.已審過的圖被重產等於換掉真理,即使內容看起來一樣.全量執行之全量趟(首選單趟收集:`E2E_COLLECT=1` 比對加 `--accept` 採用;次選重產趟)由該專案之主責 agent(或主控)自行發動,不必逐次請示——寫出或收集不等於採用:採用(`--accept`,或保留重產趟之寫出)須經審差異(逐張分類;CHANGED 以改前改後並排圖目視裁定),並於回報中逐張列出採用之變更供使用者事後檢視(可否決,否決即還原).只取數字之全套只跑比對,不重產.細節見 skill[role-coder-for-test-e2e] §7.9,§7.11.
 5. 比對失敗之證據(capture/baseline/diff 三聯組)落專案根 `./testPending/`(§4),永不覆蓋、不自動刪——偶發 flake 的當次證據常在隔天才分析.
 
 ## 3. 測試分層與檔名前綴:`e2e-` / `api-` / `unit-`
@@ -113,7 +113,7 @@ assertion 必須是 spec 的可執行翻譯,不是[跟上次跑出來一樣]的�
 - [ ] 每條 assertion 註解標明對應之 spec 句;沒有[跟上次一樣]之指紋斷言(§1)
 - [ ] spec 之觀察字眼都有 UI 斷言;步驟數 ≥ spec 動作數,被 helper 抹平者已標[未走 UI](§1)
 - [ ] 走到產品缺陷之步驟以已知缺陷標記標 pending,並已進〈已知落差〉(§1)
-- [ ] 有穩定視覺態之 case 語意斷言與 pixel baseline 兩者皆有;pixel 比對為反鋸齒感知容差非 byte-exact;產前已自 spec 列每張預期;定點重產經授權且只產受影響者,全量重產趟之採用已逐張列入回報(§2)
+- [ ] 有穩定視覺態之 case 語意斷言與 pixel baseline 兩者皆有;pixel 比對為反鋸齒感知容差非 byte-exact;產前已自 spec 列每張預期;定點重產經授權且只產受影響者,全量趟之採用已逐張列入回報(§2)
 - [ ] 檔名前綴與實際層級相符;共用層與工具在 `test/tools/` 且不帶 `.test.`(§3,§4)
 - [ ] 測試中之臨時檔在 `test/_tmp/<案名>/` 並由測試自己清掉;測試程式沒有寫 `./tmp/`(§4)
 - [ ] 沒有 `.mocharc.json`;`package.json` 之測試類指令只有 test,mocha 指令為上列限定字串之一(§5)

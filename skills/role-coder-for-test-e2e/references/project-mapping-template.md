@@ -20,11 +20,12 @@
 
 | 項目 | 值 |
 |---|---|
-| 重產趟 | 各流程之產製指令（含 `--write-mode changed` 或專案自訂之「有變更才改寫」開關名、差異上限之給法） |
+| 收集趟（首選，w-package-tools-e2e ≥ 1.0.11） | 比對指令加 `E2E_COLLECT=1`（＋`E2E_STRICT_CAPTURE=1`）；各流程是否經 `runBaselineCase` 比對端，或以 `createBaselineCollector` 包住案例本體（未包者列缺口，該流程走重產趟）；審查與採用指令（`reviewPending.mjs --since <T> …`） |
+| 重產趟（次選） | 各流程之產製指令（≥ 1.0.11：`E2E_BASELINE_KEEP_SAME=1`＋`E2E_BASELINE_KEEP_MAXDIFF=0`；< 1.0.11：`--write-mode changed` 或專案自訂之「有變更才改寫」開關名、差異上限之給法）；比對端覆蓋是否給 `compareBuf`、`transient` 宣告之暫時狀態圖 |
 | 審差異 | 分類工具（腳本位置或套件 `compareImageDirs`）、並排裁圖之產出位置、本輪副本位置（`./tmp/<本輪>/pics-before/`） |
 | 比對趟 | 逐檔隔離 runner；結果檔之位置與命名（以流程為單位） |
 | 實體檔清單 | 快照不含之實體檔夾、清單檔位置、核對與修復指令（contract C4 (c)） |
-| 埠位移 | 機制（設定鍵或環境變數名；無則寫「文字取代，白名單：…」）、位移單位（例：+100×N） |
+| 埠位移 | 機制（≥ 1.0.11：`E2E_PORT_OFFSET`＋`resolveE2ePort`，基準埠清單；< 1.0.11：設定鍵或環境變數名，無則寫「文字取代，白名單：…」）、位移單位（例：+100×N） |
 | 臨時實例 | 來源樹複製之排除清單、以目錄連結指回之項目（`node_modules`、`test/pics`）、資料庫之建立方式、建立與移除之腳本 |
 | 須留正式實例之流程 | 逐條列出與理由（畫面或期望值含主機與埠、外部登錄之固定網址、共用外部資源） |
 | 導入驗證 | 首次採用之三項驗證結果與日期（full-run-and-instances §6） |
@@ -45,7 +46,7 @@
 | C10 輸入 | `typeIntoInput(page, locator, value)`；表格 `typeIntoCell` / `fillAgGridCell` | |
 | C11 偵測等待 | `waitUntilExist(page, label, fn, { timeout, arg })` | |
 | C12 settle 訊號 | `waitDrawerReady`（`[state]`）/ `waitMutationSettled`（簽章） | |
-| C13 regen 入口 | (a) `node test/e2e-x.test.mjs --baseline [--names] [--langs] [--write-mode]` + `generateBaseline()` 末尾 `cleanup()` / (b) `npx mocha … --baseline` 或 `E2E_REGEN=1`；兩端皆 `runBaselineCase`、篩選 `createBaselineGate`、等價驗證 `E2E_BASELINE_OUT_DIR`；有變更才改寫（`--write-mode changed` 或專案開關名）與差異上限 | 例：某檔仍手寫篩選或兩份流程＝缺口，列入已知缺口；支援專案缺「有變更才改寫」＝缺口 |
+| C13 regen 入口 | (a) `node test/e2e-x.test.mjs --baseline [--names] [--langs] [--write-mode]` + `generateBaseline()` 末尾 `cleanup()` / (b) `npx mocha … --baseline` 或 `E2E_REGEN=1`；兩端皆 `runBaselineCase`、篩選 `createBaselineGate`、等價驗證 `E2E_BASELINE_OUT_DIR`；有變更才改寫（≥ 1.0.11：`E2E_BASELINE_KEEP_SAME`／`E2E_BASELINE_KEEP_MAXDIFF`；< 1.0.11：`--write-mode changed` 或專案開關名）與差異上限；比對端收集（`E2E_COLLECT`，≥ 1.0.11） | 例：某檔仍手寫篩選或兩份流程＝缺口，列入已知缺口；支援專案缺「有變更才改寫」＝缺口 |
 | C14 端點 | `baseUrl` / `apiBaseUrl`（127.0.0.1） | |
 
 ### 專案特有機制

@@ -24,21 +24,22 @@ npx mocha test/e2e-hello.test.mjs --reporter list --timeout 60000              #
 
 ## 0.5 參考實作套件：w-package-tools-e2e（2026-09-28 起四個姊妹專案共用）
 
-下列各節之片段為**契約說明**；實際共用實作在 `w-package-tools-e2e/src/<模組>.mjs`（專案以 devDependency 安裝，1.0.2 起；規格與 API 見套件 `README.md`）。專案一律經 `test/tools/e2eLib.mjs` **單一橋接檔**轉出（升版只改 `package.json` 版號；套件新增模組時橋接檔補一行轉出，如 1.0.3 之 `probeStuckTooltip`。升版之差異清單要含套件之 `dependencies`：src 逐檔相同而 playwright 升版者，截圖用之 Chromium 即換版——比 `node_modules/playwright-core/browsers.json` 之 chromium revision 新舊，不同即全部標準圖比對；1.0.6 實例為 revision 1234 → 1243、Chromium 151 → 153），共用層 `test/tools/e2e-setup.mjs` 只保留專案組態（port、spawn、種子、settle 組合、夾邊方式）與專案專屬互動原語，匯出名稱與簽章維持不變。
+下列各節之片段為**契約說明**；實際共用實作在 `w-package-tools-e2e/src/<模組>.mjs`（專案以 devDependency 安裝，1.0.2 起；規格與 API 見套件 `README.md`）。專案一律經 `test/tools/e2eLib.mjs` **單一橋接檔**轉出（升版只改 `package.json` 版號；套件新增模組時橋接檔補一行轉出，如 1.0.3 之 `probeStuckTooltip`、1.0.11 之 `createBaselineCollector`／`writeBaselineIfChanged`／`resolveE2ePort`／`reviewPendingShots`／`acceptPendingShots`（`tools/reviewPending.mjs` 為 CLI，以 `node node_modules/w-package-tools-e2e/tools/reviewPending.mjs` 直接執行，不經橋接檔）。升版之差異清單要含套件之 `dependencies`：src 逐檔相同而 playwright 升版者，截圖用之 Chromium 即換版——比 `node_modules/playwright-core/browsers.json` 之 chromium revision 新舊，不同即全部標準圖比對；1.0.6 實例為 revision 1234 → 1243、Chromium 151 → 153），共用層 `test/tools/e2e-setup.mjs` 只保留專案組態（port、spawn、種子、settle 組合、夾邊方式）與專案專屬互動原語，匯出名稱與簽章維持不變。
 
 | 契約 | 套件模組（皆 default export） | 專案組態點 |
 |---|---|---|
 | C1 | `launchBrowser`、`chromiumLaunchArgs`（六旗標） | 無 |
-| C2 / C3 | `createServiceManager`（reuse 政策；`failureMode:'once'｜'sticky'`；`restart` 殺自建後等 port 釋放、殺後仍被佔或無自建而被佔時 `killForeignOnRestart` 才殺監聽者；服務之 `beforeSpawn({phase,hookArg})` 做「spawn 前必須完成」之前置如 build、重建資料庫）、`registerCleanupHooks`（root after＋exit／訊號備援，可給 `teardown` 與自訂訊號）、`createTempSettings`（`forbiddenKeys`）、`probeHttp`（`accept`、`identify`）、`killPortListeners`／`listenerPids`／`parseListenerPids`（port 政策原語，只可用於映射表登錄之專屬 port）、`killOwnTree`／`isChildAlive`／`waitChildExit`／`pidExists`／`sleepSync`（所有權原語） | 服務清單、探測判準、是否殺外部監聽者；own 政策（只用自建、port 被佔即拋錯、跨行程互斥）未入套件 v1，沿用專案自建 harness |
+| C2 / C3 | `createServiceManager`（1.0.11 起 `services[].port` 為基準埠，探測、`spawn({ port })`、`killListeners`、`portOf(name)` 皆用 `E2E_PORT_OFFSET` 位移後之實際埠；reuse 政策；`failureMode:'once'｜'sticky'`；`restart` 殺自建後等 port 釋放、殺後仍被佔或無自建而被佔時 `killForeignOnRestart` 才殺監聽者；服務之 `beforeSpawn({phase,hookArg})` 做「spawn 前必須完成」之前置如 build、重建資料庫）、`resolveE2ePort(基準埠)`（1.0.11 起；基準埠＋環境變數 `E2E_PORT_OFFSET`，未設、空或 `0` 原樣；專案組 `baseUrl`、設定檔內之埠與 `killPortListeners` 之對象一律經此）、`registerCleanupHooks`（root after＋exit／訊號備援，可給 `teardown` 與自訂訊號）、`createTempSettings`（`forbiddenKeys`）、`probeHttp`（`accept`、`identify`）、`killPortListeners`／`listenerPids`／`parseListenerPids`（port 政策原語，只可用於映射表登錄之專屬 port）、`killOwnTree`／`isChildAlive`／`waitChildExit`／`pidExists`／`sleepSync`（所有權原語） | 服務清單、探測判準、是否殺外部監聽者；own 政策（只用自建、port 被佔即拋錯、跨行程互斥）未入套件 v1，沿用專案自建 harness |
 | C5 | `openCasePage(browser, { contextOptions, onDialog })` | viewport 等確定性參數 |
 | C6 | `captureStable`（`settle[]`、`beforeShots[]`、`strict`／`strictDefault`、`maskImgSmil`、`imgSmilFill:'static'｜'black'`（`<img>` 內 SVG 動畫區貼去動畫之靜態影格，預設 static；black 僅供等價對照）、`smilRectBasis`、`shotOpts`）、`waitColResizeOverlay`、`waitDrawerReady`、`resetAgGridScroll`、`probeStuckTooltip(page, { rootSel, createError })`（1.0.3 起；`beforeShots` 掛鉤：游標已移開後仍顯示之 hover 型提示框（w-component-vue WTooltip `mode='tooltip'`）即拋錯，SKILL §10〈提示框／hover 殘留〉） | settle 組合、strict 來源、殘留時之錯誤訊息 |
 | C7 | `captureStableWithBox`（`clampTo:'buffer'｜'viewport'`、`guardSmall`、`mask`、`capture` 注入；目標找不到／尺寸 0／夾邊後過小即**拋錯**，`allowNoBox:true` 才容許無框；**被蓋住檢查** `coverCheck:'throw'｜'warn'｜'off'`（預設讀 `E2E_COVER_CHECK`，未設為 throw）；target 另接受**量測型目標** `{ scroll, measure(page), label, probe }`，`probe` 供被蓋住檢查）、`gridContentBox(表格外框, { noRowsSel, noRowsPad })`（標頭∪可見資料列，空表為標頭∪「無資料」訊息；訊息為無邊界文字，1.0.3 起其矩形外擴 `noRowsPad`＝`INK_PAD` 後取聯集（原以元素矩形為界，字形距框內緣僅 3–4px，低於 SKILL §7.3-8 約 5px 之要求；空表截圖之框底因此下移 4px，`noRowsPad:0` 為舊行為））、`itemsUnionBox(項目選擇器或 Locator, { within, scroll, fit, inkPad })`（可見項目聯集；fit 依元素有無可見邊界：有者量元素本身，無者量可見內容（有邊界之子元素與文字）並整體外擴 inkPad＝4（恰為單一有邊界元素者視同框該元素），免紅框壓字，SKILL §7.3-8；fit 另使框線不蓋框外內容——框線置於與相鄰項目**可見範圍**之間隙正中（鄰項有邊界者取元素框，否則取子元素與文字之聯集；空白間隔不算鄰項；四向各取最近一層）；position:fixed 浮層外之內容以命中測試找，框線置於浮層內容與浮層外內容之間隙正中（四周空白照常外擴），SKILL §7.3-9）、`inkRect(矩形, { pad, neighbors })`／`INK_PAD`（canvas 等無 DOM 之緊貼墨跡矩形外擴；neighbors 為鄰項之可見矩形，框線不越過間隙正中）、`canvasInkRects(page, 矩形陣列, { canvas, alpha, bg, trimY })`（讀 canvas 像素把圖表庫回報之寬鬆矩形收斂到實際墨跡，無墨跡回 null；交 inkRect 前用）、`composeBox` 匯出 `BOX_PAD`／`BOX_STROKE`（框幾何常數，量測端據以置中框線）、`composeBox`（`onSkip` 回呼）、`rowBoxSel(i, { order, scope })`、`stepShots`（每步兩張之單步：框目標 → 操作 → 等反應 → 框反應；`before:null`＝兼任） | 夾邊方式（映射表登錄偏離）、整列容器順序 |
 | C8 | `maskRegions`、`overlayRegions`、`overlayImageAt`、`cropRegion` | 不可固定之值（產製時間、耗時等）之矩形量測與比對端覆蓋函式（下方 C8 之 `coverUnfixableForCompare`，放專案共用層一處） |
-| C9 | `assertBaselineMatch`（只比對不寫檔：原 `regen` 旁路 2026-09-28 移除、傳入即拋錯；計數逾上限 `headroomRatio`（0.5）印 `[baseline-headroom]`） | — |
+| C9 | `assertBaselineMatch`（只比對不寫檔：原 `regen` 旁路 2026-09-28 移除、傳入即拋錯；計數逾上限 `headroomRatio`（0.5）印 `[baseline-headroom]`；`opt.collect`：收集器啟用時不符照存證據不拋錯，缺標準圖亦收集）、`createBaselineCollector({ caseKey, enabled })`（1.0.11 起；以案例為單位之收集器，`run(fn)` 以 AsyncLocalStorage 界定範圍，正常結束時有不符即拋固定格式之彙整錯誤；`enabled` 預設依 `E2E_COLLECT==='1'`；`runBaselineCase` 比對端自動使用，見 C9〈收集模式〉） | 不經 `runBaselineCase` 者以 `run` 包住案例本體 |
 | C10 / C11 | `typeIntoInput`、`typeIntoNthInput`、`waitUntilExist` | 預設逾時 |
 | C12 | `waitGridIdle`（ag-grid：列內容＋容器／標頭／列幾何＋捲動量簽章連續穩定） | 範圍、必要選擇器 |
-| C13 | `runBaselineCase`（1.0.3 起產製端逐張印 `[write]`／`[keep]` 與原因，如 `diff=8343px`、`withinTolerance(diff=0px)`）、`createBaselineGate`（全部案例模式含 compareOnly；`finalize()` 孤兒檢查）、`findOrphanBaselines`、`normalizeShots`、`createKnownDefect`、`getE2eMode` | cases 宣告 |
-| 驗證 | `compareImageDirs`（另報 `rgbaDiff`／`rgbaDiffBox`；`equivalent`＝RGBA 相同或只差登錄漂移點 `drift`）、`snapshotBaselines`、`diffBaselineSnapshots`、`runIsolatedE2e`（1.0.3 起 `targets: [{ file, grep }]` 只重跑受影響案例，每檔仍換新後端並自動加 `--fail-zero`（grep 對不到任何案例即失敗）；有本地 mocha（`mochaBin`，預設 `node_modules/mocha/bin/mocha.js`，以 `projRoot` 解析，明確給定而不存在即拋錯）時以 node 直接執行、不經 shell，參數原樣送達；無本地 mocha 時退回 `npx`，Windows 下經 cmd.exe 重新解析——`\|` `&` 切出另一指令、`<` `>` 轉向、`^` `"` 被吃、空白拆開、`%名稱%` 展開（多數 exit 0，靜默改變篩選），故參數含空白或 `" & \| < > ^ %` 即於執行前拋錯；括號與 `[ ]` 不受影響）、`assertTextSpec`／`pageHasText`／`collectDomText` | 登錄漂移點 |
+| C13 | `runBaselineCase`（1.0.3 起產製端逐張印 `[write]`／`[keep]` 與原因，如 `diff=8343px`、`withinTolerance(diff=0px)`；1.0.11 起新增選項 `collect`〔比對端收集，預設依 `E2E_COLLECT`〕、`keepSame`／`keepMaxDiff`／`transient`〔產製端有變更才改寫〕、`compareBuf`〔比對端覆蓋，兩端共用〕、`pendingDir`）、`writeBaselineIfChanged(buf, path, opt)`（1.0.11 起；標準圖寫檔入口，`E2E_BASELINE_KEEP_SAME=1` 時有變更才改寫，判定順序與 `E2E_BASELINE_KEEP_MAXDIFF` 見 C13；未啟用即直接寫出）、`createBaselineGate`（全部案例模式含 compareOnly；`finalize()` 孤兒檢查）、`findOrphanBaselines`、`normalizeShots`、`createKnownDefect`、`getE2eMode`（regen 與診斷環境互斥；1.0.11 起另與 `E2E_COLLECT=1` 互斥） | cases 宣告 |
+| C14 | `resolveE2ePort`（1.0.11 起，見 C2 列）：`baseUrl`／`apiBaseUrl` 由 `resolveE2ePort(基準埠)` 組成 | 基準埠（≥ 8000、寫死）載明於映射表 |
+| 驗證 | `reviewPendingShots`／`acceptPendingShots`／CLI `tools/reviewPending.mjs`（1.0.11 起；收集模式單趟執行後之審查與採用：前者讀 `./testPending` 各標籤最新一組證據，分類 SAME／NOISE／CHANGED／SIZE／MISSING 並帶出所屬案例與結果，只讀；後者只採用明列標籤〔先全部驗證才複製〕；CLI 未給 `--accept` 不改寫任何標準圖）、`compareImageDirs`（另報 `rgbaDiff`／`rgbaDiffBox`；`equivalent`＝RGBA 相同或只差登錄漂移點 `drift`）、`snapshotBaselines`、`diffBaselineSnapshots`、`runIsolatedE2e`（1.0.3 起 `targets: [{ file, grep }]` 只重跑受影響案例，每檔仍換新後端並自動加 `--fail-zero`（grep 對不到任何案例即失敗）；有本地 mocha（`mochaBin`，預設 `node_modules/mocha/bin/mocha.js`，以 `projRoot` 解析，明確給定而不存在即拋錯）時以 node 直接執行、不經 shell，參數原樣送達；無本地 mocha 時退回 `npx`，Windows 下經 cmd.exe 重新解析——`\|` `&` 切出另一指令、`<` `>` 轉向、`^` `"` 被吃、空白拆開、`%名稱%` 展開（多數 exit 0，靜默改變篩選），故參數含空白或 `" & \| < > ^ %` 即於執行前拋錯；括號與 `[ ]` 不受影響）、`assertTextSpec`／`pageHasText`／`collectDomText` | 登錄漂移點 |
 
 **遷移協定（證明零標準圖變動）**：①遷移前 `snapshotBaselines('./test/pics')`；②以現行碼產到暫存目錄（`E2E_BASELINE_OUT_DIR=./test/_tmp/eqv-0`，舊碼無此支援時先只補寫出路徑一行）得對照組；③只換原語（共用層）再產；④換管線（測試檔）再產；各與標準圖以 `compareImageDirs` 分層比對（位元組相同 ⊂ RGBA 相同 ⊂ 容差內），不同者逐張定位差異並歸因；⑤`--write-mode changed` 實跑須零寫出；⑥mocha 全跑＋`--grep` 單跑、逐檔 runner 全跑；⑦`diffBaselineSnapshots` 須 unchanged 且 `git status --porcelain -- test/pics` 為空。**參考片段自舉（`_ref` 類）不經管線、不受暫存目錄影響**，遷移前須確認該類檔案皆已存在，否則等價驗證會寫進正式目錄。
 
@@ -53,7 +54,7 @@ const chromiumLaunchArgs = [
 export async function launchBrowser() { return await chromium.launch({ headless: true, args: chromiumLaunchArgs }) }
 ```
 
-測試端、regen 端、探查腳本全部走 wrapper。旗標組改動＝全量重產，先授權（範圍為全部之定點重產，不是全量執行之重產趟，SKILL §7.9 ①）。
+測試端、regen 端、探查腳本全部走 wrapper。旗標組改動＝全量重產，先授權（範圍為全部之定點重產，不是全量執行之全量趟，SKILL §7.9 ①）。
 
 ## C2 startServersOnce / cleanup
 
@@ -82,7 +83,17 @@ process.on('exit', cleanup); process.on('SIGINT', () => { cleanup(); process.exi
 
 前端服務模式二選一並寫進映射表：(a) dev server（port 與他專案錯開）+ proxy `/api`；(b) 先 `npm run build`，由後端同時 serve `dist` 與 API（server 注入語系類測試須此模式）。api 測試層若第三方 client 無法 close（內部 `setInterval`）→ root `after` 註冊 `process.exit()` 並註解原因。hermetic seed：初始化腳本為 upsert 時先刪整個 DB 目錄再跑，偵測 stdout 完成訊號（如 `finish.`）才視為 ready。
 
-**埠與路徑可位移（建議）**：埠之預設值寫死、不隨機（C14），同時接受**整體位移**——由設定或環境變數給一個位移量（名稱由專案定並登錄映射表；位移機制待共用層支援，未支援前依本節之專案層作法：專案 setup 自行讀取位移量），前端、後端、探測網址、seed 內之 redirect 等由 `baseUrl`／`apiBaseUrl` 衍生者一併位移；資料庫目錄、上傳夾、`test/_tmp/` 等可寫路徑一律以 `projRoot` 解析，不寫絕對路徑。如此建臨時實例（[full-run-and-instances.md](full-run-and-instances.md) §5）只需給位移量，不必以文字取代改碼（文字取代易誤改資料目錄內之數值）。位移是決定性的，不違反「不隨機」。
+**埠與路徑可位移（w-package-tools-e2e ≥ 1.0.11 用 `E2E_PORT_OFFSET`）**：埠之預設值（基準埠）寫死、不隨機（C14），同時接受**整體位移**——由環境變數 `E2E_PORT_OFFSET`（非負整數；未設、空或 `0` 不位移，格式錯誤或結果超過 65535 即拋錯）給一個位移量，實際埠＝基準埠＋位移；`createServiceManager` 之 `services[].port` 寫基準埠、`spawn({ port })` 收到實際埠，`baseUrl`／`apiBaseUrl`、設定檔內之埠（`createTempSettings` 之 overrides）、dev server 之 proxy 目標、`killPortListeners` 之對象一律經 `resolveE2ePort(基準埠)`（`probeHttp`、`killPortListeners`、`listenerPids` 不另位移），前端、後端、探測網址、seed 內之 redirect 等由 `baseUrl`／`apiBaseUrl` 衍生者因而一併位移。< 1.0.11 之退路：位移量之名稱由專案定並登錄映射表，專案 setup 自行讀取。資料庫目錄、上傳夾、`test/_tmp/` 等可寫路徑一律以 `projRoot` 解析，不寫絕對路徑。如此建臨時實例（[full-run-and-instances.md](full-run-and-instances.md) §5）只需給位移量，不必以文字取代改碼（文字取代易誤改資料目錄內之數值）。位移是決定性的，不違反「不隨機」。
+
+```js
+//經 test/tools/e2eLib.mjs 橋接；services[].port 寫基準埠，服務以 spawn 收到之 port（實際埠）啟動，不可在服務端寫死
+let sm = createServiceManager({ services: [
+    { name: 'backend', port: 11006, spawn: ({ args, env, port }) => spawn('node', ['srv.mjs', '--port', String(port), ...args], { stdio: 'ignore', env, windowsHide: true }) },
+    { name: 'frontend', port: 8090, spawn: ({ port }) => spawn('npx', ['vue-cli-service', 'serve', '--port', String(port)], { stdio: 'ignore', shell: true, windowsHide: true }) },
+    //自訂探測網址：給函數 (port) => 網址；給字串者其埠須等於基準埠（位移時改為實際埠，不等即拋錯）
+] })
+export const apiBaseUrl = `http://127.0.0.1:${resolveE2ePort(11006)}`, baseUrl = `http://127.0.0.1:${resolveE2ePort(8090)}`
+```
 
 ## C3 restartBackend + genTempSettings（條件式）
 
@@ -301,6 +312,8 @@ export function assertBaselineMatch(buf, baselinePath, label, opts = {}) {
 }
 ```
 
+**收集模式（可選；w-package-tools-e2e ≥ 1.0.11）**：上方骨架為首張不符即拋；套件版另提供收集模式，使全量比對一趟拍完每案全部階段、事後統一審差異與採用（SKILL §7.7、§7.11）。預設關閉，未設 `E2E_COLLECT` 且未給 `collect` 時行為不變。①`runBaselineCase` 比對端自動包入收集範圍（`collect` 預設依 `E2E_COLLECT==='1'`）；不經 `runBaselineCase`、於 `it` 內逐階段呼叫 `assertBaselineMatch` 者，以 `createBaselineCollector({ caseKey }).run(async () => { …逐階段比對… })` 包住案例本體（可常駐包著，未啟用時照常首張不符即拋；範圍外即使 `E2E_COLLECT=1` 仍立即拋錯，`assertBaselineMatch` 本身不讀環境變數）。②收集時：不符（超過容差、尺寸不同）照存三聯組於 `pendingDir`，缺標準圖記為「缺標準圖」並存 capture 為候選標準圖，通過亦記一筆；案例正常結束後有不符即拋固定格式之彙整錯誤（首行 `截圖與標準圖不一致 ×<不符張數>/<比對張數> [<案例鍵>]: <標籤>(<狀態>), …`）並寫案例清單 `<案例鍵>__<時間戳>__collect.json`。③語意斷言、不變式、操作逾時等其他錯誤照常立即拋出（以該錯誤為準），案例清單標 `failed`、證據不可採用；strict settle 未 settle 為截圖失敗，不被收集。④與產製模式互斥（`runBaselineCase` 產製端與 `getE2eMode` 遇 `E2E_COLLECT=1` 即拋錯）。⑤審查與採用：`node node_modules/w-package-tools-e2e/tools/reviewPending.mjs --since <T> [--crops <dir>] [--accept <標籤,...>] [--dry-run] [--root <dir>]`（SKILL §7.11；規格見套件 README §2.8）。
+
 ## C10 typeIntoInput（Pattern D）與表格 cell 版
 
 ```js
@@ -392,21 +405,21 @@ else { for (let lang of langs) describe(`<flow> [${lang}]`, function() { for (le
 
 (b) mocha REGEN（同一個 `it()` 在 `--baseline`／`E2E_REGEN=1` 時寫圖）：`it()` 內同樣呼叫 `runBaselineCase({ mode: REGEN ? 'regen' : 'compare', gate: REGEN ? createBaselineGate({ langs, cases }) : null, ... })`——**不可**在流程中逐階段「比對函式兼寫檔」（先寫圖後斷言，後面斷言失敗時已寫入半套新圖）；兩案共用同一張圖者其一宣告 `compareOnly`（否則同一張被兩案重寫）。個別檔不得自行 spawn / 判讀 REGEN。
 
-**篩選語意（`createBaselineGate`）**：`--names` 每項可帶 `<語系>-` 前綴；解析順序①完全等於已宣告之階段圖鍵→只寫該張 ②案例鍵之完全或**邊界**前綴（`E2E-005` 命中 `E2E-005-x`、不命中 `E2E-0051-x`）→該案全部階段 ③階段圖鍵之邊界前綴 ④案例未宣告 stages 時依編號執行、執行後未產出由 `finalize()` 拋錯；命中只比對之案例、不符任何鍵、旗標缺值或值以 `--` 開頭一律拋錯並列出可用鍵；`--langs` 完全比對；`--write-mode all｜missing｜changed`（missing＝追加案例只補缺圖；changed＝只寫差異超過差異上限（預設＝比對容差，見下段）或尺寸不同者，機械化「不重寫已審過之圖」）；`E2E_BASELINE_OUT_DIR` 只改寫出路徑（等價驗證用），比對端讀取不受影響。自檢：`node test/e2e-<flow>.test.mjs --baseline --names __none__` 須於啟動任何服務之前報錯並列出可用鍵。
+**篩選語意（`createBaselineGate`）**：`--names` 每項可帶 `<語系>-` 前綴；解析順序①完全等於已宣告之階段圖鍵→只寫該張 ②案例鍵之完全或**邊界**前綴（`E2E-005` 命中 `E2E-005-x`、不命中 `E2E-0051-x`）→該案全部階段 ③階段圖鍵之邊界前綴 ④案例未宣告 stages 時依編號執行、執行後未產出由 `finalize()` 拋錯；命中只比對之案例、不符任何鍵、旗標缺值或值以 `--` 開頭一律拋錯並列出可用鍵；`--langs` 完全比對；`--write-mode all｜missing｜changed`（missing＝追加案例只補缺圖；changed＝只寫差異超過差異上限（預設＝比對容差；設 `E2E_BASELINE_KEEP_SAME=1` 時其判定改由下段之有變更才改寫取代）或尺寸不同者，機械化「不重寫已審過之圖」）；`E2E_BASELINE_OUT_DIR` 只改寫出路徑（等價驗證用），比對端讀取不受影響。自檢：`node test/e2e-<flow>.test.mjs --baseline --names __none__` 須於啟動任何服務之前報錯並列出可用鍵。
 
-**有變更才改寫與差異上限（必備）**：產製端寫檔前，以比對端同一套覆蓋（C8）與同參數 pixelmatch 判定新截圖與現有標準圖之差異，pixelmatch 計數 ≤ **差異上限**者保留原檔不寫（套件 `--write-mode changed`；自寫者以旗標或環境變數開關，名稱登錄映射表）。上限預設＝比對容差 `maxDiffPixels`；全量重產趟設 0，使計數 > 0 者皆寫出交審（SKILL §7.11；取捨與建議值見 [full-run-and-instances.md](full-run-and-instances.md) §3 第 2 步）——計數 0 而 RGBA 不同者（低於 `threshold` 之均勻色差、被忽略之反鋸齒像素）仍不寫出。缺此能力者重產一趟就改寫全部標準圖，`git diff --stat test/pics` 失去判斷變更範圍之能力（SKILL §7.9），只能靠對本輪副本還原。可設之上限待共用層支援（共用層之 `changed` 目前以容差為界）；未支援前依本節之專案層作法：專案自寫之開關支援上限 0 者照用，否則全量重產趟改用**隔離輸出**（`--write-mode all` 加 `E2E_BASELINE_OUT_DIR`，審差異後才把採用者複製進 `test/pics`；[full-run-and-instances.md](full-run-and-instances.md) §3 第 2 步），不以容差為上限替代——容差內之有效改變既不寫出，`[baseline-headroom]` 也只告警逾容差一半者。
+**有變更才改寫與差異上限（必備）**：產製端寫檔前，以比對端同一套覆蓋（C8）與同參數 pixelmatch 判定新截圖與現有標準圖之差異，不超過**差異上限**者保留原檔不寫。**≥ 1.0.11 經套件 `writeBaselineIfChanged`（`runBaselineCase` 產製端自動使用）**：設 `E2E_BASELINE_KEEP_SAME=1` 啟用（預設關閉，未啟用即直接寫出、不讀標準圖）；判定依序——標準圖不存在→寫（`missing`）；`transient` 宣告之暫時狀態圖（畫面只停留短暫、截到之影格取決於時序：提示訊息滑入中、載入中轉圈、進度條）且標準圖已存在→不改寫；以 `compareBuf`（比對端覆蓋，兩端共用同一函數；未給即當次截圖）處理後與標準圖比：尺寸不同→寫（`sizeChanged`），RGBA 逐像素相同→保留（`same`），否則依 `E2E_BASELINE_KEEP_MAXDIFF`——未設＝比對端容差（`maxDiffPixels`，預設 100）、`0`＝只保留 RGBA 逐像素相同者（計數 0 而 RGBA 不同者——低於 `threshold` 之均勻色差、被忽略之反鋸齒像素——照寫，原因 `rgbaDiff(diff=0px)`）、`N`＝pixelmatch 計數 ≤ N 保留（`same(diff=Npx≤N)`）、否則寫（`diff=Npx`）；格式非非負整數即於開瀏覽器前拋錯。全量重產趟設 `0`，使計數 > 0 與計數 0 而 RGBA 不同者皆寫出交審（SKILL §7.11；取捨與建議值見 [full-run-and-instances.md](full-run-and-instances.md) §3 第 2B 步）。寫出者為當次截圖本身（非覆蓋後之影像）；啟用時 `--write-mode changed` 之容差判定由此取代（否則 gate 之 100px 會先行保留，使 `KEEP_MAXDIFF=0` 失效）；比對端覆蓋寫在自訂 `match` 內者，判定看不到該覆蓋（會多寫），故覆蓋請給 `runBaselineCase` 之 `compareBuf`，配自訂 `match` 時須明給與之相同之 `maxDiffPixels`（或 `keepMaxDiff`／`KEEP_MAXDIFF`），否則於開瀏覽器前拋錯。缺此能力者重產一趟就改寫全部標準圖，`git diff --stat test/pics` 失去判斷變更範圍之能力（SKILL §7.9），只能靠對本輪副本還原。**< 1.0.11 之退路**：套件 `--write-mode changed` 以比對容差為界、不可設；上限 0 由專案自寫之開關支援者照用（旗標或環境變數，名稱登錄映射表），否則全量重產趟改用**隔離輸出**（`--write-mode all` 加 `E2E_BASELINE_OUT_DIR`，審差異後才把採用者複製進 `test/pics`；[full-run-and-instances.md](full-run-and-instances.md) §3 第 2B 步），不以容差為上限替代——容差內之有效改變既不寫出，`[baseline-headroom]` 也只告警逾容差一半者。
 
 **逐案例續跑（全量重產趟用，建議）**：上方直跑骨架之迴圈直接 `await runCase`，一案拋錯即中止整個流程，其後案例與 `finalize()` 都不執行。全量重產趟需要每案皆有狀態：產製入口宜逐案例捕捉失敗並續跑其餘案例，結束時列出寫出／保留／失敗／pending／未執行，`finalize()` 照跑，有任一失敗即以非零離開碼結束。逐案例續跑待共用層支援；未支援前依本節之專案層作法：專案之產製入口自行逐案捕捉失敗並續跑，或失敗後以 `--names` 指定其餘案例續跑。
 
-**比對端遇第一張不符即拋錯者**（流程中逐階段比對，或管線逐張比對而不續比），該案其後各張不比對、不 dump，流程中比對者連截圖都沒有；`./testPending/` 之 capture 不得複製為標準圖（只有第一張，且繞過本管線之斷言與覆蓋），補齊靠重產趟（SKILL §7.7、§7.11）。收集模式（不符時記錄並續比、案例末才判失敗）待共用層支援；未支援前依本節之專案層作法（以重產趟補齊）。
+**比對端遇第一張不符即拋錯者**（流程中逐階段比對，或管線逐張比對而不續比），該案其後各張不比對、不 dump，流程中比對者連截圖都沒有；未啟用收集時 `./testPending/` 之 capture 不得複製為標準圖（只有第一張，且繞過本管線之斷言與覆蓋），補齊靠收集模式（≥ 1.0.11，見 C9〈收集模式〉）、重產趟或定點重產（SKILL §7.7、§7.11）。收集證據之 capture 同樣不得手動複製為標準圖，採用只經 `reviewPending.mjs --accept`／`acceptPendingShots`。共用層 < 1.0.11、或流程既未經 `runBaselineCase` 亦未包 `createBaselineCollector` 者，補齊靠重產趟。
 
 regen 入口硬 guard：`if (REGEN && (env.E2E_BARE || env.E2E_DIAG)) throw`（套件 `getE2eMode()`）。
 
 ## C14 端點
 
 ```js
-const BACKEND_PORT = 11006, FRONTEND_PORT = 8090   //≥ 8000、與他專案錯開、寫死不隨機；映射表載明；建議另接受整體位移量（C2〈埠與路徑可位移〉）
-export const apiBaseUrl = `http://127.0.0.1:${BACKEND_PORT}`, baseUrl = `http://127.0.0.1:${FRONTEND_PORT}`
+const BACKEND_PORT = 11006, FRONTEND_PORT = 8090   //基準埠：≥ 8000、與他專案錯開、寫死不隨機；映射表載明；實際埠經 resolveE2ePort（自 e2eLib.mjs 橋接匯入）接受整體位移（C2〈埠與路徑可位移〉，≥ 1.0.11）
+export const apiBaseUrl = `http://127.0.0.1:${resolveE2ePort(BACKEND_PORT)}`, baseUrl = `http://127.0.0.1:${resolveE2ePort(FRONTEND_PORT)}`
 export const projRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..')   //本模組位於 test/tools/，上兩層為專案根；相對路徑一律由此解析
 export const testDir = join(projRoot, 'test')                                        //test/_tmp、test/pics 由此衍生，不用 __dir（那是 test/tools）
 ```
