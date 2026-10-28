@@ -12,6 +12,7 @@
 | `skills/` | 全域技能原稿(每個技能一個資料夾,含 `SKILL.md`)與其 `package.json` | `~/.claude/skills/`(其後 `npm i` 與 `npm update`) |
 | `hooks/` | 全域 hook:`transcript-size-warn.mjs`(對話紀錄達 800 MB 提醒一次、達 1,500 MB 每則提醒;背景工作通知不算)與安裝程式 `install-hooks.mjs`(複製腳本並把條目合併進 `settings.json`,只動本 repo 之條目;`--dry` 預覽、`--uninstall` 移除) | `~/.claude/hooks/`,條目寫入 `~/.claude/settings.json` |
 | `sync.bat` | 同步腳本 | — |
+| `supd.bat` | 更新本機之 AI CLI:`claude update`、`codex update`、`agy update`、`npm install -g opencode-ai@latest`(各步失敗不中斷,末尾列出失敗者) | — |
 | `script.txt` | 原稿修改後推上 GitHub 之指令 | — |
 | `tools/check-skills.mjs` | 原稿自檢:技能 frontmatter、連結與 `skill[名]` 引用、`sync.bat` 編碼與換行、公開庫衛生(`node tools/check-skills.mjs`,有錯誤離開碼 1) | 不同步 |
 | `.gitattributes` | `.bat` 以 CRLF 原樣入庫(cmd.exe 對 LF 批次檔之 `goto` 標籤不可靠) | — |
@@ -33,3 +34,7 @@
 hook 門檻可於各機以 `~/.claude/hooks/transcript-size-warn.json`(`{ "warnMB": 800, "alertMB": 1500 }`)調整,此檔不由同步覆蓋.
 
 同步後**新啟動之 agent** 才讀得到新版.`~/.claude/skills`、`~/.claude/CLAUDE.md` 與 `~/.claude/hooks/` 之腳本是同步產物, 直接修改會在下次同步被覆蓋; 需修改時依全域設定 §13.
+
+## 更新 AI CLI(各電腦)
+
+取得 `supd.bat`(https://raw.githubusercontent.com/yuda-lyu/w-data-aisetting/master/supd.bat 或 clone 本 repo)後執行,依序更新 Claude Code(`claude update`)、Codex(`codex update`)、Antigravity(`agy update`)與 OpenCode(`npm install -g --allow-scripts=opencode-ai opencode-ai@latest`).各步失敗不中斷,結束時列出失敗者.首次安裝之指令寫在檔內註解.**更新前先確認本機沒有正在跑之派工 agent**(更新中之 CLI 被替換可能使進行中之派工失敗).
