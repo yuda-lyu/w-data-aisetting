@@ -1,7 +1,7 @@
 ---
 name: role-coder-for-test
 description: |
-  全層級測試（unit／api／e2e）之共通規範：測試是規格的翻譯而非現狀的指紋（每條 assertion 對應 spec 句、觀察字眼須有 UI 斷言、驗端到端不變式、聚合層依 spec 處置、產品缺陷步驟標 pending）；語意斷言為主、pixel baseline 為補強層（雙向約束、反鋸齒感知容差非 byte-exact、產前自列每張預期、定點重產須授權且只產受影響者、失敗證據落 ./testPending）；測試分層與檔名前綴（`e2e-`／`api-`／`unit-`，同一層 test/ 以前綴分類、名實不符要正名、UI 無法自然觸發者下沉）；目錄配置（test/*.test.mjs、test/tools、test/pics、test/_tmp、./testPending，測試程式禁用 ./tmp）；執行（不用 .mocharc.json、package.json scripts 只放 test、mocha 限定指令、單檔指令自行編寫、--grep 與巢狀 before 之陷阱、port ≥ 8000 不隨機）；測試／樣本數據之連結與引用須真實可驗證；附依任務找章節表與完成前勾選。e2e 特有之操作層級、標準圖、截圖穩定性與隔離另加 role-coder-for-test-e2e；spec 本身之處置見 role-coder-for-spec。
+  全層級測試（unit／api／e2e）之共通規範：測試是規格的翻譯而非現狀的指紋（每條 assertion 對應 spec 句、觀察字眼須有 UI 斷言、驗端到端不變式、聚合層依 spec 處置、產品缺陷步驟標 pending）；語意斷言為主、pixel baseline 為補強層（雙向約束、反鋸齒感知容差非 byte-exact、產前自列每張預期、定點重產須授權且只產受影響者、失敗證據落 ./testPending）；測試分層與檔名前綴（`e2e-`／`api-`／`unit-`，同一層 test/ 以前綴分類、名實不符要正名、UI 無法自然觸發者下沉）；目錄配置（test/*.test.mjs、test/tools、test/pics、test/_tmp、./testPending，測試程式禁用 ./tmp）；執行（不用 .mocharc.json、package.json scripts 只放 test、mocha 限定指令、單檔指令自行編寫、--grep 與巢狀 before 之陷阱、port ≥ 8000 不隨機）；測試／樣本數據之連結與引用須真實可驗證；計時器相關之測試以事件同步不以延時偵測（觀察回調 onTrace、假時鐘、負載試驗）；附依任務找章節表與完成前勾選。e2e 特有之操作層級、標準圖、截圖穩定性與隔離另加 role-coder-for-test-e2e；spec 本身之處置見 role-coder-for-spec。
   觸發條件：寫、改、審、拆、移除、重構任何測試；新增測試檔或盤查 test 目錄；產或重產 baseline；設定 package.json 之 test script、runner 或 port；跑測試；產製測試／樣本／示範數據——必先調用本技能，整篇入 context 逐項比對後才動工。
 ---
 
@@ -28,6 +28,7 @@ description: |
 | 設定 `package.json` 之 test script,runner,port;跑測試 | §5 |
 | 產製測試/樣本/示範數據 | §6 |
 | 宣告完成前 | §7 |
+| 測輪詢、偵測、重試、節流、防抖、排程、逾時、等待類函數;測試內有 `sleep(N)` 後即斷言 | §8 |
 
 ## 1. 測試是規格的翻譯,不是現狀的指紋
 
@@ -120,3 +121,20 @@ assertion 必須是 spec 的可執行翻譯,不是[跟上次跑出來一樣]的�
 - [ ] 啟動之伺服器 port ≥ 8000 且不隨機(§5)
 - [ ] 測試/樣本數據之連結已驗 HTTP 200,引用皆真實可查,查不到者留空(§6)
 - [ ] 完成判準已依 skill[role-coder-for-validate] 另行確認,沒有只以測試全綠宣告完成
+- [ ] 計時器相關函數之測試以事件同步(觀察回調／假時鐘),沒有以 `sleep(N)` 後斷言作為唯一同步點;改寫附變異證據與負載試驗前後對照(§8)
+
+## 8. 計時器相關之測試:以事件同步,不以延時偵測
+
+**觸發**:測試輪詢、偵測、重試、節流、防抖、排程、逾時、等待類函數;測試內出現 `await sleep(N)`/`setTimeout(resolve, N)`/固定 `delay(N)` 後即斷言;子行程輸出順序以內部計時器隔開者.**命中即讀 [references/timer-tests.md](references/timer-tests.md) 全文**.
+
+**why**:計時器與其回呼受 CPU 負載影響而時差不定,「等 N 毫秒後檢查」永遠含不穩因子;單獨重跑 5 次皆過不代表穩定,多套件並行或 e2e 多開之高負載下才現形.**典型錯誤形狀**:輪詢之測試每步 `sleep(30)` 後改狀態,高負載時取樣尚未發生就改了下一步,少一筆.
+
+核心規則(細則與限制見 references):
+
+1. **以事件同步**:被測函數提供觀察回調 `opt.onTrace`(同步、凍結之 `{ type, ... }`、拋錯忽略、未傳零成本;自有套件沿用 wsemi `getTrace`),測試以「等第 N 個事件」為同步點,再對事件內容斷言.
+2. **斷言語意**,不斷言「X 毫秒內恰 N 次」.
+3. **時間本身是規格者用假時鐘**(`node:test` 之 `mock.timers`),斷言事件之虛擬時刻;防懸置上限用真實計時器.
+4. **真實檔案監看步進式**;**子行程以事件閘門與可觀察條件**;無計時器之函數改等被測物事件,不為測試改 src.
+5. **否定斷言**才可用短暫觀察窗;**懸置以事件判定**;不得以重試掩蓋、不得只加大 timeout.
+6. 每個加回調之函數補「未傳回調時行為不變」之五種回調案;每個改寫附**變異證據**並對照舊測試.
+7. **負載試驗**為穩定之判準:CPU 壓力＋事件迴圈阻塞＋重度阻塞,改造前後同次數;基準先跑、獨佔測試資源、結束回驗壓力行程.
