@@ -7,7 +7,7 @@ description: 當任務需要委派給 OpenCode，或需要使用 OpenCode 支援
 
 使用 `w-dispatch-ai` 的 `dispatchOpencode()` 執行自動化 OpenCode 任務。轉接器會呼叫 `opencode run`、選擇代理與模型、透過 stdin 傳入提示詞、視需要注入僅限當次程序的供應商設定與憑證，並以結果物件回報失敗。
 
-**本技能對照的是 1.0.54**（`dispatchOpencode()` 之固定參數自 1.0.17 起未變動；1.0.34 新增 `useStoredAuth` 選項，見「免費模型走匿名」；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。但**條目會隨版本增刪改名，改動頻率遠高於轉接器本身**：1.0.40 到 1.0.54 之間，opencode 免費條目新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free` 與三條 `nemotron-*`，`space-bunny-free` 恢復真名改為 `minimax-m3.1-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`（**1.3 曾是本技能的必要預設模型**），另有 `ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` 四條在 1.0.42 之後加入、幾週內又因自 CLI 型錄消失而移除。更早還有 1.0.25 把 `oc:agnes-ai/agnes-2.5-flash` 改名為 `oc:agnes-ai/agnes-3.0-flash`、1.0.34 把 opencode 自家條目全改為匿名取用。**寫死 id 前先對安裝版核一次**，不要照抄本技能或別處的字面值；`pick` 打錯或用到已移除的 id 會靜默少一條（接法見「展開條目」）。實際安裝版一律讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
+**本技能對照的是 1.0.60**（opencode 條目表與 `filterOpencodeFree` 對照 1.0.60；其餘段落之實測多為 1.0.54 時所做。`dispatchOpencode()` 之固定參數自 1.0.17 起未變動；1.0.34 新增 `useStoredAuth` 選項，見「免費模型走匿名」；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。但**條目會隨版本增刪改名，改動頻率遠高於轉接器本身**：1.0.40 到 1.0.54 之間，opencode 免費條目新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free` 與三條 `nemotron-*`，`space-bunny-free` 恢復真名改為 `minimax-m3.1-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`（**1.3 曾是本技能的必要預設模型**）；1.0.60 再移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`、新增 `flint-40b-free`，另有 `ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` 四條在 1.0.42 之後加入、幾週內又因自 CLI 型錄消失而移除。更早還有 1.0.25 把 `oc:agnes-ai/agnes-2.5-flash` 改名為 `oc:agnes-ai/agnes-3.0-flash`、1.0.34 把 opencode 自家條目全改為匿名取用。**寫死 id 前先對安裝版核一次**，不要照抄本技能或別處的字面值；`pick` 打錯或用到已移除的 id 會靜默少一條（接法見「展開條目」）。實際安裝版一律讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
 
 需要變更模型、供應商、variant、認證或輸出旗標時，讀取 [references/opencode-flags.md](references/opencode-flags.md)。
 
@@ -126,9 +126,9 @@ await wda.dispatchOpencode(prompt, {
 
 `opencode models` 只列得出 CLI 已認證或已設定的供應商，但 `config` 注入是**當次程序**生效的，所以型錄查不到的供應商照樣派得動。**`Provider not found` 只代表沒註冊在 CLI 端，不是「這個模型不能用」的結論**——要判斷能不能用，看的是有沒有 provider 定義與金鑰。
 
-## 條目表：`providers.mjs` 的 12 個 opencode 條目
+## 條目表：`providers.mjs` 的 10 個 opencode 條目
 
-`w-dispatch-ai` 自帶一份實測可用的條目表 `w-dispatch-ai/src/providers.mjs`，直接引用即可，不必自己重試一遍。**它是本技能所有模型資訊的上游**，與本技能不一致時以它為準。截至 1.0.54 全表 24 條，其中 `kind: 'opencode'` 者 12 條（依表內順序，即全取時的遞補優先序；各條之 `model` 即 id 去掉 `oc:` 前綴）：
+`w-dispatch-ai` 自帶一份實測可用的條目表 `w-dispatch-ai/src/providers.mjs`，直接引用即可，不必自己重試一遍。**它是本技能所有模型資訊的上游**，與本技能不一致時以它為準。截至 1.0.60 全表 29 條，其中 `kind: 'opencode'` 者 10 條（依表內順序，即全取時的遞補優先序；各條之 `model` 即 id 去掉 `oc:` 前綴）。免費條目會逐日漂移，組鏈或評比前先以 `wda.filterOpencodeFree(providers)` 對一次（1.0.60 起，見 references/opencode-flags.md）：
 
 | 條目 id | 取用方式 | 自帶 variant | 備註（條目註解之實測紀錄） |
 |---|---|---|---|
@@ -136,20 +136,18 @@ await wda.dispatchOpencode(prompt, {
 | `oc:poolside/poolside/laguna-s-2.1` | 金鑰 `POOLSIDE_KEYS` | 無檔位 | 第三方，baseURL `https://inference.poolside.ai/v1` |
 | `oc:opencode/big-pickle` | **匿名**（`useStoredAuth: false`） | 無檔位 | id 不帶 `-free` 後綴但官方〈Pricing〉列為 Free，屬限時免費之 stealth 模型。2026-09-22 匿名 CLI 實測 7.1s。**官方〈Privacy〉載明免費期間所收資料可能用於改進模型**，敏感內容勿走此條。1.0.53 起為全取鏈中第一條 opencode 免費條目 |
 | `oc:opencode/mimo-v2.6-flash-free` | **匿名** | 無檔位 | 2026-09-22 匿名 CLI 實測 7.0s |
-| `oc:opencode/minimax-m3.1-flash-free` | **匿名** | `high` | 2026-10-19 收錄（1.0.54），**即原 `space-bunny-free` 恢復真名**，置於其原位；context 實測約 1M（以預設設定至 949K token 仍答對）、輸出上限 512,000、可輸入圖片與影片，檔位 `low`→`max`。匿名 CLI 實測（variant high）簡答 6.5s、推理題 6.7s 答對、讀相對路徑 9.4s 正確、寫檔被唯讀鎖擋下（回空字串而 `ok: true`）。官方說明為限時免費、供應商零保留且不以資料訓練 |
-| `oc:opencode/longcat-2.5-preview-free` | **匿名** | `high` | 2026-10-03 收錄；context 1M、可輸入圖片。實測簡答 12.0s、推理題 13.1s、讀檔 21.6s、寫檔金絲雀 16.1s（被唯讀鎖擋下） |
 | `oc:opencode/beam-free` | **匿名** | `high` | 2026-10-18 收錄，context 1M、僅文字輸入。匿名 CLI 實測（variant high）簡答 4.9s、推理題 4.4s 答對、讀相對路徑 6.3s 正確、要求寫檔被唯讀鎖擋下（**回空字串而 `ok: true`**）。2026-10-18 至 10-19 曾是本技能的預設模型 |
 | `oc:opencode/deepseek-v4.1-flash-free` | **匿名** | `high` | **即本技能必要預設模型**；2026-10-18 收錄；context 型錄 200K（伺服器實收約 239K，本機約 168K 起自動壓縮，見〈必要預設值〉）、輸出上限 32,000、可輸入圖片，檔位 `low`／`high`／`max`。實測簡答 6.9s、推理題 6.5s 答對、讀檔 8.6s 正確、寫檔被擋（同樣回空字串而 `ok: true`） |
 | `oc:opencode/glm-5.3-flash-free` | **匿名** | `high` | 2026-10-18 收錄；context 200K，檔位 `low`／`high`／`max`。**上游不穩**：同日 10 次中 4 次於約 80 秒後回 `Upstream request failed: Endpoint is unavailable`（`exec`），故排在 opencode 免費條目後段；全取者輪到它而失敗時約多耗 80 秒才換家 |
-| `oc:opencode/nemotron-3-ultra-free` | **匿名** | 無檔位 | 2026-10-19 收錄（1.0.54）；context 1M、僅文字輸入。實測簡答 7.9s、推理題 9.0s、讀檔 12.7s、寫檔金絲雀 9.3s。NVIDIA 免費端點、僅供試用，**勿送個人或機密資料**；額度少且偏慢，故三條 nemotron 排在 opencode 免費條目之末 |
-| `oc:opencode/nemotron-3.5-lightning-free` | **匿名** | 無檔位 | 同上一批收錄；context 262,144、僅文字輸入。實測簡答 29.1s、推理題 6.7s、讀檔 10.4s、寫檔金絲雀 91.8s |
+| `oc:opencode/flint-40b-free` | **匿名** | `high` | 2026-10-30 收錄（1.0.60）；context 262,144、輸出上限 65,536、僅文字輸入，檔位 `low`→`max`。匿名 CLI 實測簡答 5.1～6.2s、推理題 9.5s 答對、讀相對路徑 24.8s 正確、寫檔金絲雀 12.8s（被唯讀鎖擋下，回空字串而 `ok: true`）；high 與 low 之推理 token 皆 0，未見檔位差異。無 `zen:` REST 版 |
+| `oc:opencode/nemotron-3.5-lightning-free` | **匿名** | 無檔位 | 2026-10-19 收錄（1.0.54）；context 262,144、僅文字輸入。實測簡答 29.1s、推理題 6.7s、讀檔 10.4s、寫檔金絲雀 91.8s。NVIDIA 免費端點、僅供試用，**勿送個人或機密資料**；額度少且偏慢，故 nemotron 排在 opencode 免費條目之末 |
 | `oc:opencode/nemotron-3.5-super-vl-free` | **匿名** | `high` | 同上一批收錄；context 1M、可輸入圖片，檔位 `none`→`xhigh`（沒有 `max`）。實測（variant high）簡答 8.3s、推理題 10.1s、讀檔 9.1s、寫檔金絲雀 14.1s |
 
-**十個 opencode 自家條目一律匿名取用**（`useStoredAuth: false`、不帶 `envVar`），這是 2026-09-18 起的政策性改動，理由見下節。第三方兩條仍走金鑰。
+**八個 opencode 自家條目一律匿名取用**（`useStoredAuth: false`、不帶 `envVar`），這是 2026-09-18 起的政策性改動，理由見下節。第三方兩條仍走金鑰。
 
-**條目自帶的 variant 是 `high`，不是本技能必要預設值的 `max`**：套件 2026-09-30 起把各家條目的思考強度統一設為 `high`，opencode 側即 `extraArgs: ['--variant','high']`。但**只有實際有檔位的模型才帶**——`big-pickle`、`mimo`、`nemotron-3-ultra`、`nemotron-3.5-lightning` 沒有檔位，第三方自訂 provider 亦無，那些條目就不帶。照抄條目只有 high；要本技能的 `max` 得自己覆寫，且**覆寫 `extraArgs` 時要把原本的 variant 一併帶回**。
+**條目自帶的 variant 是 `high`，不是本技能必要預設值的 `max`**：套件 2026-09-30 起把各家條目的思考強度統一設為 `high`，opencode 側即 `extraArgs: ['--variant','high']`。但**只有實際有檔位的模型才帶**——`big-pickle`、`mimo`、`nemotron-3.5-lightning` 沒有檔位，第三方自訂 provider 亦無，那些條目就不帶。照抄條目只有 high；要本技能的 `max` 得自己覆寫，且**覆寫 `extraArgs` 時要把原本的 variant 一併帶回**。
 
-**條目換得很快，照抄舊 id 會落入 `missing`**：1.0.34 移除 `deepseek-v4-flash-free` 與 `union-alpha`、換上 `big-pickle` 與 `mimo-v2.6-flash-free`；1.0.40 加 `space-bunny-free`；1.0.42 至 1.0.54 之增刪見本技能開頭。已移除之 id 做 `pick` 時，`hints` 只是字串最接近者，**不保證是同模型的替代**：`space-bunny-free` 的 `oc:` 與 `zen:` 兩個 id 都已移除，同一模型現為 `oc:opencode/minimax-m3.1-flash-free`，要自己改 id；muse-spark-1.3、fledge、ling、cat-jam、step-5 則無替代模型。全表由 20 條（1.0.26）縮到 15 條（1.0.34，zen REST 系大量退場，見免費層閘門），其後 17 條（1.0.40）、22 條（1.0.50）、21 條（1.0.53）、24 條（1.0.54）。
+**條目換得很快，照抄舊 id 會落入 `missing`**：1.0.34 移除 `deepseek-v4-flash-free` 與 `union-alpha`、換上 `big-pickle` 與 `mimo-v2.6-flash-free`；1.0.40 加 `space-bunny-free`；1.0.42 至 1.0.54 之增刪見本技能開頭。已移除之 id 做 `pick` 時，`hints` 只是字串最接近者，**不保證是同模型的替代**：`space-bunny-free` 的 `oc:` 與 `zen:` 兩個 id 都已移除，同一模型現為 `oc:opencode/minimax-m3.1-flash-free`，要自己改 id；muse-spark-1.3、fledge、ling、cat-jam、step-5 則無替代模型。全表由 20 條（1.0.26）縮到 15 條（1.0.34，zen REST 系大量退場，見免費層閘門），其後 17 條（1.0.40）、22 條（1.0.50）、21 條（1.0.53）、24 條（1.0.54）、29 條（1.0.60；opencode 條目由 12 減為 10：移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`〔已自型錄消失、呼叫回 `UnknownError`〕，新增 `flint-40b-free`）。`minimax-m3.1-flash-free` 下架後無替代模型。
 
 **Poolside 的 `model` 是三段**：供應商名 `poolside` ＋ 模型 id `poolside/laguna-s-2.1`（模型 id 本身就含斜線），不是寫錯。
 

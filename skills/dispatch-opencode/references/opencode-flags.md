@@ -46,22 +46,23 @@ variant：low、high、max
 |---|---|---|---|
 | `opencode/deepseek-v4.1-flash-free` | low／high／max | 200,000／32,000 | **本技能必要預設值**。2026-10-19 以 `--variant max`、匿名跑讀中文檔＋建檔兩次皆通過（21.8 秒、18.2 秒，檔案落地、中文原樣往返），工作階段紀錄確認 variant 為 `max` |
 | `opencode/beam-free` | low／medium／high／xhigh／max | 1,048,576／131,072 | 套件條目；2026-10-18 以 `--variant max`、匿名跑讀中文檔＋建檔兩次皆通過（8.3 秒、11.4 秒）；10-18 至 10-19 曾為預設 |
-| `opencode/minimax-m3.1-flash-free` | low／medium／high／xhigh／max | 1,000,000／512,000 | 套件條目（1.0.54 起，即原 `space-bunny-free` 恢復真名） |
-| `opencode/longcat-2.5-preview-free` | low／medium／high | 1,000,000／131,072 | 套件條目 |
 | `opencode/glm-5.3-flash-free` | low／high／max | 200,000／32,000 | 套件條目；上游不穩（10 次中 4 次約 80 秒後失敗） |
+| `opencode/flint-40b-free` | low／medium／high／xhigh／max | 262,144／65,536 | 套件條目（1.0.60 起，條目帶 `--variant high`）；2026-10-30 實測簡答約 5～6 秒、讀檔 25 秒；high 與 low 之推理 token 皆 0，未見檔位差異；只收文字輸入 |
 | `opencode/big-pickle` | 無 | 200,000／32,000 | 套件條目 |
 | `opencode/mimo-v2.6-flash-free` | 無 | 200,000／32,000 | 套件條目 |
-| `opencode/nemotron-3-ultra-free` | 無 | 1,000,000／128,000 | 套件條目（1.0.54 起）；NVIDIA 免費端點，勿送個人或機密資料 |
-| `opencode/nemotron-3.5-lightning-free` | 無 | 262,144／262,144 | 套件條目（1.0.54 起）；同上 |
+| `opencode/nemotron-3.5-lightning-free` | 無 | 262,144／262,144 | 套件條目（1.0.54 起）；NVIDIA 免費端點，勿送個人或機密資料 |
 | `opencode/nemotron-3.5-super-vl-free` | none／minimal／low／medium／high／xhigh | 1,048,576／131,072 | 套件條目（1.0.54 起）；同上 |
 
 各模型的檔位名稱並不一致（有的只到 `high`、有的跳過 `medium`、有的到 `xhigh` 為止、有的沒有檔位），換模型時以 `--verbose` 實查，不要套用別支的檔位。型錄上新出現、尚未收為套件條目的，用之前先照下節查核並實跑。
+
+**組遞補鏈或評比名單前，先以 `wda.filterOpencodeFree(providers)` 對一次**（w-dispatch-ai 1.0.60 起）：它以 `opencode models` 之輸出篩出目錄中確實仍供應之免費條目，回 `available`／`removed`（目錄有、CLI 型錄已無）／`unchecked`／`uncatalogued`（CLI 有、目錄未收）；查詢失敗（`opencode` 不存在、非零離開、逾時、空輸出）回 `ok: false` 與 `errorType`，各清單為 `null`——**不可把 `null` 當成「全部下架」**。`refresh: true` 會加 `--refresh` 重抓型錄（`opencode models` 有本機快取，剛下架者可能仍列一次）。型錄有列仍不等於可用（見下節 nvidia 之例），關鍵派工仍以實跑為準。
 
 ### 已確認不可用之項目
 
 | 項目 | 實測結果 |
 |---|---|
-| `opencode/space-bunny-free` | 2026-10-19 已自 CLI 型錄與官方文件消失、呼叫回 `UnknownError`；同一模型恢復真名為 `opencode/minimax-m3.1-flash-free`，套件 1.0.54 以新 id 置於原位 |
+| `opencode/minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free` | 2026-10-29／30 已自 CLI 型錄消失（`--refresh` 亦不列），依條目呼叫約 1.5～2 秒回 `UnknownError`；匿名 REST 對 minimax 回 400 `Model is unavailable`；`w-dispatch-ai` 1.0.60 移除三條（issue #25） |
+| `opencode/space-bunny-free` | 2026-10-19 已自 CLI 型錄與官方文件消失、呼叫回 `UnknownError`；同一模型恢復真名為 `opencode/minimax-m3.1-flash-free`，套件 1.0.54 以新 id 置於原位（該 id 亦於 1.0.60 下架，見上列） |
 | `opencode/muse-spark-1.3-contributor-free` | 2026-10-18 已不在 1.19.3 之型錄，呼叫即敗；`w-dispatch-ai` 1.0.53 移除條目（官方文件改列付費之 `muse-spark-1.3`）。**曾為本技能必要預設值** |
 | `opencode/muse-spark-1.2-contributor-free` | 2026-09-30 起自 CLI 型錄消失、呼叫回 `UnknownError`；套件 1.0.42 移除條目 |
 | `opencode/ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` | 套件 1.0.42 之後收錄、數週內自 CLI 型錄與官方文件消失（呼叫回 `UnknownError`），已移除條目 |
@@ -86,7 +87,7 @@ variant：low、high、max
 | `oc:agnes-ai/agnes-3.0-flash` | `agnes-ai/agnes-3.0-flash` | `agnes-ai` | `AGNES_KEYS` | `https://apihub.agnes-ai.com/v1` | `@ai-sdk/openai-compatible` |
 | `oc:poolside/poolside/laguna-s-2.1` | `poolside/poolside/laguna-s-2.1` | `poolside` | `POOLSIDE_KEYS` | `https://inference.poolside.ai/v1` | `@ai-sdk/openai-compatible` |
 
-走 OpenCode 自家供應商的另外十條（1.0.54 實查：`big-pickle`、`mimo-v2.6-flash-free`、`minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`nemotron-3-ultra-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`）**不需要 provider 定義也不帶金鑰**，`config` 內只有權限鎖，且一律 `useStoredAuth: false` 走匿名免費存取。**改匿名的理由是帶金鑰反而受該金鑰所屬工作區之模型開關影響**（實測回 `Model access is disabled` 且耗 76s），結果會隨執行機器而異。全表之 `kind: 'opencode'` 條目共 12 條，逐條說明見 SKILL.md 之「條目表」。
+走 OpenCode 自家供應商的另外八條（1.0.60 起：`big-pickle`、`mimo-v2.6-flash-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`flint-40b-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`）**不需要 provider 定義也不帶金鑰**，`config` 內只有權限鎖，且一律 `useStoredAuth: false` 走匿名免費存取。**改匿名的理由是帶金鑰反而受該金鑰所屬工作區之模型開關影響**（實測回 `Model access is disabled` 且耗 76s），結果會隨執行機器而異。全表之 `kind: 'opencode'` 條目共 10 條（1.0.60 起），逐條說明見 SKILL.md 之「條目表」。
 
 上表之 `nvidia/poolside/laguna-xs-2.1`（403）是 **NVIDIA 轉售的另一個 laguna 項目**，與此處 Poolside 官方 REST／CLI 路徑無關，別混為一談。同一個模型經不同路徑屬不同供應商，額度池與故障域各自獨立。
 
