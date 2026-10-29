@@ -8,7 +8,9 @@
 //  [引用] CLAUDE_global.md 與技能內 skill[名] 之名稱須為 skills/ 下既有技能
 //  [同步] sync.bat 須純 ASCII 且全為 CRLF(cmd.exe 對 LF 批次檔之 goto 標籤不可靠)
 //  [設定] settings_global.json 須為合法 JSON、不得寫死使用者路徑(用 {{HOME}})、只用已知佔位字、hook 指令引用之 hooks/<檔> 須存在
-//  [公開] 本 repo 為 GitHub 公開庫: 追蹤檔(含未忽略之新檔)不得含金鑰樣式; 內網 IPv4(127.0.0.1、0.0.0.0 除外)只可出現於 CLAUDE_global.md 與 sync.bat 之 `set "NPM_REG=…"` 一行
+//  [依賴] skills/.npmrc 須存在且除註解外只有一行 registry=<http(s) 網址>(不得含權杖等其他設定);
+//         skills/package.json 之自有套件(wsemi、w-*)寫 ^x.y.z、外部套件寫確切版本 x.y.z(外部經檢查才升版, ^ 會讓各台 npm update 未經檢查即升)
+//  [公開] 本 repo 為 GitHub 公開庫: 追蹤檔(含未忽略之新檔)不得含金鑰樣式; 內網 IPv4(127.0.0.1、0.0.0.0 除外)只可出現於 CLAUDE_global.md 與 skills/.npmrc 之 registry 一行
 //結果: 第一行為 CHECK-SKILLS errors=<n> warnings=<m>; 有錯誤離開碼 1, 只有提示離開碼 0
 import fs from 'fs'
 import path from 'path'
@@ -195,6 +197,35 @@ else {
     err('settings_global.json', '不存在')
 }
 
+//skills/.npmrc 與 skills/package.json(技能根之安裝來源與版本寫法)
+let fpNpmrc = path.join(fdSkills, '.npmrc')
+if (fs.existsSync(fpNpmrc)) {
+    let lines = fs.readFileSync(fpNpmrc, 'utf8').split(/\r?\n/).map((s) => s.trim()).filter((s) => s && !/^[#;]/.test(s))
+    let nReg = lines.filter((s) => /^registry=https?:\/\/[^\s]+\/$/.test(s)).length
+    if (nReg !== 1 || lines.length !== 1) {
+        err('skills/.npmrc', `除註解外須只有一行 registry=<http(s) 網址,結尾 />(現有 ${lines.length} 行設定,其中合格之 registry ${nReg} 行);權杖等設定不得入庫`)
+    }
+}
+else {
+    err('skills/.npmrc', '不存在(技能根之自有套件須自內網 Verdaccio 安裝)')
+}
+let fpSkPj = path.join(fdSkills, 'package.json')
+try {
+    let deps = JSON.parse(fs.readFileSync(fpSkPj, 'utf8')).dependencies || {}
+    for (let [n, v] of Object.entries(deps)) {
+        let own = n === 'wsemi' || n.startsWith('w-')
+        if (own && !/^\^\d+\.\d+\.\d+$/.test(v)) {
+            err('skills/package.json', `自有套件 ${n} 須寫 ^x.y.z(現為 ${v})`)
+        }
+        if (!own && !/^\d+\.\d+\.\d+$/.test(v)) {
+            err('skills/package.json', `外部套件 ${n} 須釘確切版本 x.y.z(現為 ${v});升版經供應鏈檢查後才改`)
+        }
+    }
+}
+catch (e) {
+    err('skills/package.json', `讀取或解析失敗: ${e.message}`)
+}
+
 //公開庫衛生: 追蹤檔與未忽略之新檔
 let files = []
 try {
@@ -234,12 +265,12 @@ for (let f of files) {
         if (reSecret.test(ln)) {
             err(`${f}:${i + 1}`, '疑似金鑰或私鑰(公開庫不得含)')
         }
-        //例外: CLAUDE_global.md(內網 Gitea 資訊)、sync.bat 之 NPM_REG 一行(自有套件之 Verdaccio,同一主機已見於 CLAUDE_global.md;使用者 2026-10-29)
-        let allowIp = f === 'CLAUDE_global.md' || (f === 'sync.bat' && /^set "NPM_REG=http:\/\/[\d.]+:\d+\/"$/.test(ln))
+        //例外: CLAUDE_global.md(內網 Gitea 資訊)、skills/.npmrc 之 registry 一行(自有套件之 Verdaccio,同一主機已見於 CLAUDE_global.md;使用者 2026-10-29)
+        let allowIp = f === 'CLAUDE_global.md' || (f === 'skills/.npmrc' && /^registry=http:\/\/[\d.]+:\d+\/$/.test(ln))
         if (!allowIp) {
             for (let m of ln.matchAll(reIp)) {
                 if (isInternal(m[1])) {
-                    err(`${f}:${i + 1}`, `內網位址 ${m[1]}(僅 CLAUDE_global.md 與 sync.bat 之 NPM_REG 一行可含)`)
+                    err(`${f}:${i + 1}`, `內網位址 ${m[1]}(僅 CLAUDE_global.md 與 skills/.npmrc 之 registry 一行可含)`)
                 }
             }
         }

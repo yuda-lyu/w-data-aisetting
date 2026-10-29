@@ -9,15 +9,16 @@
 | 路徑 | 內容 | 同步到 |
 |---|---|---|
 | `CLAUDE_global.md` | 全域設定原稿 | `~/.claude/CLAUDE.md`(改名) |
-| `skills/` | 全域技能原稿(每個技能一個資料夾,含 `SKILL.md`)與其 `package.json` | `~/.claude/skills/`(其後 `npm i` 與 `npm update`) |
+| `skills/` | 全域技能原稿(每個技能一個資料夾,含 `SKILL.md`)與其 `package.json`(自有套件 `wsemi`、`w-*` 寫 `^x.y.z`,外部套件釘確切版本——外部套件經供應鏈檢查後才升版,`^` 會讓各台 `npm update` 未經檢查即升) | `~/.claude/skills/`(其後 `npm i` 與 `npm update`) |
+| `skills/.npmrc` | 技能根之 registry(內網 Verdaccio:自有套件發布於此,並代理 npmjs 之外部套件;匿名讀取,不含權杖,也不得放權杖)。於技能根執行之任何 npm 指令都以它為準,不受各台 npm 設定影響 | `~/.claude/skills/.npmrc` |
 | `hooks/` | `settings_global.json` 之 hook 所執行之腳本:`transcript-size-warn.mjs`(對話紀錄達 800 MB 提醒一次、達 1,500 MB 每則提醒;背景工作通知不算) | `~/.claude/hooks/` |
 | `settings_global.json` | 全域 Claude Code 設定原稿(權限、沙箱、模型設定、hook 等);hook 指令之路徑寫成 `{{HOME}}/.claude/hooks/<檔>`,**不寫死使用者**;不得放金鑰(公開庫) | `~/.claude/settings.json`(整份取代;`{{HOME}}` 由 `tools/install-settings.mjs` 填入該台之使用者目錄,原檔備份為 `settings.json.bak`) |
-| `tools/report-skill-deps.mjs` | 列出技能根之自有套件已安裝版與 registry 最新版(`node tools/report-skill-deps.mjs <技能根> [--registry <網址>]`;只報告) | 不同步(由 `sync.bat` 執行) |
+| `tools/report-skill-deps.mjs` | 列出技能根之自有套件已安裝版與 registry 最新版(`node tools/report-skill-deps.mjs <技能根>`;於技能根執行 npm,故依其 `.npmrc`;只報告) | 不同步(由 `sync.bat` 執行) |
 | `tools/install-settings.mjs` | 安裝 hook 腳本並以 `settings_global.json` 產生 `settings.json`(`--dry` 預覽);測試 `tools/test-install-settings.mjs` | 不同步(由 `sync.bat` 自暫存 clone 執行) |
 | `sync.bat` | 同步腳本 | — |
 | `supd.bat` | 更新本機之 AI CLI:`claude update`、`codex update`、`agy update`、`npm install -g opencode-ai@latest`(各步失敗不中斷,末尾列出失敗者) | — |
 | `script.txt` | 原稿修改後推上 GitHub 之指令 | — |
-| `tools/check-skills.mjs` | 原稿自檢:技能 frontmatter、連結與 `skill[名]` 引用、`sync.bat` 編碼與換行、`settings_global.json`(合法 JSON、不寫死使用者路徑、只用 `{{HOME}}`、引用之 hook 存在)、公開庫衛生(`node tools/check-skills.mjs`,有錯誤離開碼 1) | 不同步 |
+| `tools/check-skills.mjs` | 原稿自檢:技能 frontmatter、連結與 `skill[名]` 引用、`sync.bat` 編碼與換行、`settings_global.json`(合法 JSON、不寫死使用者路徑、只用 `{{HOME}}`、引用之 hook 存在)、`skills/.npmrc`(只准 `registry=` 一行)與 `skills/package.json` 之版本寫法、公開庫衛生(`node tools/check-skills.mjs`,有錯誤離開碼 1) | 不同步 |
 | `.gitattributes` | `.bat` 以 CRLF 原樣入庫(cmd.exe 對 LF 批次檔之 `goto` 標籤不可靠) | — |
 | `skillsOld/`、`skillsTemp/`、`CLAUDE_temp*.md`、`g_*.md` | 舊版、暫存、草稿與筆記 | 不同步 |
 
@@ -31,7 +32,7 @@
 2. 把 `skills\*` 複製到 `%USERPROFILE%\.claude\skills`(覆蓋同名,不刪除;已廢棄之技能資料夾須手動刪);
 3. 把 `CLAUDE_global.md` 複製為 `%USERPROFILE%\.claude\CLAUDE.md`;
 4. 執行 `tools\install-settings.mjs`:把 `hooks\*.mjs` 複製到 `%USERPROFILE%\.claude\hooks`,並以 `settings_global.json` 產生 `%USERPROFILE%\.claude\settings.json`——**整份取代**(各台以 `/config` 等於本機改過之設定會被蓋回;原檔備份為 `settings.json.bak`),其中 `{{HOME}}` 填入該台之使用者目錄(如 `C:/Users/<使用者>`),故各台使用者名稱不同亦可直接同步;範本非合法 JSON 或有未知佔位字時中止且不寫入;
-5. 於 `~/.claude/skills` 先刪本機 `package-lock.json`, 再執行 `npm i`(補裝缺少者)與 `npm update`(把已安裝者升到 `package.json` 範圍內最新版)——**registry 用 `sync.bat` 之 `NPM_REG`(內網 Verdaccio)**:技能依賴之自有套件(`wsemi`、`w-*`)先發布至 Verdaccio,npmjs 可能落後;先 `npm ping`,連得到即以 `--registry` 安裝,連不到(如不在內網)退回 npm 預設 registry 並警告(仍完成同步,自有套件可能較舊).裝完以 `tools/report-skill-deps.mjs` 列出各自有套件之已安裝版與最新版,落後者標 `STALE`;
+5. 於 `~/.claude/skills` 先刪本機 `package-lock.json`, 再執行 `npm i`(補裝缺少者)與 `npm update`(把自有套件升到範圍內最新版;外部套件為確切版本,不變)——**registry 依第 2 步複製過去之 `skills/.npmrc`(內網 Verdaccio)**,不受該台 npm 設定影響、不需權杖;先 `npm ping`,連不到即中止並提示連上內網後重跑(自有套件所需之版本只在 Verdaccio).裝完以 `tools/report-skill-deps.mjs` 列出各自有套件之已安裝版與最新版,落後者標 `STALE`;
 6. 刪除暫存資料夾.
 
 hook 門檻可於各機以 `~/.claude/hooks/transcript-size-warn.json`(`{ "warnMB": 800, "alertMB": 1500 }`)調整,此檔不由同步覆蓋.

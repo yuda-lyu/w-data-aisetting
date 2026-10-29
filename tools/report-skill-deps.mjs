@@ -1,21 +1,19 @@
 //列出技能根之自有套件(wsemi、w-*)已安裝版本與 registry 最新版之對照(由 sync.bat 於 npm i／update 後呼叫, 亦可手動)
-//用法: node tools/report-skill-deps.mjs <技能根> [--registry <網址>]
+//用法: node tools/report-skill-deps.mjs <技能根>
+//npm 一律於技能根執行, 故 registry 取自技能根之 .npmrc(與 sync.bat 安裝時相同)
 //只報告, 一律離開碼 0(registry 取不到時該列標 unknown);落後者標 STALE, 末行 SKILL-DEPS own=<n> stale=<m>
 import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
 
-let argv = process.argv.slice(2)
-let fdSkills = path.resolve(argv[0] || '.')
-let i = argv.indexOf('--registry')
-let registry = i >= 0 ? argv[i + 1] : ''
+let fdSkills = path.resolve(process.argv[2] || '.')
 let isWin = process.platform === 'win32'
 
-//runNpm, 優先以 node 直跑 npm-cli.js(免經 shell), 找不到才用 npm(.cmd)
+//runNpm, 於技能根執行; 優先以 node 直跑 npm-cli.js(免經 shell), 找不到才用 npm(.cmd)
 let npmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
 let runNpm = (args) => (fs.existsSync(npmCli)
-    ? spawnSync(process.execPath, [npmCli, ...args], { encoding: 'utf8', timeout: 60000 })
-    : spawnSync(isWin ? 'npm.cmd' : 'npm', args, { encoding: 'utf8', timeout: 60000, shell: isWin }))
+    ? spawnSync(process.execPath, [npmCli, ...args], { cwd: fdSkills, encoding: 'utf8', timeout: 60000 })
+    : spawnSync(isWin ? 'npm.cmd' : 'npm', args, { cwd: fdSkills, encoding: 'utf8', timeout: 60000, shell: isWin }))
 
 let cmpVer = (a, b) => {
     let pa = String(a).split(/[.-]/).map((v) => Number(v) || 0)
@@ -31,7 +29,8 @@ let cmpVer = (a, b) => {
 let pj = JSON.parse(fs.readFileSync(path.join(fdSkills, 'package.json'), 'utf8'))
 let own = Object.keys(pj.dependencies || {}).filter((n) => n === 'wsemi' || n.startsWith('w-'))
 let nStale = 0
-console.log(`[skill-deps] registry: ${registry || '(npm 預設)'}`)
+let rReg = runNpm(['config', 'get', 'registry'])
+console.log(`[skill-deps] registry: ${rReg.status === 0 ? String(rReg.stdout).trim() : '(取不到)'}`)
 for (let name of own) {
     let installed = ''
     try {
@@ -40,7 +39,7 @@ for (let name of own) {
     catch (e) {
         installed = '(未安裝)'
     }
-    let r = runNpm(['view', name, 'version', ...(registry ? ['--registry', registry] : [])])
+    let r = runNpm(['view', name, 'version'])
     let latest = r.status === 0 ? String(r.stdout || '').trim() : ''
     let mark = 'ok'
     if (!latest) {

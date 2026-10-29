@@ -19,9 +19,6 @@ set "WORK=%~dp0tmp"
 set "SRC=%WORK%\w-data-aisetting"
 set "CLAUDE_HOME=%USERPROFILE%\.claude"
 set "DST=%CLAUDE_HOME%\skills"
-rem Own packages (wsemi, w-*) used by the skills are published to this intranet Verdaccio first;
-rem npmjs may lag behind, so the skills are installed from here whenever it is reachable.
-set "NPM_REG=http://100.120.70.67:4873/"
 
 echo [1/7] create "%WORK%"
 if exist "%SRC%" rmdir /s /q "%SRC%"
@@ -52,25 +49,25 @@ rem npm i installs what is missing (fresh machine); npm update then upgrades eve
 rem package to the newest version allowed by package.json - npm i alone keeps old versions
 rem that already satisfy the ranges, even without a lock file. The local lock is removed first.
 rem package.json "allowScripts" approves the install scripts that npm 12 blocks by default.
-rem Registry: NPM_REG when reachable (npm ping), else npm's default registry with a warning
-rem (sync still completes, but own packages may be older than the latest release).
-set "REGARG="
-call npm ping --registry %NPM_REG% >nul 2>&1
-if errorlevel 1 (
-  echo WARN: %NPM_REG% is unreachable, installing from the default registry - own packages may be older.
-) else (
-  set "REGARG=--registry %NPM_REG%"
-)
+rem Registry: skills\.npmrc (copied in step 3) points npm at the intranet Verdaccio, where the
+rem own packages are published; it overrides this machine's npm settings inside the skills root.
+rem Verdaccio unreachable = stop here: the required own package versions are only there.
 if exist "%DST%\package-lock.json" del /q "%DST%\package-lock.json"
 pushd "%DST%" || goto :fail
-call npm i %REGARG%
+call npm ping >nul 2>&1
+if errorlevel 1 (
+  echo ERROR: the registry in "%DST%\.npmrc" is unreachable - connect to the intranet and run sync.bat again.
+  popd
+  goto :fail
+)
+call npm i
 set "RC=%errorlevel%"
-if "%RC%"=="0" call npm update %REGARG%
+if "%RC%"=="0" call npm update
 if "%RC%"=="0" set "RC=%errorlevel%"
 popd
 if not "%RC%"=="0" goto :fail
 rem Report installed vs latest of each own package (wsemi, w-*); STALE lines need attention.
-node "%SRC%\tools\report-skill-deps.mjs" "%DST%" %REGARG%
+node "%SRC%\tools\report-skill-deps.mjs" "%DST%"
 
 echo [7/7] delete "%WORK%"
 rmdir /s /q "%WORK%"
