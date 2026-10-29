@@ -7,6 +7,7 @@
 //  [連結] 技能內 markdown 相對連結之目標檔存在(含 references/ 等子檔; 略過 http、mailto、純錨點)
 //  [引用] CLAUDE_global.md 與技能內 skill[名] 之名稱須為 skills/ 下既有技能
 //  [同步] sync.bat 須純 ASCII 且全為 CRLF(cmd.exe 對 LF 批次檔之 goto 標籤不可靠)
+//  [設定] settings_global.json 須為合法 JSON、不得寫死使用者路徑(用 {{HOME}})、只用已知佔位字、hook 指令引用之 hooks/<檔> 須存在
 //  [公開] 本 repo 為 GitHub 公開庫: 追蹤檔(含未忽略之新檔)不得含金鑰樣式; CLAUDE_global.md 以外不得含內網 IPv4(127.0.0.1、0.0.0.0 除外)
 //結果: 第一行為 CHECK-SKILLS errors=<n> warnings=<m>; 有錯誤離開碼 1, 只有提示離開碼 0
 import fs from 'fs'
@@ -164,6 +165,34 @@ if (fs.existsSync(fpBat)) {
 }
 else {
     err('sync.bat', '不存在')
+}
+
+//settings_global.json(sync.bat 以 tools/install-settings.mjs 產生各台之 ~/.claude/settings.json)
+let fpSet = path.join(root, 'settings_global.json')
+if (fs.existsSync(fpSet)) {
+    let s = fs.readFileSync(fpSet, 'utf8')
+    try {
+        JSON.parse(s)
+    }
+    catch (e) {
+        err('settings_global.json', `不是合法 JSON: ${e.message}`)
+    }
+    if (/[A-Za-z]:[\\/]+Users[\\/]+[^{\\/"]+|\/home\/[^{/"]+/i.test(s)) {
+        err('settings_global.json', '寫死使用者路徑(改用佔位字 {{HOME}},由 sync.bat 依各台填入)')
+    }
+    for (let m of s.matchAll(/\{\{(\w+)\}\}/g)) {
+        if (m[1] !== 'HOME') {
+            err('settings_global.json', `未知之佔位字 ${m[0]}(只支援 {{HOME}})`)
+        }
+    }
+    for (let m of s.matchAll(/\{\{HOME\}\}\/\.claude\/hooks\/([^"\\]+)/g)) {
+        if (!fs.existsSync(path.join(root, 'hooks', m[1]))) {
+            err('settings_global.json', `hook 指令引用之 hooks/${m[1]} 不存在`)
+        }
+    }
+}
+else {
+    err('settings_global.json', '不存在')
 }
 
 //公開庫衛生: 追蹤檔與未忽略之新檔

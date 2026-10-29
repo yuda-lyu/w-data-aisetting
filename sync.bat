@@ -4,9 +4,11 @@ setlocal
 rem Sync https://github.com/yuda-lyu/w-data-aisetting (GitHub, public, branch master, no login needed) to this machine:
 rem   repo skills\*   -> %USERPROFILE%\.claude\skills    (then npm i there)
 rem   repo CLAUDE_global.md -> %USERPROFILE%\.claude\CLAUDE.md   (renamed on copy)
-rem   repo hooks\*.mjs -> %USERPROFILE%\.claude\hooks, and their entries merged into
-rem   %USERPROFILE%\.claude\settings.json by hooks\install-hooks.mjs (other settings are kept;
-rem   an invalid settings.json aborts without writing; the previous file is kept as settings.json.bak)
+rem   repo hooks\*.mjs -> %USERPROFILE%\.claude\hooks
+rem   repo settings_global.json -> %USERPROFILE%\.claude\settings.json (whole file replaced; the
+rem   placeholder {{HOME}} is filled with this machine's user folder, so the template names no user;
+rem   done by tools\install-settings.mjs; an invalid template aborts without writing; the previous
+rem   settings.json is kept as settings.json.bak)
 rem The global settings draft is named CLAUDE_global.md in the repo so that agents working
 rem inside this repo do not auto-load it as the project's own CLAUDE.md.
 rem Existing files are overwritten, nothing is deleted; remove obsolete skill folders manually.
@@ -36,9 +38,10 @@ if not exist "%SRC%\CLAUDE_global.md" goto :fail
 copy /Y "%SRC%\CLAUDE_global.md" "%CLAUDE_HOME%\CLAUDE.md" >nul
 if errorlevel 1 goto :fail
 
-echo [5/7] install hooks to "%CLAUDE_HOME%\hooks" and merge them into settings.json
-if not exist "%SRC%\hooks\install-hooks.mjs" goto :fail
-node "%SRC%\hooks\install-hooks.mjs"
+echo [5/7] install hooks to "%CLAUDE_HOME%\hooks" and settings_global.json as settings.json
+if not exist "%SRC%\tools\install-settings.mjs" goto :fail
+if not exist "%SRC%\settings_global.json" goto :fail
+node "%SRC%\tools\install-settings.mjs"
 if errorlevel 1 goto :fail
 
 echo [6/7] npm i and npm update in "%DST%"
