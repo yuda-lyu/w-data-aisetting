@@ -8,7 +8,7 @@
 //  [引用] CLAUDE_global.md 與技能內 skill[名] 之名稱須為 skills/ 下既有技能
 //  [同步] sync.bat 須純 ASCII 且全為 CRLF(cmd.exe 對 LF 批次檔之 goto 標籤不可靠)
 //  [設定] settings_global.json 須為合法 JSON、不得寫死使用者路徑(用 {{HOME}})、只用已知佔位字、hook 指令引用之 hooks/<檔> 須存在
-//  [公開] 本 repo 為 GitHub 公開庫: 追蹤檔(含未忽略之新檔)不得含金鑰樣式; CLAUDE_global.md 以外不得含內網 IPv4(127.0.0.1、0.0.0.0 除外)
+//  [公開] 本 repo 為 GitHub 公開庫: 追蹤檔(含未忽略之新檔)不得含金鑰樣式; 內網 IPv4(127.0.0.1、0.0.0.0 除外)只可出現於 CLAUDE_global.md 與 sync.bat 之 `set "NPM_REG=…"` 一行
 //結果: 第一行為 CHECK-SKILLS errors=<n> warnings=<m>; 有錯誤離開碼 1, 只有提示離開碼 0
 import fs from 'fs'
 import path from 'path'
@@ -234,10 +234,12 @@ for (let f of files) {
         if (reSecret.test(ln)) {
             err(`${f}:${i + 1}`, '疑似金鑰或私鑰(公開庫不得含)')
         }
-        if (f !== 'CLAUDE_global.md') {
+        //例外: CLAUDE_global.md(內網 Gitea 資訊)、sync.bat 之 NPM_REG 一行(自有套件之 Verdaccio,同一主機已見於 CLAUDE_global.md;使用者 2026-10-29)
+        let allowIp = f === 'CLAUDE_global.md' || (f === 'sync.bat' && /^set "NPM_REG=http:\/\/[\d.]+:\d+\/"$/.test(ln))
+        if (!allowIp) {
             for (let m of ln.matchAll(reIp)) {
                 if (isInternal(m[1])) {
-                    err(`${f}:${i + 1}`, `內網位址 ${m[1]}(僅 CLAUDE_global.md 可含內網 Gitea 資訊)`)
+                    err(`${f}:${i + 1}`, `內網位址 ${m[1]}(僅 CLAUDE_global.md 與 sync.bat 之 NPM_REG 一行可含)`)
                 }
             }
         }
