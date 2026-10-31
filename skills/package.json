@@ -7,11 +7,11 @@
     "mupdf": "1.28.1",
     "opencc-js": "1.4.2",
     "unpdf": "1.9.1",
-    "w-dispatch-ai": "^1.0.60",
-    "w-dwdata-hub": "^1.0.23",
-    "w-fetch-web": "^1.0.28",
-    "w-orm-lmdb": "^1.0.47",
-    "w-zip": "^1.0.49",
+    "w-dispatch-ai": "^1.0.61",
+    "w-dwdata-hub": "^1.0.24",
+    "w-fetch-web": "^1.0.29",
+    "w-orm-lmdb": "^1.0.48",
+    "w-zip": "^1.0.50",
     "wsemi": "^1.9.36"
   },
   "allowScripts": {
