@@ -12,7 +12,7 @@
     "w-fetch-web": "^1.0.30",
     "w-orm-lmdb": "^1.0.50",
     "w-zip": "^1.0.51",
-    "wsemi": "^1.9.40"
+    "wsemi": "^1.9.41"
   },
   "allowScripts": {
     "@askjo/camofox-browser": true,
