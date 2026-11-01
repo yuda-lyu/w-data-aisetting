@@ -26,6 +26,11 @@ description: 盤點當前專案套件更新(ncu 或 npx npm-check-updates),依�
   ncu --version
   ```
   成功 → 後續以 `ncu` 為指令;失敗 → 改用 `npx -y npm-check-updates`(npx 會自動下載,需網路;首次較慢屬正常)。兩者皆不可用(如無網路)→ 回報無法執行並終止。
+- **檢查生效之 registry**(自有套件只發布至私有倉庫,見全域設定 §5.1):於 cwd 執行
+  ```bash
+  npm config get registry
+  ```
+  ncu 依 npm 設定之順序取 registry(專案 `.npmrc` → 使用者設定 → 預設 npmjs),**不會因查錯倉庫而報錯**。結果為 `https://registry.npmjs.org/`(或其他非私有倉庫之位址)時,自有套件會靜默查到 npmjs 上停更之舊版、看似「已是最新」——**停下並回報**:列出生效之 registry 與其來源(`npm config list` 中標示之設定檔),提示依全域設定 §5.1 於專案根目錄 `.npmrc` 設定私有倉庫(或本機使用者設定),**不得改用 npmjs 之結果繼續**。私有倉庫之位址以全域設定 §5.1 為準,本技能不寫死。
 - 檢查專案根目錄是否有 `建議*修改.md`(glob):此類檔代表 `node_modules` 內有**尚未收回套件 repo 的本地 patch**,`npm i` 會將其覆蓋。有的話先列出檔名,並於最終回報提醒[哪些本地 patch 已被覆蓋,如仍需要須重套]。**不因此中止**,照常更新。
 
 ### 2. 查更新
