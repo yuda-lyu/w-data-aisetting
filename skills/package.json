@@ -7,12 +7,12 @@
     "mupdf": "1.28.1",
     "opencc-js": "1.4.2",
     "unpdf": "1.9.1",
-    "w-dispatch-ai": "^1.0.64",
+    "w-dispatch-ai": "^1.0.67",
     "w-dwdata-hub": "^1.0.25",
-    "w-fetch-web": "^1.0.30",
-    "w-orm-lmdb": "^1.0.50",
-    "w-zip": "^1.0.51",
-    "wsemi": "^1.9.41"
+    "w-fetch-web": "^1.0.31",
+    "w-orm-lmdb": "^1.0.51",
+    "w-zip": "^1.0.52",
+    "wsemi": "^1.9.45"
   },
   "allowScripts": {
     "@askjo/camofox-browser": true,
