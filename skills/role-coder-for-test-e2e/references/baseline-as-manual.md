@@ -112,12 +112,15 @@
 
 ```js
 // preload 模組（node --import <file URL>），只攔無參數 new Date() / Date()，保留 Date.now()
-function installFakeClock(anchorIso, g = globalThis) {
+// isShifted = false：凍結（預設）；true：平移（錨點＋掛上後之真實經過時間，見下）
+function installFakeClock(anchorIso, g = globalThis, isShifted = false) {
     let RealDate = g.Date
     let anchor = new RealDate(anchorIso).getTime()
+    let t0 = RealDate.now()
+    let nowMs = () => (isShifted ? anchor + (RealDate.now() - t0) : anchor)
     function FakeDate(...args) {
-        if (!new.target) { return new RealDate(anchor).toString() }
-        if (args.length === 0) { return Reflect.construct(RealDate, [anchor], new.target) }
+        if (!new.target) { return new RealDate(nowMs()).toString() }
+        if (args.length === 0) { return Reflect.construct(RealDate, [nowMs()], new.target) }
         return Reflect.construct(RealDate, args, new.target)
     }
     FakeDate.prototype = RealDate.prototype
@@ -131,7 +134,8 @@ function installFakeClock(anchorIso, g = globalThis) {
 - 兩個錨點：**種子錨點**（建庫程序）< **執行期錨點**（e2e 自行啟動的後端與瀏覽器），使測試中新增的資料在「最近項目」排序仍正確、且一眼分得出哪些是測試期間產生的。
 - `Date.now()` 必須保留：debounce / throttle 靠差值，凍住即永不觸發。代價是寫入與讀取可能不同時鐘，須盤點（SKILL §8.2〈盤點寫入時鐘與讀取時鐘〉）。
 - `--import` 用絕對 file URL；worker_threads 會繼承。
-- 瀏覽器端只在需要時以 `context.addInitScript` 掛同一段（限定 origin）；有以 `+new Date()` 算動畫經過時間的圖表頁不掛（會停在第 0 幀）。否決 Playwright `clock.setFixedTime`（管不到後端，且連 `Date.now()` 一起凍）。
+- 瀏覽器端以 `context.addInitScript` 掛同一段（限定 origin；函式需序列化，用字串形式：`` `(${installFakeClock})(${JSON.stringify(anchorIso)}, globalThis, ${isShifted})` ``）：**預設凍結**（日期選擇器預設月份等須固定者）；有以 `+new Date()` 算動畫經過時間的圖表頁改掛**平移**（`isShifted = true`）——凍結會讓動畫停在第 0 幀，但**不是不掛**：不掛則該頁之 `new Date()` 取真時鐘，與錨點資料脫節（依現在算出之值恆為 0 或恆為過期，見 SKILL §8.2〈盤點寫入時鐘與讀取時鐘〉）。只有確實須真實時間者才不掛，且須先盤點該頁有無瀏覽器端依現在算出之值。否決 Playwright `clock.setFixedTime`（管不到後端，且連 `Date.now()` 一起凍）。
+- **平移之代價**：`new Date()` 隨案例實際耗時前進，案例須跑超過門檻才會跨過下一格（「最近 N 分鐘」之桶、「N 分鐘前」之字樣）。門檻以小時、天計者，實例中案例僅數分鐘，不受影響；門檻為分鐘級者另行評估（錨點距下一格之時間是否大於案例最長耗時）。平移使 `new Date()` 之值每輪略異，截圖若含其秒級以下之值（毫秒、秒），列入不可固定之值盤點（[unfixable-values-masking.md](unfixable-values-masking.md) §1）。
 - 瀏覽類測試檔在 `before` 重置一次資料庫作守門，否則日常以真時鐘重建的資料庫會讓整檔假紅。
 - 遮罩函數保留為 opt-in，且要做遮擋判定（`elementFromPoint`），否則黑塊會畫到上層彈窗之上。
 
@@ -152,6 +156,7 @@ function installFakeClock(anchorIso, g = globalThis) {
 3a. **新舊圖都有的異狀也要追**：審重產圖時除了看差異範圍，也看新舊兩張共有之畫面是否合理——兩張都有代表它早已被凍結為標準圖，不代表它是規格（殷鑑：審「提示框殘留」之重產圖時，新舊兩張之紅色儲存鈕點擊後都呈淡灰底，追下去是焦點色只設了一半，三專案同病）。
 3b. **審圖者對他人主張只認圖不認話**：實作者（或子代理）說「既有圖也是這樣」「這是元件既有行為」「掃描全過」時，審圖者自己開既有圖、或以探測重現後才採信；殷鑑：實作者稱既有查詢標籤圖只框到文字而提議整批重產，審圖者實際開圖兩張皆已框整顆，若照單全收會無故換掉已審過的真理。「約 1px、已無法再外移，請審圖時裁量」也是主張：審圖者自己逐列量像素，依 SKILL §7.3-8 之判準（≤ 1px 即缺陷）判定，不轉交使用者裁量（殷鑑：照轉後實測為 0～1px，同類全掃另找出 2 張，見 SKILL §7.3-10）。
 3c. **框落在圖片邊緣之量測**：框之任一側落在圖片邊緣（外緣即圖片邊界或距邊界等於夾邊留距）時，沿該側逐列（或逐欄）找框線內緣之後第一個與底色亮度差 > 20 之像素，取最小距離；以框色長段紅線定框之前，先排除頁面本身同色系之元素（側欄之強調色條、紅字），否則外接矩形會抓錯。標出者逐張放大看，分三類：壓到文字或圖示墨跡（缺陷，依 SKILL §7.3-10 改框選目標）、只貼到目標自身之底色或外框（可）、目標本就超出畫面而被裁切處（可，SKILL §7.3-5 之「框可見部分」）。
+3d. **整齊之結果要對照資料**：整欄全 0、全部過期、整表同值、整列空白這類「整齊」之結果，位元相同（連跑多輪不變、比對全綠）不代表正確——依現在算出之值落在錯的時鐘時，結果恆為同一個整齊之值，穩定性反而掩蓋錯誤。看到就對照種子資料或查詢結果（用量表逐列對種子資料加總）確認該值是否本該如此；本該如此者於映射表註明依據，否則先依 SKILL §8.2〈盤點寫入時鐘與讀取時鐘〉查讀取時鐘（含瀏覽器端）。殷鑑：統計頁之用量表「最近 N」各欄全為 0，凍入標準圖與手冊用圖數月，輪對輪位元相同而無人起疑。
 4. **交使用者審圖**：標準圖同時是手冊用圖，業主要先看圖；使用者難以逐張開圖檔時以圖文對照之審圖報告交審（只收本輪新增／變動案例、每圖附圖鍵與框住對象，見 dispatch-and-review-workflow §6），已有手冊者手冊同輪更新；未經認可不跑 mocha 比對（跑了也只是把未審的圖當真理；全量執行依 SKILL §7.11，採用經審差異後即 `--accept` 或比對、由使用者事後檢視）。
 5. 認可後才跑 mocha 全跑與 `--grep` 單跑一致性，然後回報。
 
@@ -168,6 +173,7 @@ function installFakeClock(anchorIso, g = globalThis) {
 - [ ] 被遮罩或彈窗蓋住的目標已改框上層
 - [ ] 表格 / 清單只框有內容處；抽屜 / 彈窗框整個面板
 - [ ] 畫面本身沒有錯誤覆蓋層、空白表格、載入中狀態
+- [ ] 整欄全 0、全部過期、整表同值這類整齊之結果已對照資料確認（位元相同不代表正確，§6.2 3d）
 - [ ] 游標已移開，畫面上沒有殘留之提示框或 hover 底色；剛點過之按鈕其焦點外觀與按鈕身分一致（強色按鈕點擊後不應變灰、圖示仍清楚）
 - [ ] 頁首沒有因捲動被切掉數 px（與同流程其他圖對齊）
 ```
