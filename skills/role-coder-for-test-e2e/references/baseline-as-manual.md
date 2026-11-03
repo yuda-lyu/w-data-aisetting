@@ -129,7 +129,7 @@ function installFakeClock(anchorIso, g = globalThis) {
 ```
 
 - 兩個錨點：**種子錨點**（建庫程序）< **執行期錨點**（e2e 自行啟動的後端與瀏覽器），使測試中新增的資料在「最近項目」排序仍正確、且一眼分得出哪些是測試期間產生的。
-- `Date.now()` 必須保留：debounce / throttle 靠差值，凍住即永不觸發。
+- `Date.now()` 必須保留：debounce / throttle 靠差值，凍住即永不觸發。代價是寫入與讀取可能不同時鐘，須盤點（SKILL §8.2〈盤點寫入時鐘與讀取時鐘〉）。
 - `--import` 用絕對 file URL；worker_threads 會繼承。
 - 瀏覽器端只在需要時以 `context.addInitScript` 掛同一段（限定 origin）；有以 `+new Date()` 算動畫經過時間的圖表頁不掛（會停在第 0 幀）。否決 Playwright `clock.setFixedTime`（管不到後端，且連 `Date.now()` 一起凍）。
 - 瀏覽類測試檔在 `before` 重置一次資料庫作守門，否則日常以真時鐘重建的資料庫會讓整檔假紅。
