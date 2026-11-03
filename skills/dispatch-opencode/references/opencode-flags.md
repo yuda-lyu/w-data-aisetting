@@ -10,6 +10,8 @@
 
 `opencode auth list`、`opencode agent list` 與第三方供應商之實測沿用 2026-09-08 之結果（見各節日期）。
 
+2026-11-03 增補（OpenCode Go 與 Console 改名兩節）之來源：已發布的 `w-dispatch-ai` **1.0.72** 之 `src/providers.mjs`、`src/dispatchOpencode.mjs`、`src/opencodeGoUsage.mjs` 檔頭與條目註解（其中〔本機實測〕為套件於 2026-11-03 以 opencode 1.19.5 對官方 Console 文件與已訂閱 Go 之金鑰所做；本檔**未重跑**）。
+
 ## 非互動語法
 
 ```text
@@ -55,7 +57,7 @@ variant：low、high、max
 
 各模型的檔位名稱並不一致（有的只到 `high`、有的跳過 `medium`、有的到 `xhigh` 為止、有的沒有檔位），換模型時以 `--verbose` 實查，不要套用別支的檔位。型錄上新出現、尚未收為套件條目的，用之前先照下節查核並實跑。
 
-**組遞補鏈或評比名單前，先以 `wda.filterOpencodeFree(providers)` 對一次**（w-dispatch-ai 1.0.60 起）：它以 `opencode models` 之輸出篩出目錄中確實仍供應之免費條目，回 `available`／`removed`（目錄有、CLI 型錄已無）／`unchecked`／`uncatalogued`（CLI 有、目錄未收）；查詢失敗（`opencode` 不存在、非零離開、逾時、空輸出）回 `ok: false` 與 `errorType`，各清單為 `null`——**不可把 `null` 當成「全部下架」**。`refresh: true` 會加 `--refresh` 重抓型錄（`opencode models` 有本機快取，剛下架者可能仍列一次）。型錄有列仍不等於可用（見下節 nvidia 之例），關鍵派工仍以實跑為準。
+**組遞補鏈或評比名單前，先以 `wda.filterOpencodeFree(providers)` 對一次**（w-dispatch-ai 1.0.60 起）：它以 `opencode models` 之輸出篩出目錄中確實仍供應之免費條目，回 `available`／`removed`（目錄有、CLI 型錄已無）／`unchecked`／`uncatalogued`（CLI 有、目錄未收）；查詢失敗（`opencode` 不存在、非零離開、逾時、空輸出）回 `ok: false` 與 `errorType`，各清單為 `null`——**不可把 `null` 當成「全部下架」**。`refresh: true` 會加 `--refresh` 重抓型錄（`opencode models` 有本機快取，剛下架者可能仍列一次）。型錄有列仍不等於可用（見下節 nvidia 之例），關鍵派工仍以實跑為準。**它只判 `model` 以 `opencode/` 開頭的條目**（讀 1.0.72 原始碼所得，未實跑）：`ocgo:` 的 `opencode-go/…` 前綴不符，含 `free` 字樣的 `beam-free`、`iceman-contributor-free` 兩條會列入 `unchecked`（不判下架），其餘 Go 條目不含 `free` 字樣、不被處理。
 
 ### 已確認不可用之項目
 
@@ -71,7 +73,7 @@ variant：low、high、max
 | `nvidia/deepseek-ai/deepseek-v4-flash-0731`、`…/deepseek-v4-pro-0813` | 2026-09-08：403 `Authorization failed` |
 | `nvidia/poolside/laguna-xs-2.1` | 2026-09-08：403 `Authorization failed` |
 | `cline/deepseek/deepseek-v4-flash` | 型錄為 `reasoning: false`、`variants: {}`，無推理變體 |
-| **所有免費模型之 REST 路徑** | **2026-09-17 起一律 403 `FreeTierError`**（`OpenCode's free tier can only be used from within OpenCode`）——維護者於 issue #49580 明示這是刻意的反濫用政策，付費模型不受限。**屬政策非故障，再等再試也不會通**，只能走 `oc:` CLI 版。`w-dispatch-ai` 1.0.34 因此把大量 `zen:` REST 條目移除；唯一曾通的 `zen:space-bunny-free` 也於 2026-10-13 因例外收回而移除。`/systemone` 端點的決策模型不受此限（2026-09-22 實測帶金鑰或匿名皆 200） |
+| **所有免費模型之 REST 路徑** | **2026-09-17 起一律 403 `FreeTierError`**（`OpenCode's free tier can only be used from within OpenCode`）——維護者於 issue #49580 明示這是刻意的反濫用政策，付費模型不受限。**屬政策非故障，再等再試也不會通**，只能走 `oc:` CLI 版。2026-11-03：OpenCode Zen 已改稱 **OpenCode Console**，官方 Console 文件（`api/inference`、`harnesses` 頁）現已載明同一政策（免費對話模型離開 OpenCode 一律 403，即使帶金鑰）；但同日實測 REST 直呼免費對話模型是**先遇 429 `FreeUsageLimitError`**（免費額度用盡，CLI 與 REST 共用額度），兩者並存時的先後次序未驗證，429 的處置見 SKILL.md〈Console（原 Zen）免費層閘門〉。`w-dispatch-ai` 1.0.34 因此把大量 `zen:` REST 條目移除；唯一曾通的 `zen:space-bunny-free` 也於 2026-10-13 因例外收回而移除。`/systemone` 端點的決策模型不受此限（2026-09-22 實測帶金鑰或匿名皆 200） |
 | `opencode/union-alpha`、`opencode/deepseek-v4-flash-free` | 1.0.34 起已自 `providers` 表移除（union-alpha 曾於 1.0.26 收錄；deepseek-v4-flash-free 則 2026-08-21 即實測 `UnknownError`） |
 
 照抄已移除的條目 id 會在 `resolveProviders` 的 `pick` 落入 `missing`。**nvidia 那四項在同一天的 `opencode models nvidia --refresh` 中照樣列得出來**——型錄查得到不等於供應商還在服務；muse-spark 則是型錄先拿掉。兩種方向都有，所以查型錄之外一定要實跑。
@@ -87,11 +89,45 @@ variant：low、high、max
 | `oc:agnes-ai/agnes-3.0-flash` | `agnes-ai/agnes-3.0-flash` | `agnes-ai` | `AGNES_KEYS` | `https://apihub.agnes-ai.com/v1` | `@ai-sdk/openai-compatible` |
 | `oc:poolside/poolside/laguna-s-2.1` | `poolside/poolside/laguna-s-2.1` | `poolside` | `POOLSIDE_KEYS` | `https://inference.poolside.ai/v1` | `@ai-sdk/openai-compatible` |
 
-走 OpenCode 自家供應商的另外八條（1.0.60 起：`big-pickle`、`mimo-v2.6-flash-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`flint-40b-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`）**不需要 provider 定義也不帶金鑰**，`config` 內只有權限鎖，且一律 `useStoredAuth: false` 走匿名免費存取。**改匿名的理由是帶金鑰反而受該金鑰所屬工作區之模型開關影響**（實測回 `Model access is disabled` 且耗 76s），結果會隨執行機器而異。全表之 `kind: 'opencode'` 條目共 10 條（1.0.60 起），逐條說明見 SKILL.md 之「條目表」。
+走 OpenCode 自家供應商的另外八條（1.0.60 起：`big-pickle`、`mimo-v2.6-flash-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`flint-40b-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`）**不需要 provider 定義也不帶金鑰**，`config` 內只有權限鎖，且一律 `useStoredAuth: false` 走匿名免費存取。**改匿名的理由是帶金鑰反而受該金鑰所屬工作區之模型開關影響**（實測回 `Model access is disabled` 且耗 76s），結果會隨執行機器而異。全表之 `kind: 'opencode'` 條目共 18 條（`oc:` 10 條，自 1.0.60 起不變；1.0.72 起另有 `ocgo:` 8 條，**與上述八條相反，須金鑰、不匿名**，見下節），逐條說明見 SKILL.md 之「條目表」與「OpenCode Go」。
 
 上表之 `nvidia/poolside/laguna-xs-2.1`（403）是 **NVIDIA 轉售的另一個 laguna 項目**，與此處 Poolside 官方 REST／CLI 路徑無關，別混為一談。同一個模型經不同路徑屬不同供應商，額度池與故障域各自獨立。
 
 該表另有同名模型的 REST 條目（`agnes:agnes-3.0-flash`、`poolside:laguna-s-2.1`，kind 為 `api-openai-compat`），走 `dispatchApiOpenaiCompat` 而非本轉接器：免 CLI、快，但**無工具能力**，只適合純文字生成。
+
+### OpenCode Go（`opencode-go` 供應商）：CLI 型錄與錯誤字樣
+
+使用判準（provider 分流、`OPENCODE_GO_KEYS`、隱私前提、實測狀態）在 SKILL.md〈OpenCode Go〉，本節只放查型錄與診斷用的欄位與字樣（2026-11-03，opencode 1.19.5）。
+
+**型錄要帶金鑰才查得到**：`dispatchOpencode` 給 `provider: 'opencode-go'` ＋ `key` 時，以 `provider` 為鍵注入 `OPENCODE_AUTH_CONTENT={"opencode-go":{"type":"api","key":…}}`，不必 `config`、不必改轉接器（`model` 前綴須與 `provider` 同名）。查型錄同理需注入同形的 `OPENCODE_AUTH_CONTENT`，之後 `opencode models opencode-go --verbose`（當日 30 個）；匿名可查的公開型錄是 `GET …/inference/go/v1/models`（28 個），models.dev 的 `opencode-go` 則列 37 個（其中 7 個標 deprecated）——三者數字不同，**判「能不能用」仍以實際要用的那把金鑰所注入的 CLI 型錄加實跑為準**。
+
+8 條 `ocgo:opencode-go/…` 的型錄欄位（〔CLI型錄〕＋官方 Go 頁；「月額」為 Go 方案值，Go Plus／Go Teams 另計；單價見條目註解）：
+
+| 模型 | 脈絡窗／最大輸出 | 輸入 | 檔位 | Go 方案月額 |
+|---|---|---|---|---|
+| `beam-free` | 1,048,576／131,072 | 僅文字 | low／medium／high／xhigh／max | 官方標 Free（限時）、Unlimited |
+| `deepseek-v4.1-flash` | 1,000,000／384,000 | 文字與圖片 | low／high／max | $100 |
+| `minimax-m3.1-flash` | 1,000,000／512,000 | 文字與圖片 | low／medium／high／xhigh／max | $20（最低） |
+| `qwen3.8-flash` | 1,000,000／131,072 | 文字與圖片 | low／medium／**xhigh（無 high）** | $30 |
+| `glm-5.3-flash` | 1,000,000／131,072 | 文字與圖片 | low／high／max | $60 |
+| `mimo-v2.6-flash` | 1,048,576／131,072 | 文字與圖片 | 無檔位 | $60 |
+| `iceman-contributor-free` | 262,144／131,072 | 僅文字 | 無檔位 | 官方標 Free（限時）、Unlimited |
+| `muse-spark-1.3-contributor` | 1,048,576／131,072 | 文字與圖片 | minimal／low／medium／high／xhigh | $60 |
+
+型錄脈絡窗不等於實際可用：`iceman-contributor-free` 伺服器上限 262,139 且 opencode 預設預留 32,000 給 completion（本機實測約 18.9 萬 token 答對、輸入約 23.6 萬被拒）；`beam-free` 本機只測到約 84.5 萬 token；付費條目的實際上限未測。
+
+**錯誤字樣對照**（〔本機實測〕＝套件當日於已訂閱 Go 的金鑰實跑；〔提出端〕＝issue 提出端自述，本機工作區隱私開關已開、未重現）：
+
+| 字樣 | 成因 | 處置 |
+|---|---|---|
+| `Upstream request failed: An active OpenCode Go subscription is required to use Go models.` | 〔本機實測〕金鑰所屬工作區沒有 Go 訂閱（用量端點對同一把回 403 `EntitlementError`）；opencode 內部重試後 **77.2s** 才 exit 1，`errorType: 'exec'` | 換已訂閱的金鑰；未訂閱的金鑰不要放進 `OPENCODE_GO_KEYS`，可先以 `opencodeGoUsage` 的 `noGoSubscription` 篩 |
+| `ProviderModelNotFoundError: Model not found: opencode-go/<id>.` | 〔本機實測〕id 不在 Go 型錄（寫錯或已下架），約 **1.7s** 即 exit 1 | 以注入金鑰後的 `opencode models opencode-go` 核 id |
+| `Free usage limit reached…subscribe to OpenCode Go to keep going` | 〔本機實測〕`opencode/*` **免費池**用盡，不是 Go 額度；`run` 不結束，以逾時（`TIMEOUT`）回報；同一分鐘內 `opencode-go/` 的模型照常 | 免費條目整批換家，或改走 `ocgo:` |
+| `Upstream request failed: Model access is disabled` | 〔提出端〕兩種成因：①按量工作區沒開該模型；②付費或 Go 專屬 id 誤用 `opencode/` 前綴（應為 `opencode-go/`） | 先看前綴，再看工作區模型開關 |
+| `This Go model requires Global regions. Select Global in your workspace's Privacy settings to use it.` | 〔提出端〕DeepSeek 須工作區 Settings›Privacy 的 Regions 選 Global | 由 owner／admin 改設定 |
+| `This Go model trains on request data. Allow paid endpoints that train on request data in your workspace's Privacy settings to use it.` | 〔提出端〕Muse／Iceman Contributor 須開「Allow paid endpoints that train on request data」；開了即表示該工作區接受以提示詞訓練 | 由 owner／admin 決定；敏感內容勿走 |
+| `Model is unavailable` | 〔提出端〕以 `OPENCODE_CONFIG_CONTENT` 自行補定義 Go 專屬 id 後的回應（`ocgo:` 條目不必補定義） | 移除自補的定義 |
+| Go 額度到頂 | **未撞過**，字樣與 `run` 是否結束皆未知 | 以 `timeoutMs` 封頂，勿預寫簽章 |
 
 ### `config` 內的權限設定
 
