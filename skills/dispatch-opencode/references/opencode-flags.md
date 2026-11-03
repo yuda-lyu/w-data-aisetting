@@ -127,7 +127,7 @@ variant：low、high、max
 | `This Go model requires Global regions. Select Global in your workspace's Privacy settings to use it.` | 〔提出端〕DeepSeek 須工作區 Settings›Privacy 的 Regions 選 Global | 由 owner／admin 改設定 |
 | `This Go model trains on request data. Allow paid endpoints that train on request data in your workspace's Privacy settings to use it.` | 〔提出端〕Muse／Iceman Contributor 須開「Allow paid endpoints that train on request data」；開了即表示該工作區接受以提示詞訓練 | 由 owner／admin 決定；敏感內容勿走 |
 | `Model is unavailable` | 〔提出端〕以 `OPENCODE_CONFIG_CONTENT` 自行補定義 Go 專屬 id 後的回應（`ocgo:` 條目不必補定義） | 移除自補的定義 |
-| Go 額度到頂 | **未撞過**，字樣與 `run` 是否結束皆未知 | 以 `timeoutMs` 封頂，勿預寫簽章 |
+| Go 額度到頂 | **未撞過**，字樣與 `run` 是否結束皆未知 | 以 `timeoutMs` 封頂，勿預寫簽章；遞補層 1.0.73 起預設以 `quotaGate` 於用量 ≥95% 時略過該把金鑰（到頂前即停，見 SKILL.md〈逾時與等待〉） |
 
 ### `config` 內的權限設定
 

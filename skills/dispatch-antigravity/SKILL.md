@@ -5,7 +5,7 @@ description: 當任務需要委派給 Antigravity，或需要使用其提供的 
 
 # dispatch-antigravity
 
-使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.53；固定旗標與自用鍵自 1.0.17 起未變動，**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-10-18 以 1.4.2 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
+使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.73；固定旗標與自用鍵自 1.0.17 起未變動（1.0.73 另加自用鍵 `spawnGate`：每次 spawn 前有機器級守門，agy 預設不限，見〈逾時分層〉選項表），**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-10-18 以 1.4.2 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
 
 需要變更模型 slug、effort、print 模式旗標、逾時或工作區可視範圍時，讀取 [references/agy-flags.md](references/agy-flags.md)。
 
@@ -229,7 +229,8 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
 | `cooldownMs` | `0`（關閉） | 只對**有明給 `id`** 的條目記冷卻；內建觸發只有 HTTP 429 與逾時，而 **429 僅 REST 類偵測得到**；CLI 類的限流埋在輸出文字裡，內建規則抓不到 |
 | `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /quota/i.test(r.stderr \|\| '')`。agy 額度用盡時的實際字樣與離開碼套件未驗證，先觀察到再寫 |
-| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
+| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
+| `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**antigravity 預設不限**（只有 opencode 預設啟用，其 `opencode.exe` 單次短呼叫實測約占 1.1 核心）。**未驗證處**：`agy.exe` 在套件實測機上沒有行程，**其 CPU 占用從未量測**——預設不限是「未證實會占核故不擋」，不是「已證實不占核」，有實測後預設可能改為限制。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `agy.exe`〔非 Windows 為 `agy`〕之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
 
 遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰。
 
@@ -334,9 +335,10 @@ await wda.dispatchAntigravity(prompt, {
 | `cwd` | 目前目錄 | 子程序工作目錄。**它本身不會讓 agy 看得到檔案**——agy 以自身 scratch 目錄為工作區，可視範圍只由 `--add-dir` 決定；未給 `addDirs` 時轉接器自動把有效 `cwd` 加進去，就是為了補這個落差 |
 | `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`；以淺層副本轉傳，物件不可讀（拋錯之 getter 等）時於啟動前回 `errorType: 'params'` |
 | `validate` | 省略 | 由套件自身判定（`src/runExecCli.mjs`；1.0.49 起不交 `execCli`）：規則字串或自訂函數，函數可回傳 Promise，等待時間算在同一次嘗試的 `timeoutMs` 內；拋錯、reject、逾時皆為 `OUTPUT_VALIDATION_FAILED`（`errorType: 'validation'`） |
+| `spawnGate` | 未給＝不限 | **1.0.73 新增**，自用鍵、不轉交 `execCli`。每次 spawn 前守門（驗證不過而重試者每次重守）；預設與依據見〈逾時分層〉選項表 |
 | `maxRetries`、`retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
 
-回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`；必須檢查 `ok`。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`；`durationMs` 含驗證時間。轉接器會捕捉提示詞過長與 spawn 失敗，維持不 reject 的契約。
+回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`（守門實際等過時另帶 `gateWaitedMs`，逾時放行者再帶 `gateFailOpen: true`，`durationMs` 不含守門等待）；必須檢查 `ok`。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`；`durationMs` 含驗證時間。轉接器會捕捉提示詞過長與 spawn 失敗，維持不 reject 的契約。
 
 請使用 UMD 預設匯出：`import wda from 'w-dispatch-ai'`。
 
@@ -352,8 +354,9 @@ await wda.dispatchAntigravity(prompt, {
 | 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
 | 實際可用且已被實測過的模型條目（含權限鎖、`addDirs`、實測耗時） | `src/providers.mjs` |
 | `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。agy 被權限擋下（stdout 空）只靠 `nonempty` 擋得住，這個字更不能打錯 |
-| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`，含命令列過長、權限不足、非有效執行檔；前置檢查擋下的提示詞過長則為 `params`） |
-| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000；其註解已更正：agy 1.4.0 之 `print-timeout` 預設為 `0s`，此值不再以「對齊 5m0s」為依據）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭 |
+| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`，含命令列過長、權限不足、非有效執行檔；前置檢查擋下的提示詞過長則為 `params`；1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時亦回 `aborted`） |
+| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000；其註解已更正：agy 1.4.0 之 `print-timeout` 預設為 `0s`，此值不再以「對齊 5m0s」為依據）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
+| spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
 | 多供應商遞補、金鑰輪替、條目 id 命名規則 | `src/dispatchAiFallback.mjs` 檔頭 |
 
@@ -397,6 +400,13 @@ agy update       # 版本低於 1.1.25 時升級
 ```
 
 無人值守／無介面執行前，須先以互動方式完成 Google 認證。
+
+2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式；**未實際呼叫模型、未重跑 agy**）：
+
+| 項目 | 結果 |
+|---|---|
+| `dispatchAntigravity()` 固定旗標與自用鍵 | 旗標順序不變（`--dangerously-skip-permissions`、`--print-timeout`、`--model`、`--effort`、`--add-dir`、`extraArgs`、`--print <prompt>`）；**新增自用鍵 `spawnGate`**（與 `spawnGateKind` 同為 `runExecCli` 自用、不轉交 `execCli`），**呼叫方式不變** |
+| `spawnGate` 預設 | `KIND_DEFAULT_LIMITED` 只有 `opencode`；antigravity 未給即守門為 no-op（不查 `tasklist`／`ps`、不取樣）。`agy.exe` 之 CPU 占用套件亦未量測，見〈逾時分層〉選項表 |
 
 2026-10-18 查核：技能根實裝 `w-dispatch-ai` **1.0.53**，本機 agy 為 **1.4.2**。
 

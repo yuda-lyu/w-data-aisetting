@@ -5,7 +5,7 @@ description: 當任務需要委派給 Codex，或需要把 Codex 納入多代理
 
 # dispatch-codex
 
-使用 `w-dispatch-ai` 的 `dispatchCodex()` 執行自動化 Codex 任務（本技能對照 1.0.53；`dispatchCodex()` 之固定參數與自用鍵自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。轉接器會呼叫 `codex exec`、透過 stdin 傳入提示詞、設定沙箱政策、略過 Git 儲存庫限制、管理逾時與程序樹清理，並以結果物件回報失敗。
+使用 `w-dispatch-ai` 的 `dispatchCodex()` 執行自動化 Codex 任務（本技能對照 1.0.73；`dispatchCodex()` 之固定參數與自用鍵自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，codex 預設不限，見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。轉接器會呼叫 `codex exec`、透過 stdin 傳入提示詞、設定沙箱政策、略過 Git 儲存庫限制、管理逾時與程序樹清理，並以結果物件回報失敗。
 
 需要變更模型／設定旗標、沙箱行為或非互動輸出時，讀取 [references/codex-flags.md](references/codex-flags.md)。
 
@@ -366,7 +366,8 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
 | `cooldownMs` | `0`（關閉） | 只對**有明給 `id`** 的條目記冷卻；內建觸發只有 HTTP 429 與逾時，而 **429 僅 REST 類偵測得到**；CLI 類的限流埋在輸出文字裡，內建規則抓不到 |
 | `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /<觀察到的限流字樣>/i.test(r.stderr \|\| '')`；字樣由觀察到的呼叫端維護，套件不內建 |
-| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
+| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
+| `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**codex 預設不限**（只有 opencode 預設啟用）。依據：套件在 8 核心 Windows 機觀察現役 `codex.exe`（1 個）數十秒窗內為 0.0% 單核——等候模型回應時幾乎不占 CPU；若比照 opencode 以 `核心數−1` 計數，同時派多個 `codex exec` 反而讓新派工白等。**未驗證處**：這是對現役行程之觀察，**未以真實 `codex exec` 派工量測**（會耗訂閱額度）。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `codex.exe` 之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
 
 遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰。
 
@@ -409,9 +410,10 @@ await wda.dispatchCodex(prompt, {
 | `cwd` | 目前目錄 | 傳給子程序的工作目錄 |
 | `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`；以淺層副本轉傳，物件不可讀（拋錯之 getter 等）時於啟動前回 `errorType: 'params'` |
 | `validate` | 省略 | 由套件自身判定（`src/runExecCli.mjs`；1.0.49 起不交 `execCli`）：規則字串或自訂函數，函數可回傳 Promise，等待時間算在同一次嘗試的 `timeoutMs` 內；拋錯、reject、逾時皆為 `OUTPUT_VALIDATION_FAILED`（`errorType: 'validation'`） |
+| `spawnGate` | 未給＝不限 | **1.0.73 新增**，自用鍵、不轉交 `execCli`。每次 spawn 前守門（驗證不過而重試者每次重守）；預設與依據見〈逾時分層〉選項表 |
 | `maxRetries`、`retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
 
-提示詞透過 stdin 傳入。回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`；應檢查 `ok`，不要假設失敗會造成 reject。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`（1.0.48 起回結果物件，此前部分情形會 reject）；`durationMs` 含驗證時間。
+提示詞透過 stdin 傳入。回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`（守門實際等過時另帶 `gateWaitedMs`，逾時放行者再帶 `gateFailOpen: true`，`durationMs` 不含守門等待）；應檢查 `ok`，不要假設失敗會造成 reject。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`（1.0.48 起回結果物件，此前部分情形會 reject）；`durationMs` 含驗證時間。
 
 請使用套件的 UMD 預設匯出：`import wda from 'w-dispatch-ai'`。
 
@@ -427,8 +429,9 @@ await wda.dispatchCodex(prompt, {
 | 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
 | 實際可用且已被實測過的模型條目（含沙箱檔位、實測耗時） | `src/providers.mjs` |
 | `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。validate 字串要逐字核對，或直接傳自訂函數 |
-| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（`params`／`timeout`／`spawn`／`validation`／`exec`／`http`／`fetch`…；子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`） |
-| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭 |
+| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（`params`／`timeout`／`spawn`／`validation`／`exec`／`http`／`fetch`…；子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`；1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時亦回 `aborted`） |
+| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
+| spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
 | 多供應商遞補、金鑰輪替、條目 id 命名規則 | `src/dispatchAiFallback.mjs` 檔頭 |
 
@@ -476,6 +479,13 @@ codex --version
 codex exec --help
 ls ~/.codex/.sandbox/setup_marker.json   # Windows：存在才代表 elevated 沙箱設定已完成
 ```
+
+2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式；**未實際呼叫模型**，守門之 CPU 實測為套件同日之紀錄，本技能未重驗）：
+
+| 項目 | 結果 |
+|---|---|
+| `dispatchCodex()` 固定參數與自用鍵 | 固定參數不變（`exec`、`--sandbox`、`--skip-git-repo-check`、`-m`）；**新增自用鍵 `spawnGate`**（與 `spawnGateKind` 同為 `runExecCli` 自用、不轉交 `execCli`），**呼叫方式不變** |
+| `spawnGate` 預設 | `KIND_DEFAULT_LIMITED` 只有 `opencode`；codex 未給即守門為 no-op（不查 `tasklist`／`ps`、不取樣）。依據為現役 `codex.exe` 之觀察，**未以真實 `codex exec` 派工量測** |
 
 2026-10-28 追加：`w-dispatch-ai` **1.0.59** 新增條目 `codex:gpt-6.1-terra`（`sandbox: 'read-only'`、強度 `high`，排在 luna 之後、sol 之前；欄位比照 sol）。`dispatchCodex()` 未變。唯讀沙箱金絲雀未對 terra 重測（沿用 sol 條目之實測）。
 

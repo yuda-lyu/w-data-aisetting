@@ -7,7 +7,7 @@ description: 當任務需要委派給 OpenCode，或需要使用 OpenCode 支援
 
 使用 `w-dispatch-ai` 的 `dispatchOpencode()` 執行自動化 OpenCode 任務。轉接器會呼叫 `opencode run`、選擇代理與模型、透過 stdin 傳入提示詞、視需要注入僅限當次程序的供應商設定與憑證，並以結果物件回報失敗。
 
-**本技能對照的是 1.0.72**（opencode 條目表〔含 `ocgo:` Go 條目〕、`filterOpencodeFree`、`opencodeGoUsage` 與 Console 端點路徑／診斷對照 1.0.72；其餘段落之實測多為 1.0.54 時所做。`dispatchOpencode()` 之固定參數自 1.0.17 起未變動；1.0.34 新增 `useStoredAuth` 選項，見「免費模型走匿名」；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。但**條目會隨版本增刪改名，改動頻率遠高於轉接器本身**：1.0.40 到 1.0.54 之間，opencode 免費條目新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free` 與三條 `nemotron-*`，`space-bunny-free` 恢復真名改為 `minimax-m3.1-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`（**1.3 曾是本技能的必要預設模型**）；1.0.60 再移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`、新增 `flint-40b-free`，另有 `ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` 四條在 1.0.42 之後加入、幾週內又因自 CLI 型錄消失而移除。更早還有 1.0.25 把 `oc:agnes-ai/agnes-2.5-flash` 改名為 `oc:agnes-ai/agnes-3.0-flash`、1.0.34 把 opencode 自家條目全改為匿名取用；1.0.72 新增 8 條 `ocgo:` Go 條目（月費訂閱，**須金鑰、不匿名**）與 `opencodeGoUsage`，OpenCode Zen 並已改稱 Console（見「OpenCode Go」「Console 免費層閘門」）。**寫死 id 前先對安裝版核一次**，不要照抄本技能或別處的字面值；`pick` 打錯或用到已移除的 id 會靜默少一條（接法見「展開條目」）。實際安裝版一律讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
+**本技能對照的是 1.0.73**（opencode 條目表〔含 `ocgo:` Go 條目〕、`filterOpencodeFree`、`opencodeGoUsage` 與 Console 端點路徑／診斷對照 1.0.72；1.0.73 新增 spawn 前機器級守門 `spawnGate` 與 Go 用量略過 `quotaGate`，見〈逾時與等待〉選項表；其餘段落之實測多為 1.0.54 時所做。`dispatchOpencode()` 之固定參數自 1.0.17 起未變動；1.0.34 新增 `useStoredAuth` 選項，見「免費模型走匿名」；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。但**條目會隨版本增刪改名，改動頻率遠高於轉接器本身**：1.0.40 到 1.0.54 之間，opencode 免費條目新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free` 與三條 `nemotron-*`，`space-bunny-free` 恢復真名改為 `minimax-m3.1-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`（**1.3 曾是本技能的必要預設模型**）；1.0.60 再移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`、新增 `flint-40b-free`，另有 `ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` 四條在 1.0.42 之後加入、幾週內又因自 CLI 型錄消失而移除。更早還有 1.0.25 把 `oc:agnes-ai/agnes-2.5-flash` 改名為 `oc:agnes-ai/agnes-3.0-flash`、1.0.34 把 opencode 自家條目全改為匿名取用；1.0.72 新增 8 條 `ocgo:` Go 條目（月費訂閱，**須金鑰、不匿名**）與 `opencodeGoUsage`，OpenCode Zen 並已改稱 Console（見「OpenCode Go」「Console 免費層閘門」）。**寫死 id 前先對安裝版核一次**，不要照抄本技能或別處的字面值；`pick` 打錯或用到已移除的 id 會靜默少一條（接法見「展開條目」）。實際安裝版一律讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
 
 需要變更模型、供應商、variant、認證或輸出旗標時，讀取 [references/opencode-flags.md](references/opencode-flags.md)。
 
@@ -202,7 +202,7 @@ await wda.dispatchOpencode(prompt, {
 - **隱私前提**（工作區 Settings›Privacy，僅 owner／admin 可改）：Go 繼承工作區設定，預設擋「以請求資料訓練的付費端點」，允許地區為歐洲與美國。DeepSeek 須 Regions 選 Global，Muse／Iceman Contributor 須開「Allow paid endpoints that train on request data」，否則各回一句要求改設定的錯誤（字樣見 references/opencode-flags.md，**〔提出端〕自述，本機工作區已開、未重現**）。
 - **免費池與 Go 互不牽動**：Go 訂閱不改變 `opencode/*` 的免費上限，但免費池用盡（`Free usage limit reached…subscribe to OpenCode Go`，`run` 不結束）時，同一模型改走 `opencode-go/` 仍可用——同一分鐘內匿名 `oc:opencode/beam-free` 逾時、`ocgo:opencode-go/beam-free` 6.1s 成功。
 - **為何只收 CLI 類、不收 REST 類 Go 條目**：Go 基底必帶穩定的 `x-opencode-session` 標頭（缺則 400 `MissingSessionID`），官方載明 Go 給 OpenCode 與同類 coding agent 使用；本套件 REST 轉接器是一般 HTTP 呼叫，是否被允許官方未載，保守不收。opencode CLI 本身是官方支援的客戶端，走 CLI 才是明確認可的路。
-- **額度到頂的行為未知**：Go 額度到頂時 `opencode run` 的行為與字樣**沒有人撞過、未查明**（免費池到頂是 `run` 不結束、只到逾時；Go 是否同樣不返回未知），所以遞補層不接用量，呼叫端排程時一律以 `timeoutMs` 封頂，不要假設到頂會快速失敗。
+- **額度到頂的行為未知**：Go 額度到頂時 `opencode run` 的行為與字樣**沒有人撞過、未查明**（免費池到頂是 `run` 不結束、只到逾時；Go 是否同樣不返回未知）。1.0.73 起遞補層預設以 `quotaGate` 於用量 ≥95% 時略過該把金鑰（見〈逾時與等待〉），那是「到頂前即停」，不倚賴到頂時的行為；呼叫端排程時仍一律以 `timeoutMs` 封頂，不要假設到頂會快速失敗。
 - 其餘 22 個 Go 模型未收；要用時以 `resolveCatalogue` 的 `extraProviders` 自帶條目，形狀比照上列（`kind: 'opencode'`、`provider: 'opencode-go'`、`model: 'opencode-go/<id>'`、`envVar: 'OPENCODE_GO_KEYS'`、`config: { permission: { edit: 'deny', bash: 'ask' } }`），檔位先以 `opencode models opencode-go --verbose` 實查。
 
 ### 免費模型走匿名：`useStoredAuth: false`
@@ -529,13 +529,17 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
 | `cooldownMs` | `0`（關閉） | 內建觸發只有 HTTP 429 與逾時，**429 僅 REST 類（`zen:`／`agnes:`／`poolside:`）偵測得到**；`oc:` 這類 CLI 條目的限流埋在 stderr 文字裡，內建規則抓不到。觸發後該條目**只被移到鏈尾不被移除**（前面全敗時仍會被試到，任一次成功立即解除），啟用期間「providers 順序即優先序」會被暫時重排。套件記載之實測：一次 107 秒請求中 72 秒耗在重複踩同一家，開冷卻後降至 15 秒。**只對有明給 `id` 的條目生效** |
 | `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /FreeUsageLimitError/i.test(r.stderr \|\| '')`。注意 opencode 1.18.32 遇 Zen 免費層 429 時 `run` **不會結束**、stderr 只有 session 標頭，直到逾時才以 `TIMEOUT` 回報（內建逾時觸發已涵蓋）；要讓字樣出現在 stderr 須於 `extraArgs` 加 `--print-logs --log-level ERROR`（套件 2026-09-23 實測；2026-11-03 於 opencode 1.19.5 再證：免費額度用盡時 `run` 仍不結束，只到逾時）。**`FreeUsageLimitError`（`Free usage limit reached…subscribe to OpenCode Go`）代表整個免費池用盡**（CLI 與 REST 共用額度），冷卻只是把該條移到鏈尾，**不會恢復額度**，也不必逐個免費條目冷卻；`opencode-go/` 前綴（`ocgo:` 條目）不受影響。**Go 額度到頂時的字樣與 `run` 行為未知**（沒人撞過），別為它預寫簽章 |
-| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
+| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
+| `spawnGate` | 未給＝預設啟用（1.0.73 起） | CLI 類（`oc:`／`ocgo:` 條目亦是）**每次 spawn 前**的機器級守門：機器上 `opencode.exe` 數 ≥ `max(1, 核心數−1)`、RAM 已用 >85%、全機 CPU >90% 任一成立即等，每 10 秒再查，累計等逾 10 分鐘即放行；計數或取樣本身失敗亦放行（fail-open，守門不會成為新的失敗來源）。**預設只對 opencode 啟用**——依據是套件在 8 核心 Windows 機之實測：`opencode.exe` 單次短呼叫約占 1.1 核心，而 claude／codex 等候回應時幾乎不占 CPU，故另三家預設不限（見其技能；`agy` 未測）。只守 `exe` 為真的 `opencode`（假 CLI、包裝腳本不守，明給 `true` 或物件才守）。`false` 關閉；物件逐鍵覆寫 `maxCli`／`ramUsedMax`／`cpuMax`（各可 `false` 關該項）、`pollMs`、`gateWaitMaxMs`，非預期之值改用預設而不報錯；放在遞補層頂層為各條目共用，條目自帶者**整個取代**、不逐鍵合併。等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算。結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true`。成本（套件實測）：首次檢查或閒置逾 10 秒後約 +1.1 秒，之後約 +0.07 秒 |
+| `quotaGate` | 未給＝預設開（1.0.73 起） | 只作用於 `ocgo:` Go 條目且有金鑰者：選到某把金鑰前先以 `opencodeGoUsage` 查**該金鑰所屬工作區**之用量，任一視窗（5 小時／週／月）`percent ≥ 95`（`rollingMax`／`weeklyMax`／`monthlyMax` 可調、`false` 關該視窗）或端點明說 `rate-limited` 即**略過該把金鑰**、不派，視同沒額度（事件 `quota-skip`、`tried[].outcome: 'quota-skip'`）；組內每把皆略過時，整條鏈最後一筆失敗若屬此類，`error` 為 `QUOTA_EXHAUSTED: …`、`errorType: 'quota'`。結果快取 60 秒（`cacheMs`）、到期重查，用量降回門檻即恢復，**不盲信 `resetsAt` 冷卻到該時刻**。端點是實測所得、官方未載，所以**端點失敗、欄位缺少、`percent` 非數字、未知狀態字一律不擋**（另發 `quota-gate-error` 事件）；`false` 關閉。這是「到頂前即停」；撞限實況（`rate-limited` 字樣、到頂後 `run` 的行為）仍未實測 |
 
 遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `config` 不可序列化、`env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰——第三方兩條有多把金鑰時，依 `next-key`／`skip-group` 計數的數字會因此變小。
 
 **`budgetFor()` 有陷阱，不要照抄**：它**只累加條目自己的 `timeoutMs`**（未帶者以統一預設 300000 計），讀不到你寫在 opt／`defaults` 的那一個；而套件內建的 providers 條目**刻意一條都不帶 `timeoutMs`**（1.0.54 實查 24 條皆無），所以 `budgetFor(內建條目)` 恆為「條目數 × 300000」（24 條就是 120 分鐘）——比你的 4 小時還小，反而把它壓下去。**本技能教的「直接引用 `providers.mjs`」正好踩中這一點**：要用 `budgetFor()` 就得先把 `timeoutMs: 14_400_000` 逐條寫進每個條目（用 `resolveProviders` 的 `patch` 逐 id 覆寫，別自己 map 回傳值），否則直接寫 `K × 14_400_000`。
 
-**4 小時派工要留觀測點**：`dispatchAiFallback` 的 `onEvent` 會逐步回報 `'try'`／`'ok'`／`'next-key'`／`'skip-group'`／`'budget-out'`／`'aborted'`／`'cooled'`，以及一組試完仍無成交時的 `'group-exhausted'`（1.0.39 起，帶 `attempted`／`by`／`errorTypes`），失敗事件另帶 `errorType`、被拒回覆與 stderr。沒掛它的話，四小時內看不出是卡在哪一家、還是早就跳完整條鏈在空轉。detached 執行時把事件一併落檔，等待期間隨時可讀：`onEvent: (ev) => fs.appendFileSync(out('events.log'), JSON.stringify(ev) + '\n')`（事件皆為純欄位物件；回呼拋出例外或回傳被 reject 的 Promise 都不影響主流程，也不會被等待）。
+**4 小時派工要留觀測點**：`dispatchAiFallback` 的 `onEvent` 會逐步回報 `'try'`／`'ok'`／`'next-key'`／`'skip-group'`／`'budget-out'`／`'aborted'`（`spawnGate` 守門等待中被 `shouldStop` 中止亦同，此時 `tried` 末項 `outcome` 為 `'aborted'`）／`'cooled'`，以及一組試完仍無成交時的 `'group-exhausted'`（1.0.39 起，帶 `attempted`／`by`／`errorTypes`；`attempted` 不計 `quota-skip` 者），失敗事件另帶 `errorType`、被拒回覆與 stderr；1.0.73 起另有 `'quota-skip'`（`quotaGate` 因 Go 用量略過某把金鑰，帶 `windows`／`until`）與 `'quota-gate-error'`（用量查詢失敗、該把照派，同一把金鑰快取期間只發一次）。沒掛它的話，四小時內看不出是卡在哪一家、還是早就跳完整條鏈在空轉。detached 執行時把事件一併落檔，等待期間隨時可讀：`onEvent: (ev) => fs.appendFileSync(out('events.log'), JSON.stringify(ev) + '\n')`（事件皆為純欄位物件；回呼拋出例外或回傳被 reject 的 Promise 都不影響主流程，也不會被等待）。
+
+**opencode 派工會先等守門**：預設受 `spawnGate` 約束，同機同時有多個 opencode 派工（含他專案、他行程）時，後到者可能在 spawn 前先等，最久 10 分鐘才放行。detached 派工腳本之等待估算（觀測點、`STILL-RUNNING` 的最長總時長）要預留這段——它不計入 `timeoutMs`，所以 4 小時逾時不會變短，但牆鐘時間會變長。要看有沒有在等：看結果之 `gateWaitedMs`，或在 `spawnGate` 物件掛 `onTrace`（同步回調，事件 `check`／`wait`／`pass`／`fail-open`）一併落檔。要嚴格上限者由單一行程派工（跨行程之預約只是提示、不是鎖，兩行程同一毫秒內仍可能各放行）。
 
 **工作流層的覆寫順序**（細者覆蓋粗者）：`dispatchAiWkf` 的 `defaults` → 各工作流 `callOpt` → 階段／名額規格 → provider 條目。把 4 小時寫在 `defaults`、而某條目自帶較小的 `timeoutMs` 時，**條目會贏**。另外 1.0.49 起呼叫層的 `validate`（含寫在 `defaults` 者）會與工作流的 `parse`／`check` **取交集**，兩者皆過才算過——此前被靜默忽略，舊設定升版後可能開始擋下回覆而換家。
 
@@ -556,7 +560,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 - **判讀用 `available`（三視窗皆在且 `status` 皆為 `'ok'`），不要用 `!limited`**：`limited` 只在某視窗恰為 `'rate-limited'` 時為真（`limitedWindows` 列出是哪些），視窗缺漏或出現未知狀態字時 `available` 為 `false`、`unknownStatus` 列出它們——未知值不得當正常。
 - **`nextResetAt` 取被限視窗 `resetsAt` 的最晚者**（同時被限的多個視窗須全部重置才恢復；取最早者會在其餘視窗仍被限時誤判可用），被限視窗有任一個缺漏或無法解析時為 `null`；此為依狀態語意的推論，**本機沒撞過限，撞限後實際何時恢復未驗證**。`'rate-limited'` 這個狀態字本身也來自第三方記載，本機只見過 `'ok'`。
 - **永不 reject**：失敗以 `ok: false` 加 `errorType`（`params`／`auth`／`forbidden`／`ratelimit`／`http`／`parse`／`timeout`／`network`／`toolarge`／`other`，是額度查詢共用的詞彙，與轉接器的不同）回報；403 且本文為 `EntitlementError` 時另帶 `noGoSubscription: true`（金鑰有效但其工作區沒有 Go 訂閱，與一般 403 區分）。`key` 須為 6 字元以上、無空白的可見 ASCII，否則 `params` 失敗且不發請求；金鑰只放在 `Authorization` 標頭，不入結果、錯誤訊息與日誌，但**會送往 `baseURL`，勿指向不信任的主機**；`baseURL` 非 http(s) 網址時視為未給、改用預設官方網址。
-- **遞補層不接這個函數**（Go 到頂時 `run` 的行為未查明，見「OpenCode Go」）：要依用量排程由呼叫端自己查，例如派工前先查 `available`，並仍以 `timeoutMs` 封頂。
+- **遞補層 1.0.73 起預設以 `quotaGate` 接這個函數**（見〈逾時與等待〉選項表）：選到 `ocgo:` 條目之某把金鑰前先查用量，任一視窗 `percent ≥ 95` 即略過該把金鑰；判定只認「成功回應且 `percent` 為有效數字 ≥ 門檻」或「`status` 明確 `rate-limited`」，查詢失敗與未知形狀一律不擋。它是「到頂前即停」，Go 到頂時 `run` 的行為仍未查明（見「OpenCode Go」），所以單次派工、自訂排程仍由呼叫端自己查（例如派工前先查 `available`），並一律以 `timeoutMs` 封頂。
 
 ## 轉接器契約（w-dispatch-ai 1.0.54）
 
@@ -573,9 +577,10 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `timeoutMs` | `300000` | 逾時時終止程序樹 |
 | `cwd` | 目前目錄 | 傳給子程序的工作目錄；其絕對路徑同步注入 `PWD`（opencode 以繼承的 `PWD` 優先於真實 cwd 決定 session 目錄），呼叫端 `env` 內的 `PWD` 會被覆寫 |
 | `validate` | 省略 | 由套件自身判定（`src/runExecCli.mjs`；1.0.49 起不交 `execCli`）：規則字串或自訂函數，函數可回傳 Promise，等待時間算在同一次嘗試的 `timeoutMs` 內；拋錯、reject、逾時皆為 `OUTPUT_VALIDATION_FAILED`（`errorType: 'validation'`） |
+| `spawnGate` | 未給＝預設啟用 | **1.0.73 新增**，自用鍵、不轉交 `execCli`。每次 spawn 前守門（驗證不過而重試者每次重守；`maxRetries>0` 且未給 `validate` 之 `execCli` 自理重試不重守）；細節與預設之依據見〈逾時與等待〉選項表 |
 | `maxRetries`、`retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
 
-提示詞透過 stdin 傳入。結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`；必須檢查 `ok`。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`（1.0.48 起回結果物件，此前部分情形會 reject）；`durationMs` 含驗證時間。
+提示詞透過 stdin 傳入。結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`（守門實際等過時另帶 `gateWaitedMs`，逾時放行者再帶 `gateFailOpen: true`，`durationMs` 不含守門等待）；必須檢查 `ok`。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`（1.0.48 起回結果物件，此前部分情形會 reject）；`durationMs` 含驗證時間。
 
 請使用 UMD 預設匯出：`import wda from 'w-dispatch-ai'`。
 
@@ -591,13 +596,14 @@ Bash({ run_in_background: true, timeout: 7200000,
 | **實際可用、已實測過的模型與供應商條目**（含第三方 provider 的完整 `config`、金鑰環境變數、權限鎖、實測耗時與失敗碼） | `src/providers.mjs`——**本技能所有模型資訊的上游**，改模型前先讀它 |
 | 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
 | `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。validate 字串要逐字核對，或直接傳自訂函數 |
-| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽。CLI 類（本轉接器）用得到的只有 `params`／`timeout`／`spawn`／`validation`／`exec`（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`），**其餘失敗一律歸 `exec` 不再細分**（各家 CLI 字樣隨版本漂移，套件刻意不維護簽章表）；`http`／`fetch`／`tool-unsupported`／`invalid-response`／`incomplete` 只出現於 REST 類，`aborted`／`budget` 只出現於遞補層。要細分 CLI 失敗就自己用 `coolDetect` 式注入判斷 |
-| 額度查詢（**opencode 免費池無**）之函數、結構與詞彙 | `src/quota/`（三家訂閱制 CLI）；其 `errorType` 是另一套詞彙，與上列轉接器的不共用。Go 用量為 `src/opencodeGoUsage.mjs`（檔頭記端點來源、回應形狀、判讀語意與錯誤詞彙） |
+| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽。CLI 類（本轉接器）用得到的只有 `params`／`timeout`／`spawn`／`validation`／`exec`（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`），**其餘失敗一律歸 `exec` 不再細分**（各家 CLI 字樣隨版本漂移，套件刻意不維護簽章表）；`http`／`fetch`／`tool-unsupported`／`invalid-response`／`incomplete` 只出現於 REST 類，`budget` 只出現於遞補層；`aborted` 以遞補層為主，1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時 CLI 轉接器亦回此值（`error` 為 `ABORTED`、`attempts` 為 0），`quota`（`quotaGate` 略過之合成失敗結果，`error` 以 `QUOTA_COOLDOWN` 開頭、`failureKind` 為 `no-credit`）只出現於遞補層。要細分 CLI 失敗就自己用 `coolDetect` 式注入判斷 |
+| 額度查詢（**opencode 免費池無**）之函數、結構與詞彙 | `src/quota/`（三家訂閱制 CLI）；其 `errorType` 是另一套詞彙，與上列轉接器的不共用。Go 用量為 `src/opencodeGoUsage.mjs`（檔頭記端點來源、回應形狀、判讀語意與錯誤詞彙）；遞補層據以略過金鑰之 `quotaGate` 為 `src/goQuotaGate.mjs`（檔頭記判定、快取、不誤判到頂之規則） |
+| spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open、逾時歸屬 | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
 | OpenCode Go 之全貌（provider 分流、金鑰變數、隱私前提、錯誤字樣、為何不收 REST 類） | `src/providers.mjs` 檔頭【OpenCode Go】段與 `src/dispatchOpencode.mjs` 檔頭【OpenCode Go】段；各 `ocgo:` 條目註解逐項標〔本機實測〕／〔提出端〕／〔CLI型錄〕 |
 | Console 端點分流、診斷流程（429／400／403／500 各代表什麼） | `src/providers.mjs` 檔頭【OpenCode Console】段（含權威來源網址） |
 | 條目展開、`pick`／`exes`／`patch`、拼寫提示 | `src/resolveProviders.mjs`（檔頭記載「後處理收進本函數」之理由與單邊套用殷鑑） |
 | 工作流配套工具 | `src/wkf/`：`createFileStore`（跨行程持久化遞補游標與冷卻狀態，排程任務每次都是新行程故記憶體版每次歸零）、`createUsageCounter`（逐日用量計帳，純觀測不據以節流）、`salvageTruncatedArray`（截斷 JSON 陣列之前段搶救，刻意不併入預設解析） |
-| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭 |
+| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】 |
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
 | 多供應商遞補、金鑰輪替、條目 id 命名規則（`oc:`／`zen:`／`agnes:`…之意義） | `src/dispatchAiFallback.mjs` 檔頭 |
 
@@ -655,6 +661,16 @@ opencode run --help
 ```
 
 `w-dispatch-ai` 裝在技能根、由使用者統籌更新（見「套件裝在哪」），**不要在專案裡 `npm install w-dispatch-ai`**。
+
+2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式，讀 `src/cliSpawnGate.mjs`、`src/goQuotaGate.mjs`、`src/runExecCli.mjs`、`src/dispatchAiFallback.mjs`、`src/dispatchOpencode.mjs`、`src/WDispatchAi.mjs`、`src/providers.mjs` 與 README 新段；**未重跑 opencode、未實際呼叫模型**，守門與 Go 用量之實測數字為套件於同日之紀錄，本技能未重驗）：
+
+| 項目 | 結果 |
+|---|---|
+| `spawnGate` | 新增。預設啟用之 kind 只有 `opencode`（`KIND_DEFAULT_LIMITED`），claude／codex／antigravity 預設不限；預設值與行為已寫入〈逾時與等待〉選項表 |
+| `quotaGate` | 新增。只作用於 `ocgo:` Go 條目且有金鑰者；門檻各 95、快取 60000 ms、查詢逾時 5000 ms；取代原「遞補層不接用量」之說法 |
+| `providers.mjs` | 全表仍 **37 條**（`oc:` 10、`ocgo:` 8），條目未動 |
+| 匯出 | `WDispatchAi` 仍 **34** 個鍵，不新增守門相關匯出 |
+| `dispatchOpencode()` | 固定參數順序（`run` → `--agent <值>` → `-m` → `extraArgs`）未變；多一個自用鍵 `spawnGate`（與 `spawnGateKind` 同為 `runExecCli` 自用、不轉交 `execCli`） |
 
 2026-11-03 對照：以已發布的 `w-dispatch-ai` **1.0.72** 原始碼核對（讀 `src/providers.mjs`、`src/WDispatchAi.mjs`、`src/opencodeGoUsage.mjs` 與兩份檔頭；**未重跑 opencode**，條目註解所載的實測皆為套件於 2026-11-03 以 opencode 1.19.5 所做）：
 
