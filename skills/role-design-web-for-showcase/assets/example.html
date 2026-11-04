@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>亮點圖範例</title>
+<link rel="stylesheet" href="base.css">
+</head>
+<body>
+<!--
+    骨架範例: 複製後改內容與色票; 主角區塊換成 .pic 內之標準圖裁切
+    動手前六問(每張圖都寫):
+    ①成品放哪裡: {報告}
+    ②本期核心: {範圍、對象或主題}
+    ③一句主張: {同標題}
+    ④主角與次要: {成果為主角; 手段為次要}
+    ⑤圖源與證據: {標準圖路徑; 數字之出處}
+    ⑥讀者會反問什麼: {逐項列出並寫怎麼堵}
+-->
+<main class="stage">
+    <header class="ttl" style="left:40px;top:16px">
+        <div class="mk"><i data-ic="pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></i></div>
+        <div>
+            <h1 data-t>資料自動更新<em>全線提速</em></h1>
+            <div class="kw"><span>流程整併</span><b class="sep">+</b><span>設備更新</span></div>
+        </div>
+    </header>
+
+    <!-- 主角: 大矩形, 上下緣與右欄對齊 -->
+    <div class="panel" style="left:40px;top:112px;width:1064px;height:928px"></div>
+    <div class="abs" style="left:80px;top:520px;font-size:30px;font-weight:600;color:var(--sub)">主角區塊(換成 .pic 內之標準圖裁切)</div>
+
+    <!-- 右欄: 2 個子區塊, 間距 12, 小於大區塊之 16 -->
+    <div class="panel" data-sub="r" style="left:1120px;top:112px;width:760px;height:458px"></div>
+    <div class="abs" data-peer style="left:1148px;top:140px;font-size:40px;font-weight:700">主要成果</div>
+    <div class="abs num" style="left:1148px;top:220px;font-size:96px;line-height:1;color:var(--accent)" data-t>大幅縮短</div>
+    <div class="abs sm" data-minor style="left:1148px;top:340px;font-size:25px">技術路徑退為一行灰字</div>
+
+    <div class="panel" data-sub="r" style="left:1120px;top:582px;width:760px;height:458px"></div>
+    <div class="abs" data-peer style="left:1148px;top:610px;font-size:40px;font-weight:700">次要成果</div>
+    <div class="abs sm" style="left:1148px;top:680px;width:700px;font-size:25px">說明佔滿全寬;同階標題字級相同,只有全圖之主要亮點可大一階並用強調色</div>
+</main>
+<script src="viewer.js"></script>
+</body>
+</html>

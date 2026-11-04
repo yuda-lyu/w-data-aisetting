@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>亮點展示圖檢視</title>
+<style>
+:root { --ink: #0F1E30; --sub: #4A5A6B; --accent: #0E6B78; --panel: #F3F6F9; --panel2: #E4EAF1; --hover: #D5DDE7; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; background: #fff; color: var(--ink); font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; background: var(--panel); }
+button { height: 38px; padding: 0 14px; border: 0; background: var(--panel2); color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
+button:hover { background: var(--hover); }
+button[aria-selected="true"] { background: var(--accent); color: #fff; }
+.hint { margin-left: auto; color: var(--sub); font-size: 14px; }
+a { color: var(--accent); font-size: 14px; }
+iframe { flex: 1; min-height: 0; width: 100%; border: 0; }
+</style>
+</head>
+<body>
+<header>
+    <div id="tabs" role="tablist" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <span class="hint">滾輪放大、拖曳平移、雙擊還原</span>
+    <a id="open" target="_blank">新分頁開啟</a>
+</header>
+<iframe id="view" title="亮點展示圖"></iframe>
+<script>
+    //依專案列出各圖: [代號, 檔名, 按鈕文字]
+    var figs = [
+        ['a1', 'a1-overview.html', 'a1 總覽'],
+    ];
+    var tabs = document.getElementById('tabs');
+    var cur = null;
+    function show(key) {
+        var hit = figs.filter(function (v) { return v[0] === key; })[0] || figs[0];
+        if (hit[0] === cur) { return; }
+        cur = hit[0];
+        document.getElementById('view').src = hit[1];
+        document.getElementById('open').href = hit[1];
+        Array.prototype.forEach.call(tabs.children, function (b) {
+            b.setAttribute('aria-selected', b.dataset.key === hit[0] ? 'true' : 'false');
+        });
+        location.hash = hit[0];
+    }
+    figs.forEach(function (v) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('role', 'tab');
+        b.dataset.key = v[0];
+        b.textContent = v[2];
+        b.addEventListener('click', function () { show(v[0]); });
+        tabs.appendChild(b);
+    });
+    addEventListener('hashchange', function () { show(location.hash.slice(1)); });
+    show(location.hash.slice(1));
+</script>
+</body>
+</html>
