@@ -205,6 +205,14 @@ await wda.dispatchOpencode(prompt, {
 - **額度到頂的行為未知**：Go 額度到頂時 `opencode run` 的行為與字樣**沒有人撞過、未查明**（免費池到頂是 `run` 不結束、只到逾時；Go 是否同樣不返回未知）。1.0.73 起遞補層預設以 `quotaGate` 於用量 ≥95% 時略過該把金鑰（見〈逾時與等待〉），那是「到頂前即停」，不倚賴到頂時的行為；呼叫端排程時仍一律以 `timeoutMs` 封頂，不要假設到頂會快速失敗。
 - 其餘 22 個 Go 模型未收；要用時以 `resolveCatalogue` 的 `extraProviders` 自帶條目，形狀比照上列（`kind: 'opencode'`、`provider: 'opencode-go'`、`model: 'opencode-go/<id>'`、`envVar: 'OPENCODE_GO_KEYS'`、`config: { permission: { edit: 'deny', bash: 'ask' } }`），檔位先以 `opencode models opencode-go --verbose` 實查。
 
+### 推理模型長提示詞回空字串或被截斷：單次輸出上限
+
+- **症狀**：推理模型配 `--variant high` 跑長提示詞（約 3 萬字元）時 `ok: true`、離開碼 0，stdout 卻是空的或半截，stderr 只有標頭，日誌沒有 ERROR。容易誤判成模型能力不足而去降檔位。
+- **根因**：opencode CLI 端單次輸出預設上限 32000 token，reasoning 加 output 合計，**不是閘道限制**。請求之 `max_tokens` ＝ min(型錄 `limit.output`, `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX` 或 32000)，無效值被 CLI 靜默忽略。1.0.75 起 `dispatchOpencode` 預設調為 128000，`opt.outputTokenMax` 可覆寫。
+- **診斷**：`opencode session list --format json` 取 sessionID，`opencode export <id>` 看 `finish` 與 tokens；`finish=length` 且 reasoning＋output 等於上限即中。條目開 `detectTruncation: true` 時（`ocgo:` 8 條已開），截斷回 `ok: false`、`errorType: 'incomplete'`、`truncated: true`。
+- **處置**：調高上限，不要降檔位。調高後長推理會跑完（3 萬字元加 high 實測 382～511 秒），`timeoutMs` 要給足，建議至少 900000。截斷是確定性的，不要重試同一請求，也不要靠加大 `timeoutMs` 解決，遞補下一條目。
+- **代價**：上限每調高 N，可用輸入約少 N（伺服器以輸入加 `max_tokens` 驗 context），所以 context 26 萬級之條目維持 32000；單次 token 用量也會上升。
+
 ### 免費模型走匿名：`useStoredAuth: false`
 
 `dispatchOpencode()` 於 1.0.34 有一個 `useStoredAuth` 選項（預設 `true`）。給 `false` 時會注入 `OPENCODE_AUTH_CONTENT='{}'`（空憑證），令本次**不讀 `auth.json`**、改以匿名免費存取。
