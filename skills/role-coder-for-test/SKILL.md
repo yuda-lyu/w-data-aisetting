@@ -86,7 +86,7 @@ assertion 必須是 spec 的可執行翻譯,不是[跟上次跑出來一樣]的�
 **有parallel**:`mocha --parallel \"test/*.test.mjs\" --timeout 180000`
 **無parallel**:`mocha --no-parallel \"test/*.test.mjs\" --timeout 180000`
 
-- 若有啟動伺服器要開port,若太多得須有自動配發port的機制,都要8000以上,也禁止用隨機產生,否則常一堆衝突導致測試失敗.
+- 啟動伺服器要開 port:基準埠 ≥ 8000、寫死、禁止隨機.e2e 之實際埠由 w-package-tools-e2e 之 `reserveE2ePorts` 依占用自動位移(順序固定,仍非隨機;見 skill[role-coder-for-test-e2e]).非 e2e 測試之監聽埠要與他套件錯開,或用作業系統配發(`listen(0)`),不要依賴 8080、8091 等常用埠,否則多套件同跑時會撞.
 
 - `--grep` 過濾掉 outer `it` 時,nested `before` 會在 DB 未 setup 前執行(徵狀「找不到 user / 30s timeout」是 artifact 非 production bug):`--grep` 涵蓋 outer 至少一個 case、或 nested 自己 setup、或 outer 改 `before`.
 
@@ -118,7 +118,7 @@ assertion 必須是 spec 的可執行翻譯,不是[跟上次跑出來一樣]的�
 - [ ] 檔名前綴與實際層級相符;共用層與工具在 `test/tools/` 且不帶 `.test.`(§3,§4)
 - [ ] 測試中之臨時檔在 `test/_tmp/<案名>/` 並由測試自己清掉;測試程式沒有寫 `./tmp/`(§4)
 - [ ] 沒有 `.mocharc.json`;`package.json` 之測試類指令只有 test,mocha 指令為上列限定字串之一(§5)
-- [ ] 啟動之伺服器 port ≥ 8000 且不隨機(§5)
+- [ ] 啟動之伺服器基準埠 ≥ 8000 且不隨機;e2e 經 `reserveE2ePorts` 自動換埠(§5)
 - [ ] 測試/樣本數據之連結已驗 HTTP 200,引用皆真實可查,查不到者留空(§6)
 - [ ] 完成判準已依 skill[role-coder-for-validate] 另行確認,沒有只以測試全綠宣告完成
 - [ ] 計時器相關函數之測試以事件同步(觀察回調／假時鐘),沒有以 `sleep(N)` 後斷言作為唯一同步點;改寫附變異證據與負載試驗前後對照(§8)

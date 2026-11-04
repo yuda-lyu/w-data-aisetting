@@ -18,7 +18,7 @@ description: |
 | 問 | 怎麼查 | 決定 |
 |---|---|---|
 | runner 與比對方式？ | `package.json` scripts、`test/tools/e2e-setup.mjs` 有無 `pixelmatch` | 本技能全量適用 / 只採通用原則 |
-| 服務拓撲？ | setup 內 spawn 什麼：前端 dev server + 後端，或後端 serve build；port 是否與他專案錯開 | 契約 C2 模式 |
+| 服務拓撲？ | setup 內 spawn 什麼：前端 dev server + 後端，或後端 serve build；port 是否經 `reserveE2ePorts`（基準埠不必為了不撞而與他專案錯開） | 契約 C2 模式 |
 | 語系與資料來源？ | 有無 i18n（語系迴圈）；seed 腳本、mock 開關、fixture log | C4 / C5 是否需要、§10 場景 |
 | 時間戳從哪層寫入？ | grep schema 預設值、ORM 服務層、Worker、前端暫態；另 grep 產製／打包腳本寫入之時間與畫面上之耗時、即時數值；再 grep 讀取端（統計窗、排序、到期判斷、前端依現在算出之計數）取時間處，後端與瀏覽器端都查 | 執行期寫入者：假時鐘錨點放哪層、寫入與讀取是否同一時鐘（§8.2，含瀏覽器端）；建置時寫入、耗時、即時數值：列入不可固定之值盤點（unfixable-values-masking §1～§2） |
 | 專案映射表存在嗎？ | 規則帳本(`sgud/rule/rulebook.md`;舊制為 `CLAUDE_rulebook.md`)之 e2e 映射節 | 缺 → 先依範本補，再寫 case |
@@ -92,14 +92,14 @@ description: |
 | # | 能力 | 要求 |
 |---|---|---|
 | C1 | `launchBrowser()` | 全專案唯一 `chromium.launch` 出口，內含確定性渲染旗標組（§8.4） |
-| C2 | `startServersOnce()` / `cleanup()` | port 偵測 reuse-or-spawn（health 回專案識別才 reuse）；有多服務時 once 旗標依服務分拆；cleanup 只殺自己 spawn 的、exit 備援走同步指令；兩條觸發來源（§9）；埠可由環境變數 `E2E_PORT_OFFSET` 整體位移（`createServiceManager` 之 `services[].port` 寫基準埠、其餘經 `resolveE2ePort(基準埠)`，w-package-tools-e2e ≥ 1.0.11；供臨時實例，§1.5；未升版者由專案 setup 自讀位移量）；可寫路徑一律以 `projRoot` 解析 |
+| C2 | `startServersOnce()` / `cleanup()` | 埠經 `reserveE2ePorts`（做法見 §9 進場；w-package-tools-e2e ≥ 1.0.22）：沒有占用即基準埠，被占用時整組移位並寫入 `E2E_PORT_OFFSET`；`createServiceManager` 之 `services[].port` 寫基準埠、其餘經 `resolveE2ePort(基準埠)`；有多服務時 once 旗標依服務分拆；cleanup 只殺自己 spawn 的、exit 備援走同步指令；兩條觸發來源（§9）；可寫路徑一律以 `projRoot` 解析 |
 | C6 | `captureStable(page, opts)` | 所有 pixel 截圖唯一入口；retry-until-stable；`strict` 時未 settle 即 throw（regen 用） |
 | C7 | `captureStableWithBox(page, target, opts)` | 紅框 #f26 / 5px / 圓角 4，**截圖後 sharp 合成**，不注入 DOM；多個 target 取聯集畫**一個**框；接受直接給定之矩形 |
 | C9 | `assertBaselineMatch(buf, baselinePath, label, opts)` | pngjs + pixelmatch（`includeAA:false`, `threshold:0.1`, `maxDiffPixels` 100）；fail-dump 三聯組永不覆蓋；尺寸不同直接 fail；缺檔 throw；可選**收集模式**（`E2E_COLLECT=1`／`createBaselineCollector`，≥ 1.0.11）：不符照存證據、續拍至案例末才拋彙整錯誤，與產製互斥（§7.7、§7.11） |
 | C10 | `typeIntoInput(page, locator, value)` | Pattern D 真人輸入 |
 | C11 | `waitUntilExist(page, label, fn, opts)` | 偵測 driven 等待 |
 | C13 | regen 入口 | 直跑 `--baseline` + `generateBaseline()` 末尾 `cleanup()`，或 mocha `--baseline` / `E2E_REGEN=1`；**截圖前 gate**、**產製端 / 測試端同管線**、寫檔前語意斷言先過、未 settle 不寫、已知缺陷跳過該步（§7.5）；**有變更才改寫**（≥ 1.0.11：`E2E_BASELINE_KEEP_SAME=1`＋`E2E_BASELINE_KEEP_MAXDIFF`，未設＝比對容差，全量重產趟設 `0`＝只保留 RGBA 逐像素相同者，§7.9、§7.11；< 1.0.11 為 `--write-mode changed`，上限＝比對容差） |
-| C14 | 端點常數 | `127.0.0.1`；seed 內 redirect URL 由 `baseUrl` 衍生；基準埠寫死、實際埠經 `resolveE2ePort(基準埠)`（≥ 1.0.11，見 C2） |
+| C14 | 端點常數 | `127.0.0.1`；基準埠寫死（≥ 8000、不隨機），實際埠可能不是基準埠；測試碼、seed、redirect、CORS、設定檔之埠一律由解析後之值衍生（`baseUrl`、`resolveE2ePort`），Grep `localhost:|127\.0\.0\.1:` 逐筆確認 |
 
 **條件式 adapter**（專案有該特徵才需要；映射表註明「不適用」即可）：
 
@@ -353,7 +353,10 @@ headless Chromium 預設 GPU 光柵化 + subpixel AA 非決定性（拉丁字偶
 
 ### 9.1 進場 ↔ 離場
 
-- 進場：偵測 port（port ≥ 8000、與他專案錯開、寫死於映射表不隨機；health 回專案識別才 reuse，否則另選 port / fail-fast）；沒人 → spawn 等 ready；多服務時 once 旗標依服務分拆。
+- 進場：e2e-setup 最上層先呼叫 `reserveE2ePorts(本實例全部基準埠)`，之後才取 `resolveE2ePort`、建 `createServiceManager`（順序反了會拋錯）。沒有占用時即基準埠，行為與標準圖不變；被占用時整組移位（位移 0、100、200…，順序固定，不隨機），實際埠印入輸出；`opt.avoid` 列本專案其他測試寫死之埠。保留後埠已有回應且本實例未啟動過，就是他人占走，報錯不沿用（開發中要沿用既有服務者手動設 `E2E_PORT_OFFSET=0`）；沒人 → spawn 等 ready；多服務時 once 旗標依服務分拆。
+- 埠之其他情形：逐檔 runner 於最上層保留一次，子行程繼承 `E2E_PORT_HOLD` 不再換埠；多開由工具指定位移並持有預約，自動換埠不會選到；行程內自行監聽者以 `applyEnv: false` 各自保留，綁定遇 `EADDRINUSE` 呼叫 `reselect()`。
+- 畫面含埠之流程擇一：比對端覆蓋（`compareBuf` 加 `overlayRegions`，被覆蓋之值另以語意斷言驗）；或只能在基準埠跑（`baseOnly: true`，被占用時等待不換埠；多開列 `officialOnly`；流程開頭 `assertE2eBasePort`）。全綠不能證明畫面不含埠：差異可能低於容差。
+- 回報附占用基準埠之實跑結果（占用者不受影響、e2e 仍全綠）；沒有就寫明未測，不算通過。
 - 離場死結：spawn 的 child hold event loop，`process.on('exit')` 要等 loop 清空 → 互鎖；`unref()` 單獨用讓 cleanup 沒人觸發；`process.exit(0)` 掩蓋問題——都不要用。正解：同一 `cleanup()`、兩條觸發來源——①`globalThis.after`（框架）②直跑分支主函式末尾顯式呼叫；exit / SIGINT 備援只做**同步**殺（`execSync taskkill`），非同步 spawn 在 exit handler 內不會被等待。
 - 第三方 client 無法 close（內部 `setInterval`）時，api 測試層 root `after` 註冊 `process.exit()`，註解原因——明文例外。
 - **規則錨定 artifact**：規則寫「接觸 spawned server 的 script」而非「框架跑完不退」，否則直跑模式觸發詞不命中而累犯；發現 recurring bug 第一動作是 grep 全 repo 同 pattern 一起修。
@@ -362,7 +365,7 @@ headless Chromium 預設 GPU 光柵化 + subpixel AA 非決定性（拉丁字偶
 
 ### 9.2 restartBackend 與逐檔隔離
 
-- `restartBackend`：先殺自己 spawn 的；port 仍被佔（reuse / 手動啟動之**同專案**後端）走 OS 層 `netstat` / `taskkill`（posix `lsof` / `kill`），等 port 真釋放再 spawn——這是「只重啟自己 PID」規則的明文例外，前提是該 port 專屬本專案（映射表載明）。需特殊 settings 的 case 以 `try/finally` 還原預設；環境變數覆寫收斂在 `envOverride`。
+- `restartBackend`：先殺自己 spawn 的；port 仍被佔時，只有正面確認是本實例之殘留才殺（PID 與起始時間完全相符，或沿存活父子鏈走到；`reservation.killOwnListeners(埠)`），否則報錯，等 port 真釋放再 spawn。不依埠下殺：多套件同跑時占用者可能是別的套件，`killForeignOnRestart`、`killPortListeners(埠)` 這類寫法要換掉。需特殊 settings 的 case 以 `try/finally` 還原預設；環境變數覆寫收斂在 `envOverride`。
 - 逐檔隔離 runner：多 e2e 檔塞單一 mocha 進程會共用被前面測試改過狀態的後端（RPC 正規化過欄位序 → 列序與 solo 產的 baseline 不符）。每檔獨立 mocha 進程 + 全新後端；無狀態且啟動慢的前端暖機共用；`readdirSync` 動態白名單。測試之間過於混雜或相依時，套件自己負責建立獨立程序、專用資料來源或獨立儲存區——逐檔隔離 runner 即此類機制之一，放 `test/tools/`，以 `node test/tools/run-e2e-isolated.mjs` 直跑。依差異範圍只重跑受影響案例時，以套件 `runIsolatedE2e` 之 `targets`（檔＋`--grep`）指定：每檔仍換新後端，grep 對不到任何案例即失敗（自動 `--fail-zero`，不假綠）；有本地 mocha 時不經 shell，正則原樣送達（contract §0.5）。
 - cwd：以專案根為 cwd 執行，setup 內相對路徑以 `projRoot` 解析；cwd 錯會整檔「標準圖不存在」假紅。
 - **測試中介資料一律落 `test/_tmp/`（gitignore），測完即刪**：臨時 settings、fixture 副本、合成 log 目錄、資料庫快照等放 `test/_tmp/<用途>/`，由該測試檔 `after` 或 setup `cleanup()` 刪除（追蹤本進程建立的檔案逐一 `rm`，目錄空了再 `rmdir`）。**絕不可放專案 `./tmp/`**——那是 AI 代理的暫存區，隨時會被整個清除，測試執行途中被刪即假失敗（殷鑑：三專案 `genTempSettings` 原寫 `./tmp/`；golden 產生器留在 `./tmp/` 隨清除佚失）。fixture 資產（golden logs、expected、`_staref`、上傳用 xlsx）不是中介資料，放 `test/<fixture>/` 入版控。**失敗證據也不是中介資料**：baseline 比對失敗之三聯組一律 dump 到專案根 `./testPending/`（gitignore、ms 時間戳、永不覆蓋、**不自動刪除**——偶發 flake 的當次證據常在隔天才分析），這是本技能既定規則（§7.7、contract C9），不因「臨時資料放 test/_tmp」而改變；三者分工：`test/_tmp/`＝中介資料（測完即刪）、`./testPending/`＝失敗證據（人工清理）、`./tmp/`＝AI 暫存區（測試禁用）。
@@ -454,7 +457,7 @@ token 檔不存在時由服務自動產生（啟動輸出不印全文）；一�
 - [ ] 每步兩張依 §7.1 粒度（一個操作一步、兼任圖只框下一步之目標、共通進場路徑一案記錄）；spec 以「非決定性」為由不拍者已改以假時鐘／遮罩處理
 - [ ] 交審形式：圖文對照之審圖報告只收本輪新增／變動案例、每圖附圖鍵與框住對象；下游手冊已同輪更新；涉信流程之寄信點已全盤點，模板／〈信件對照〉／測試期望三處一致
 - [ ] baseline 命名 <flow>-<lang>-E2E-NNN-<序>-…；regen 有授權（定點重產逐次授權；全量趟〔單趟收集或重產趟〕由主責 agent 或主控自行發動，寫出／收集不等於採用，採用者已逐張列入回報供事後檢視）；--names 截圖前 gate；strict settle；git diff --stat 僅預期；certify 通過
-- [ ] 核心契約無缺口，條件式 adapter 已標適用/不適用；chromium.launch 只在 wrapper；紅框後合成；cleanup 兩來源；setup 與 runner 在 test/tools/；port ≥ 8000 且不隨機
+- [ ] 核心契約無缺口，條件式 adapter 已標適用/不適用；chromium.launch 只在 wrapper；紅框後合成；cleanup 兩來源；setup 與 runner 在 test/tools/；基準埠 ≥ 8000 且不隨機，經 `reserveE2ePorts` 自動換埠，已實跑占用基準埠；下殺只動本實例
 - [ ] --grep 單跑與全跑一致；testPending 無本輪殘留；./tmp 清乾淨；netstat 無殘留 server；非自己啟動的程序已回報
 - [ ] 變體覆蓋：資料型別、內容型別、鍵盤觸發入口各有 case；具名資料為結果最豐富者
 - [ ] 全量執行（§7.11）：實體檔清單開跑前後各核對；本輪副本與開發資料庫已備份並核對；首選收集趟（`E2E_COLLECT=1`＋`E2E_STRICT_CAPTURE=1`，起始時間 T 已記；逐案例狀態「未執行」為 0）→ 審差異（`--since <T>` 分類，分類表無空格、failed 案例未採用、只在不可固定之值者已補遮蔽）→ `--accept`（先 `--dry-run`）；次選重產趟（`KEEP_SAME`＋`KEEP_MAXDIFF=0` 或隔離輸出）→ 審差異（不能證明為雜訊者未還原、還原自副本並核對雜湊）→ 比對趟；採用與刪除清單已逐張列入回報供使用者事後檢視（否決即自副本還原）；報告數字只取比對模式之執行並附對帳表；差異回報依成因列表（「雜訊」「超容差」不當結論，「不穩定」限連跑兩輪證實者，〈穩定度量測〉）；收尾先停服務再還原資料庫；臨時實例已以不跟進連結之方式拆連結、回驗正式專案完好後才刪除，`./tmp/<本輪>/` 下無殘留連結
