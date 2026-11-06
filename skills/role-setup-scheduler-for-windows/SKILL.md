@@ -9,7 +9,7 @@ description: |
 
 ## 概述
 
-以 Windows 工作排程器建立定時／常駐任務的實務要點。核心來自 `c:/tai-news-ai` 專案（2026-09-24 前為 `c:/tai-news`）**實際採用且穩定運作數月**的設定（每小時執行），以及多次實測驗證的結論。
+以 Windows 工作排程器建立定時／常駐任務的實務要點。核心來自 `c:\my-project` 專案（2026-09-24 前為 `c:/使用端`）**實際採用且穩定運作數月**的設定（每小時執行），以及多次實測驗證的結論。
 
 **最常被問的「不彈 cmd 黑視窗」**：網路上方法很多（VBScript 包裝、`start /min`、PowerShell `-WindowStyle Hidden`…），但真正的關鍵只有一個設定項——見 §3。
 
@@ -69,14 +69,14 @@ description: |
 
 > **先分清兩件事**：`ExecutionTimeLimit` 是排程器在外面的硬上限，撞到即強制終止、連失敗通知都發不出；「不撞上限」要由**程式自己**規劃每輪時間來保證。每小時一輪的工作出現撞限風險時，**不要去調高 `ExecutionTimeLimit`，也不要把各步預算壓到總和小於上限**——前者只是把問題往後推、還要使用者輸入密碼改排程，後者犧牲成功率。
 >
-> **正解**（比照 tai-kns-trade 2026-09-12 複審 S2「時間預算單一擁有者」，已收斂為 w-knowledge-extract `src/core/budget.mjs` 之 `budgetOf`）：
+> **正解**（比照使用端 2026-09-12 複審 S2「時間預算單一擁有者」，已收斂為 w-knowledge-extract `src/core/budget.mjs` 之 `budgetOf`）：
 > 1. 截止＝排程上限 − 安全邊際 6 分（下限 10 分；`w-knowledge-extract/src/core/createKnowledgeExtract.mjs` 第 407–416 行）。排程上限在設定檔登錄一份，作為截止的單一來源。
 > 2. 由單一擁有者（`budgetOf(ctx)`）守門：每段開工前、逐項取件前看剩餘時間，不足就不開工——已完成的照送，未做的降級或留待下輪；每次外呼（AI、子行程、HTTP）以剩餘時間封頂。
 > 3. 截止之後仍在跑的，只剩「已開始且已封頂」的那一次外呼與最後的通知，整輪必然落在排程上限內。
 >
-> **判準用程式碼上限，不用觀測值**：觀測到的最大值不是上限。例：tai-news-ai 各步實測最壞值同輪相加 142＋552＋2×420＝1534 秒；依程式碼逐步追到的上限更高——抓文每篇 3 次嘗試×（90＋3）秒＋重試間隔 5、10 秒＝294 秒、5 篇 1470 秒（`wsemi/src/execCli.mjs` 第 186–214、494–500 行）；Telegram 通知器未給逾時則每次嘗試只受 Node 內建 fetch（undici）預設 `headersTimeout` 300 秒、`connectTimeout` 10 秒所限，失敗立即重試共 4 次。兩者都遠超 1200 秒。
+> **判準用程式碼上限，不用觀測值**：觀測到的最大值不是上限。例：使用端各步實測最壞值同輪相加 142＋552＋2×420＝1534 秒；依程式碼逐步追到的上限更高——抓文每篇 3 次嘗試×（90＋3）秒＋重試間隔 5、10 秒＝294 秒、5 篇 1470 秒（`wsemi/src/execCli.mjs` 第 186–214、494–500 行）；Telegram 通知器未給逾時則每次嘗試只受 Node 內建 fetch（undici）預設 `headersTimeout` 300 秒、`connectTimeout` 10 秒所限，失敗立即重試共 4 次。兩者都遠超 1200 秒。
 >
-> **實例（tai-news-ai）**：AI 遞補預算 `rotationBudgetMs` 原設 780000，當時以「低於 1200 秒」認定安全——錯在拿**每次呼叫**的預算與**整輪**上限比（每輪呼叫 AI 兩次，最壞 1560 秒）；2026-08-14 下修為 420000 仍不保證（見上）。以 1008 輪日誌重放「截止 840 秒＋逐篇與每次外呼封頂」之守門，歷史上實質受影響 0 輪（2026-09-24 模擬，尚未實作）。
+> **實例（使用端）**：AI 遞補預算 `rotationBudgetMs` 原設 780000，當時以「低於 1200 秒」認定安全——錯在拿**每次呼叫**的預算與**整輪**上限比（每輪呼叫 AI 兩次，最壞 1560 秒）；2026-08-14 下修為 420000 仍不保證（見上）。以 1008 輪日誌重放「截止 840 秒＋逐篇與每次外呼封頂」之守門，歷史上實質受影響 0 輪（2026-09-24 模擬，尚未實作）。
 > 撞破上限的後果：**行程被強制終止時，連失敗通知都發不出去**，變成靜默失敗。該專案下修前整輪曾達 1191.2 秒（2026-06-17，上限之 99%），另有三輪日誌停在中途、沒有結束紀錄，推測即遭逾時中止。
 > **數字一律由日誌重算**：該專案註解原載之各步耗時（45 秒、300 秒）與「歷史最高 809.5 秒」皆已過時或不實，重算後才發現上述缺口。
 
@@ -116,7 +116,7 @@ description: |
 `Password` 本來就必須輸入密碼，**無法純腳本化免互動註冊**——既然一定要人在場，有兩條路：
 
 - **GUI**：「工作排程器」若需要權限，**作業系統會自行彈出 UAC 提示**，使用者按下去即可，不必事先知道要不要提權；也不需要先開「以系統管理員身分執行」的終端機。
-- **`schtasks /create /xml <檔> /ru <電腦名>\<帳號> /rp *`**：由 schtasks 自己詢問密碼（輸入不回顯），密碼不進命令列與歷史檔，XML 內其餘設定一次到位（§5 配方 A）。除了人輸入一次密碼，其餘都可腳本化（tai-kns-trade `src/tools/install-schedule.mjs` 即此法）。
+- **`schtasks /create /xml <檔> /ru <電腦名>\<帳號> /rp *`**：由 schtasks 自己詢問密碼（輸入不回顯），密碼不進命令列與歷史檔，XML 內其餘設定一次到位（§5 配方 A）。除了人輸入一次密碼，其餘都可腳本化（使用端 `src/tools/install-schedule.mjs` 即此法）。
 
 **實測（2026-09-24）**：以上述 schtasks 指令**覆寫既有** Password 型任務，在標題無「系統管理員」字樣之一般 PowerShell 視窗執行成功。新建任務是否亦免提權：未實測。
 
@@ -209,8 +209,8 @@ S4U 權杖**不具網路認證憑據**（官方明載 no access to network or en
 <Actions Context="Author">
   <Exec>
     <Command>C:\Program Files\nodejs\node.exe</Command>   <!-- 直接指向 exe -->
-    <Arguments>c:\tai-news-ai\src\trigger-run.mjs</Arguments>
-    <WorkingDirectory>c:\tai-news-ai</WorkingDirectory>
+    <Arguments>c:\my-project\src\trigger-run.mjs</Arguments>
+    <WorkingDirectory>c:\my-project</WorkingDirectory>
   </Exec>
 </Actions>
 
@@ -243,7 +243,7 @@ Register-ScheduledTask -TaskName 'trigger-news-ai' -Xml (Get-Content 'task.xml' 
 
 - **`/rp *` 必須搭配 `/ru`**：`schtasks /create /?` 寫「當工作 XML 已經包含原則時，單獨使用 /RP」，實際回「錯誤: 語法不正確。沒有指定使用者名稱，所以無法指定密碼。」。加 `/ru <電腦名>\<帳號>` 即成功，讀回 `<UserId>` 仍為原 SID、`<LogonType>` 仍為 `Password`。帳號先以 `whoami.exe /user` 核對 SID 與 XML 內 `<UserId>` 相同（Git Bash 的 `whoami` 是 MSYS 版，不支援 `/user`）。
 - **XML 檔編碼**：UTF-16LE＋BOM 可匯入；宣告 `encoding="UTF-8"` 的無 BOM 檔被拒（「工作 XML 格式不正確。(1,40)::錯誤: 無法切換編碼」）；`schtasks /query /xml` 經管線存下的單位元組檔（宣告仍為 UTF-16、內容純 ASCII）可匯入。**一律存成 UTF-16LE＋BOM 最保險**（內容含非 ASCII 時未實測）。
-- **修改既有任務一律「匯出 → 改 → `/create /xml … /f`」，不用 `schtasks /change`**：`/change` 連 InteractiveToken 型任務都會要求輸入執行身分密碼（實測）；另據 tai-news-ai 專案紀錄，`/change /tr` 會清掉起始目錄（WorkingDirectory）並在程式路徑外多包一層引號（本次未能重驗）。
+- **修改既有任務一律「匯出 → 改 → `/create /xml … /f`」，不用 `schtasks /change`**：`/change` 連 InteractiveToken 型任務都會要求輸入執行身分密碼（實測）；另據使用端專案紀錄，`/change /tr` 會清掉起始目錄（WorkingDirectory）並在程式路徑外多包一層引號（本次未能重驗）。
 - `/f` 會刪除並重建任務（§8）；改完照 §7 讀回逐欄比對。
 
 ### 配方 B：schtasks 起底 + Set-ScheduledTask 補設定
