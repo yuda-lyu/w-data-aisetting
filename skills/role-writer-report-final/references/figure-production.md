@@ -42,7 +42,7 @@ async function padFigWidth(buf, minW) {
 }
 ```
 
-- **docx 不降採樣**：Word 對過寬之圖片會降採樣並轉存為較低品質之圖，範本之 `word/settings.xml` 須帶 `<w:doNotAutoCompressPictures/>`（該轉檔套件之內建範本已含；自備範本須自行加，不以未帶此旗標之範本替換）。
+- **docx 不降採樣**：過寬之圖在 docx 內不被降採樣，靠範本之旗標，作法與檢查依 skill[role-writer-report-convert-to-docx] 第 4 節。
 
 ## 3. 圖種之選型
 

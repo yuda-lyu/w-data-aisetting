@@ -63,15 +63,14 @@ export default {
 
 ## 5. md 版式之產生要點
 
-- 封面：仿專案既有報告封面，水平置中、字級區分，空段落以專案之空段落標記撐開（docx 管線會丟純空段落），末加分頁。
-- 節：`### 1.k {title}` → 「本節之操作項目如{表名}所示。」→ 表（`data-for="tab"` 類標記與逐欄樣式，第一欄 `white-space:nowrap`）→ 敘述段（`{fig:k}` 已換為 `{圖名}`）→ 各圖區塊（圖題「圖n 圖名」置圖下，圖間空段落）。
-- 自動編號：圖題「圖n 名稱」／表題「表n 名稱」由 md→html 層依名稱唯一性編號並替換內文 `{名稱}`；名稱含 `{`、`}` 或重名皆會誤引，故 §4 之檢核不可省。
+- 封面：仿專案既有報告封面，水平置中、字級區分，空段落以專案之空段落標記撐開（docx 管線會丟純空段落，標記見 skill[role-writer-report-convert-to-docx] 之 `references/md-syntax.md` 第 3 節），末加分頁。
+- 節：`### 1.k {title}` → 「本節之操作項目如{表名}所示。」→ 表（`data-for="tab"` 類標記與逐欄樣式〔語法見 skill[role-writer-report-convert-to-docx] 之 `references/md-syntax.md` 第 3 節〕，第一欄 `white-space:nowrap`）→ 敘述段（`{fig:k}` 已換為 `{圖名}`）→ 各圖區塊（圖題「圖n 圖名」置圖下，圖間空段落）。
+- 自動編號（圖題「圖n 名稱」／表題「表n 名稱」、內文 `{名稱}` 之替換）之機制與語法依 skill[role-writer-report-convert-to-docx] 之 `references/md-syntax.md` 第 2 節；名稱含 `{`、`}` 或重名皆會誤引，故 §4 之檢核不可省。
 
 ## 6. genFigs 與 genDocx
 
 - genFigs：只複製已撰寫案例引用之圖，檔名沿用；標準圖重產後重跑即同步；找不到來源即拋錯。
-- genDocx：走專案共用之 md→docx 模組（本機文書軟體或既有服務），套用共用模板（圖片不壓縮旗標）；以產物實體檔（存在、時間戳、大小）判定成敗，回傳值不可信；產製期間不得開啟文書軟體，產後檢查殘留行程。
-- 圖較多之冊 docx 可達數十 MB，屬正常；相同圖檔被轉檔器去重致內嵌媒體數少於圖數，屬正常。
+- genDocx：走專案共用之 md→docx 模組，轉檔呼叫、共用範本與其衛生、成敗判定（以實體檔，回傳值不可信）、執行紀律、docx 大小與媒體去重之說明，一律依 skill[role-writer-report-convert-to-docx] 第 4～7 節；轉檔經本機 Word 或轉檔服務皆然。
 - **重產順序**（spec 或 content 改動後）：genMd → lint → genDocx → `verification-and-report.md` §1～§2 之核對；只重產受影響之冊。
 
 ## 7. lint 與文件同步
@@ -90,7 +89,7 @@ export default {
 | genMd 報「無導文」 | 無主選單入口之系統於 config 給 `lead` |
 | lint 命中 spec 帶入之禁詞 | 改 spec 與 e2e 測試檔 title；非資料項名稱不放行 |
 | lint 命中「括號內容過長」 | 縮短 spec title 之括號註記，測試檔同步 |
-| docx 產出但為舊檔 | 以時間戳判定；服務假成功時改本機轉檔或重試 |
+| docx 產出但為舊檔 | 以時間戳判定（skill[role-writer-report-convert-to-docx] 第 7 節）；轉檔服務異常之處置依該技能第 5 節 |
 | 標準圖夾與 spec 圖鍵不一致 | 回 e2e 端修 spec 或重產，不在 content 遷就 |
 | 內容檔長時間 0 byte | 子代理未分批存檔而陷入重讀迴圈；停掉重派並明令每三案例存檔 |
 | 子代理回報「未執行 g.mjs」 | 正常：子代理只寫 content 並跑 genMd；產圖與 docx 由主代理統一跑 |

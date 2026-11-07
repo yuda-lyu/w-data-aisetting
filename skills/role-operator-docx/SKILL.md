@@ -5,6 +5,8 @@ description: 凡涉及 .docx 檔案之任務皆須使用本技能——不論該
 
 # OfficeCLI DOCX 技能
 
+**分工**:本技能直接讀取、檢查、修改 docx(含清理範本所用之 officecli 操作).報告由 md 產線轉為 docx 者(md 端語法、轉檔呼叫、範本衛生、轉檔產物之驗證)依 skill[role-writer-report-convert-to-docx].
+
 ## 安裝與呼叫
 
 `officecli` 由 npm 套件 `@officecli/officecli` 提供,安裝在**技能根**——本技能目錄的上一層(本技能目錄之絕對路徑由載入本技能時取得).版本只由技能根之 `package.json` 管理:使用者在技能根執行 `npm i` 即完成安裝,升降版由使用者改 `package.json` 後再 `npm i`.

@@ -81,5 +81,5 @@
 | 逐案例審稿 | 語氣、「」標記（內文無【】〔〕『』《》）、承接前置、無測試用語與禁詞、數字政策、無「不受影響」類未驗證斷言、無無依據收尾句、暫時狀態與零命中案例之敘述正確 |
 | 抽圖核對 | 每冊至少抽開 10% 之圖（含每類：點擊前、結果、彈窗、訊息），敘述與畫面相符 |
 | 不符清單裁定 | 每條開圖確認後三選一：改 spec（同步測試檔、補〈畫面元素對照〉）／退回 e2e 重產／照圖寫；裁定寫入 spec〈已知落差〉或 L3 |
-| 產製 | 主代理統一跑 genFigs → genMd → lint → genDocx；docx 以實體檔與 document.xml 文字節點驗證；spec 改後受影響之冊重產 |
+| 產製 | 主代理統一跑 genFigs → genMd → lint → genDocx；docx 依 skill[role-writer-report-convert-to-docx] 第 7 節驗證並加手冊專屬判準（verification-and-report.md §2）；spec 改後受影響之冊重產 |
 | 回報 | 五段格式；「請裁示」經三問過濾；已裁示者不重提 |

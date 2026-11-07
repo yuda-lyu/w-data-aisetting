@@ -1,7 +1,7 @@
 ---
 name: role-writer-report-final
 description: |
-  撰寫繁體中文之系統開發案整體成果類報告（年度成果、期末、結案、總報告，各專案稱呼不同）之方法技能：以段落敘述向委託單位與審查者陳述系統成果、挑選亮點與配圖、引用附錄。專案層優先，規則皆附事實前提；動工前先查專案參數（27 項）。內容：專案參數表、素材提取與事實核對、章節與敘事、文句診斷（AI 味、套版、主語動詞）、內容邊界與防禦性寫作、亮點與圖之挑選與圖名、自繪結構圖之產圖、格式用字與 docx 產製、附錄引用、落地到專案。通用檢測（證據門檻、因果五問、候選掃描、通讀、他案試讀、完成判準）不在本技能，依 role-writer-validate。
+  撰寫繁體中文之系統開發案整體成果類報告（年度成果、期末、結案、總報告，各專案稱呼不同）之方法技能：以段落敘述向委託單位與審查者陳述系統成果、挑選亮點與配圖、引用附錄。專案層優先，規則皆附事實前提；動工前先查專案參數（27 項）。內容：專案參數表、素材提取與事實核對、章節與敘事、文句診斷（AI 味、套版、主語動詞）、內容邊界與防禦性寫作、亮點與圖之挑選與圖名、自繪結構圖之產圖、格式用字（含圖題表題之文體）、附錄引用、落地到專案。md 轉 docx（圖表語法、轉檔、範本、docx 驗證）依 role-writer-report-convert-to-docx；通用檢測（證據門檻、因果五問、候選掃描、通讀、他案試讀、完成判準）依 role-writer-validate，皆不在本技能。
   觸發條件：撰寫、修改、審查此類報告之正文、亮點挑選、圖清單、小結或其撰寫原則；為此類報告提取開發素材；被指出「AI 味」「套版」「因果不通」「沒頭沒尾」，或裁定者直接改寫要求提煉原則時——必先調用本技能。看到「成果報告」「期末報告」「總報告」「主報告」，或「結案報告」而所指為整體成果之正文時即觸發。專案之 CLAUDE.md、要點與裁定優先於本技能。
   不適用：規格書、測試計畫與報告、操作手冊、掃描報告等附錄類文件；投標階段之服務建議書（role-writer-report）；亮點展示圖之版面設計與製作（role-design-web-for-showcase）。
 ---
@@ -49,7 +49,8 @@ description: |
 | 判斷能不能寫、怎麼寫才不被反咬、內部實況 | [內容邊界與防禦性寫作](references/content-boundary.md) |
 | 挑亮點、選圖類別與圖種、圖文排列、圖名 | [亮點與配圖](references/highlights-and-figures.md) |
 | 繪流程圖、層級樹、放射圖、六邊形或甘特圖 | [產圖規範](references/figure-production.md) |
-| 標題、標點、數字、縮寫、用字、圖表語法、docx 產製 | [格式、標點與用字](references/format-and-wording.md) |
+| 標題、標點、數字、縮寫、用字、圖題表題之文體 | [格式、標點與用字](references/format-and-wording.md) |
+| md 轉 docx（圖表語法、轉檔呼叫、範本、docx 驗證） | skill[role-writer-report-convert-to-docx] |
 | 提及附錄、各系統末段、附錄要點表 | [附錄引用](references/appendix-citation.md) |
 | 交付前勾選與反模式、盤查、被指正後之修改、修訂紀律、回報內容 | [盤查與修訂](references/review-and-revision.md) |
 | 專案要建哪些要點、資料分層與產線；自他案借用原則 | [落地到專案](references/project-landing.md) |
@@ -65,7 +66,8 @@ description: |
 | skill[role-writer-report] | 投標階段之服務建議書；其公文書面語之要求可參考，不混用其章節與定位 |
 | skill[role-writer-report-e2e-to-manual] | 操作手冊本體；本技能只取其圖與章節作為亮點來源與附錄段之全集 |
 | skill[role-coder-for-spec]、skill[role-coder-for-test-e2e] | 手冊沒有該功能之圖時，回頭補規格與標準圖 |
-| skill[role-operator-docx] | 讀取、檢查與修改既有 docx 走該技能。專案已有 md 轉 docx 之產線者沿用（〈格式、標點與用字〉第 8 節）；專案無產線，或無範本與轉檔套件者，先問裁定者，或依該技能另建 docx |
+| skill[role-writer-report-convert-to-docx] | md 轉 docx 之產線、圖表語法、轉檔呼叫、範本與 docx 驗證走該技能；專案已有產線者沿用 |
+| skill[role-operator-docx] | 讀取、檢查與修改既有 docx 走該技能；專案無 md 轉 docx 之產線，或無範本與轉檔套件者，先問裁定者，或依該技能另建 docx |
 
 自有套件之問題依全域設定之通報管道，不在專案端繞道。
 
@@ -81,7 +83,7 @@ description: |
 | 6 附錄引用 | 打開每份附錄定位；各系統末段；文件脈絡段 | 每份附錄皆提及 | 附錄引用 |
 | 7 小結 | 最後寫；核心 → 好處 → 長期特性收束 | 小結 | 章節與敘事 §8 |
 | 8 盤查 | 依 skill[role-writer-validate] 決策表「成果／進度報告」列選層（必做 L0a、L1、L1b；L2、L0b、L3 之條件見該表）；另加本技能之成果類通讀面向與交付前勾選 | 該技能之產物與覆蓋聲明 | 盤查與修訂 |
-| 9 產製驗證 | 產圖、產 md、交審 md、產 docx、實體檔與表格核對 | 報告檔、驗證結果 | 格式 §8 |
+| 9 產製驗證 | 產圖、產 md、交審 md、產 docx、實體檔與表格核對 | 報告檔、驗證結果 | skill[role-writer-report-convert-to-docx] |
 
 ## 6. 最核心之原則（細節在各參考檔）
 

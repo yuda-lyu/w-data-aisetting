@@ -70,55 +70,13 @@
 | 冪等 | 重複執行不會重複登錄 |
 | 降級 | 改以靜態呈現 |
 
-## 7. 圖表語法（以 w-md2docx 產製時；報告不寫此名稱）
+## 7. 圖題與表題之文體
 
-下列語法僅於以該轉檔管線產製時適用；不用該管線者，圖表編號與交叉引用依專案之產製方式（無者以 md 手編並於回報註明），內建檢查（〈落地到專案〉第 4 節）之意旨仍適用。語法由 md→html 階段處理（轉檔套件所依賴之 `w-md2html`，其說明載有 `data-for`、圖題與引用之規則；轉檔套件本身之說明未載）；本節已以小型 md 轉檔並解開 docx 核對過，專案內可用自己之小型 md 重跑一次確認版本差異。
+md 端為轉檔所寫之語法（圖表自動編號與交叉引用、`data-for` 標記、留白、欄寬、格內換行）依 skill[role-writer-report-convert-to-docx] 之 `references/md-syntax.md`。不以該轉檔管線產製者，圖表編號與交叉引用依專案之產製方式（無者以 md 手編並於回報註明），內建檢查（〈落地到專案〉第 4 節）之意旨仍適用。下列為屬報告文體之規則：
 
-```html
-<div style="padding:2rem 0; text-align:center;">
-    <img style="width:100%; max-width:700px;" src="pics/申請流程圖.png" />
-    <div style="padding-top:0.5rem;">圖n 申請流程圖</div>
-</div>
-
-<div style="text-align:center;" data-for="br"></div>   <!-- 連續多圖之間 -->
-
-<div style="margin:1rem 0; text-align:center; page-break-after:avoid;">表n 構面要點表</div>
-<div data-for="tab" data-style-th-0="white-space:nowrap;" data-style-td-0="white-space:nowrap; text-align:center;"></div>
-
-| 欄一 | 欄二 | 欄三 |
-|---|---|---|
-
-<div style="margin:1rem 0;" data-for="br"></div>       <!-- 表下留白 -->
-```
-
-- **自動編號**：作者在 md 內寫字面之 `圖n 名稱`、`表n 名稱`（`n` 即字母 n，不寫成 `圖1`），轉換時依序換成圖 1、表 1；內文以 `{名稱}` 引用，名稱須完全一致。**對不上者只印一行警告（`reference(s) match no figure/table name`）而不中斷，`{名稱}` 字面會留在輸出**，須自行檢查警告。實跑時若圖題寫成 `圖1 …`，三處引用皆未解析。
-- **docx 端之圖題判定**為「圖1 名稱」形式（標號後空一格）；「圖1：名稱」不算圖題；使用目錄（`toc`）時編號須由 1 依序，否則轉檔失敗。
 - **圖題**在圖下、末字為「圖」；**表題**在表上、末字為「表」；內文以編號引用，不寫「如下表」「如上圖」。
-- **`data-for="br"`**：空段落，撐開垂直留白；**`data-for="tab"`**：把 `data-style-th-N`、`data-style-td-N`（N 為由 0 起算之欄索引，內容為任意行內樣式字串）追加到其後第一張表格；多個標記會疊加，故**同一表格前只放 1 個**；標記須與表格同層，找不到表格時標記被靜默移除。
-- **留白**：圖外框用 padding，垂直留白以 `data-for="br"` 撐開（經驗作法；套件說明載明的是區塊表格之 `margin:auto` 無法帶入 docx、`li` 之 margin 須為個別元素之 px 值，並未說所有 margin 皆無效）。
-- 一行寫兩個以上 `<img src>` 會拋錯，須分行；`<img>` 只處理雙引號之 `src`。
 - **三欄以上才用表格**：兩欄改條列分項（表單類與指定版式除外）。
-- **短欄不折行**（經驗，版式參數）：5 字以內一律不換行，6～10 字酌情，不換行欄加總不超過內文寬（A4 直式約 37 字）；超過時 Word 仍會壓縮欄寬，依序減少不換行之欄、縮小字級與邊距、長表頭以 `<br>` 斷為 2 行。
-- **表格格內換行**用 `<br>`（經驗）。
 
 ## 8. docx 產製與驗證
 
-```js
-import WMd2docx from 'w-md2docx/src/WMd2docx.mjs'   // 套件說明之範例以 src 入口匯入
-let r = await WMd2docx.cvMdToDocx('./report/報告.md', './report/報告.docx', {
-    fpInTemp: '<專案之範本>.docx', // 建議絕對路徑；範本須含 doNotAutoCompressPictures
-    keepCaption: true,             // 圖名表名與其圖表同頁
-    toc: true,                     // 章節、圖、表目錄並重編頁碼；是否開啟依專案版式
-    // optHtml2docx: { imgHeightReserveLines: 4 }, // 預設 4，大圖下方預留間隔段與圖名
-})
-// r 恆有 fpOutDocx、sizeDocx、sizeHtml、ms；啟用 keepCaption、toc 時另有同名欄位；fpOutHtml 只在 opt.fpOutHtml 時有
-```
-
-- **環境**：須 Windows 且已安裝 Microsoft Word；使用 `toc` 套件內部另呼叫 PowerShell，全域設定要求避免 PowerShell，故啟用 `toc` 前先徵詢裁定者；首次轉檔須自網路取得轉檔所需之執行檔（依套件說明）。專案未安裝轉檔套件、無範本或無 Word 者，不自行加裝，先問裁定者，或改依 skill[role-operator-docx] 另建 docx。
-- **工作目錄與範本**：相對路徑與預設範本皆依工作目錄解析；未給 `fpInTemp` 時於工作目錄之 `./src/tmp.docx` 或 `./node_modules/w-html2docx/src/tmp.docx` 找內建範本，找不到即失敗。範本用專案自己的，不混用他案範本；以專案根為工作目錄或給絕對路徑。
-- **一次一個**：同一 Node 行程內之轉檔會自動排隊，跨行程不保證，Word 為單一實例，並行會互相拒絕；產製期間勿手動開 Word；結束後確認無殘留 WINWORD 行程（目錄更新逾時時可能殘留，須人工結束）。
-- **圖片**：不存在即 reject（一次列出全部缺圖之絕對路徑）；路徑以 md 所在資料夾解析；Word 解析不到之圖（如網址取不到）於後段 reject。
-- **失敗時不留檔**：`toc` 或 `keepCaption` 失敗時轉檔會刪除剛產出之 docx 再 reject；不以「檔案存在」判斷成敗。
-- **以實體檔之時間與大小驗證，不憑回傳值**；docx 是 zip，可解開讀 `word/document.xml`：目錄欄位（`TOC`）、圖表編號欄位（`SEQ`）、圖數（`<w:drawing>`）是否與 md 一致，並確認 `word/settings.xml` 含 `doNotAutoCompressPictures`；版面有疑義者以 Word 實排轉圖目視。
-- **md 抽查**：交叉引用全解析（無警告）、圖檔存在、表格完整、定稿句在位。
-- **審稿順序**：md 交審定後才產 docx（裁定者要求看 docx 者依其指示）。
+md 轉 docx 之轉檔呼叫、環境、範本與範本衛生、執行紀律（一次一個、產製期間不開文書軟體）、docx 驗證（實體檔、document.xml 文字節點核對）、審稿順序與產物管理，一律依 skill[role-writer-report-convert-to-docx]，本技能不重述。
