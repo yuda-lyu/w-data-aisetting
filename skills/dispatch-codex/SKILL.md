@@ -5,7 +5,7 @@ description: 當任務需要委派給 Codex，或需要把 Codex 納入多代理
 
 # dispatch-codex
 
-使用 `w-dispatch-ai` 的 `dispatchCodex()` 執行自動化 Codex 任務（本技能對照 1.0.73；`dispatchCodex()` 之固定參數與自用鍵自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，codex 預設不限，見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。轉接器會呼叫 `codex exec`、透過 stdin 傳入提示詞、設定沙箱政策、略過 Git 儲存庫限制、管理逾時與程序樹清理，並以結果物件回報失敗。
+使用 `w-dispatch-ai` 的 `dispatchCodex()` 執行自動化 Codex 任務（本技能對照 1.0.80；`dispatchCodex()` 之固定參數與自用鍵自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，codex 預設不限，見〈逾時分層〉選項表；1.0.79 起遞補層對 `codex` 條目於呼叫前先看額度、用量 ≥95% 即略過（`quotaGate`，遞補層選項、非 `dispatchCodex()` 的自用鍵），見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。轉接器會呼叫 `codex exec`、透過 stdin 傳入提示詞、設定沙箱政策、略過 Git 儲存庫限制、管理逾時與程序樹清理，並以結果物件回報失敗。
 
 需要變更模型／設定旗標、沙箱行為或非互動輸出時，讀取 [references/codex-flags.md](references/codex-flags.md)。
 
@@ -365,9 +365,10 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**；給得比 `timeoutMs` 小，4 小時等於白設 |
 | `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
 | `cooldownMs` | `0`（關閉） | 只對**有明給 `id`** 的條目記冷卻；內建觸發只有 HTTP 429 與逾時，而 **429 僅 REST 類偵測得到**；CLI 類的限流埋在輸出文字裡，內建規則抓不到 |
-| `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /<觀察到的限流字樣>/i.test(r.stderr \|\| '')`；字樣由觀察到的呼叫端維護，套件不內建 |
+| `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /<觀察到的限流字樣>/i.test(r.stderr \|\| '')`；字樣由觀察到的呼叫端維護，套件不內建（codex 的額度字樣套件未見過、不內建；要讓失敗文字進額度帳，見下列 `quotaGate` 列的 `quotaUntilOf`） |
 | `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
 | `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**codex 預設不限**（只有 opencode 預設啟用）。依據：套件在 8 核心 Windows 機觀察現役 `codex.exe`（1 個）數十秒窗內為 0.0% 單核——等候模型回應時幾乎不占 CPU；若比照 opencode 以 `核心數−1` 計數，同時派多個 `codex exec` 反而讓新派工白等。**未驗證處**：這是對現役行程之觀察，**未以真實 `codex exec` 派工量測**（會耗訂閱額度）。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `codex.exe` 之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
+| `quotaGate` | 未給＝**預設開**（codex 條目自 1.0.79 起；此鍵為遞補層與 `createAiCaller` 的選項，不是 `dispatchCodex()` 的自用鍵、不轉傳轉接器） | 遞補層選到 `codex` 條目（**無 `keys` 者**；條目 `env.CODEX_HOME` 與本行程不同者不適用——讀者繼承本行程環境，查的會是別的帳號）、呼叫轉接器前，先看**額度帳**（`store.quota`，`now < until` 即略過、不查不派），再以 `getQuotaCodex`（`codex app-server`，唯讀、不耗額度）查用量，**任一視窗 `usedPercent ≥ 95` 即略過、不派**——事件 `quota-skip`（帶 `source`：`'usage-api'`／`'ledger'`／`'limit-text'`）、`tried[].outcome: 'quota-skip'`、合成失敗結果 `errorType: 'quota'`、`failureKind: 'no-credit'`、`error` 以 `QUOTA_COOLDOWN:` 開頭、`attempts: 0`；**不寫條目冷卻**（`cooldownMs` 之既有語意不變）。此前額度滿期間，每輪每席都先空試一次（可達逾時）。**模型別視窗只在 model 相符時計入**：視窗帶 `scope` 者，只在條目 `model` 含該 scope（忽略大小寫與非英數）時計入；無 `scope` 的視窗一律計入。**入帳**：判定為被擋且被擋視窗的重置時刻可解析時，寫入 `store.quota`（`until` 為被擋視窗重置時刻之最晚者，上限現在＋8 天，跨行程經既有 `store` 持久化；`store` 無效時退回行程內記憶體），之後 `now < until` 不再查詢，過期才重查；codex 的額度字樣本套件未見過、**不內建**，要靠失敗文字入帳者由呼叫端注入 `quotaUntilOf(r)`（以 `entry:<id>` 入帳，只對明給 `id` 的條目有效）。**預設只作用於 `exe` 為真的 `codex`（或未給 `exe`）**，假 CLI 與包裝腳本不被預設查詢，明給 `quotaGate: true` 或物件才不論 `exe`。**fail-open**：讀者逾時、拋錯、未授權、欄位缺漏、`usedPercent` 缺漏或非數字一律不擋（另發 `quota-gate-error`）。**成本**：讀者約 4.6 秒（套件本機實測 1 次），claude／codex 讀者結果預設快取 60 秒（`cacheMs`）、查詢逾時 15 秒（`timeoutMs`）。**關閉**：`quotaGate: false`（遞補層頂層或單一條目；查用量、讀帳、寫帳三處全關）；只想調門檻用 `codexMax`（`false` 關閉該家）或 `windowMax`。帳在重置前不重查，期間若升級方案或補充額度，須清除 `store.quota` 之該鍵或 `quotaGate: false` |
 
 遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰。
 
@@ -432,6 +433,7 @@ await wda.dispatchCodex(prompt, {
 | `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（`params`／`timeout`／`spawn`／`validation`／`exec`／`http`／`fetch`…；子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`；1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時亦回 `aborted`） |
 | 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
 | spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
+| 遞補層送出前的額度門檻（`quotaGate`）與額度帳（1.0.79 起） | `src/subQuotaGate.mjs` 檔頭（適用範圍、選項、fail-open）、`src/quotaLedger.mjs`（`store.quota` 形狀與 8 天上限）、`src/quotaJudge.mjs`（視窗判定與快取）；codex 讀者為 `src/quota/getQuotaCodex.mjs` |
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
 | 多供應商遞補、金鑰輪替、條目 id 命名規則 | `src/dispatchAiFallback.mjs` 檔頭 |
 
@@ -479,6 +481,14 @@ codex --version
 codex exec --help
 ls ~/.codex/.sandbox/setup_marker.json   # Windows：存在才代表 elevated 沙箱設定已完成
 ```
+
+2026-11-07 對照：以 `w-dispatch-ai` **1.0.80** 之原始碼與 README 行為變更紀錄第 67 條核對（讀 `src/subQuotaGate.mjs`、`src/quotaLedger.mjs`、`src/dispatchAiFallback.mjs` 檔頭與 `dispatchCodex.mjs` 之自用鍵；**未實際呼叫模型**，讀者耗時為套件同日之本機實測紀錄，本技能未重驗）：
+
+| 項目 | 結果 |
+|---|---|
+| `dispatchCodex()` 固定參數與自用鍵 | 不變（`exec`、`--sandbox`、`--skip-git-repo-check`、`-m`；自用鍵 `exe`／`model`／`sandbox`／`extraArgs`／`input`）；`quotaGate`／`quotaUntilOf` 為遞補層選項，不是本轉接器的自用鍵、不轉傳，**呼叫方式不變** |
+| `quotaGate`（1.0.79） | 擴及 `codex` 條目（無 `keys` 者），預設開：額度帳 → `getQuotaCodex` → 任一適用視窗 ≥95% 即略過；codex 額度字樣不內建；讀者失敗一律不擋 |
+| `providers.mjs` | codex 條目仍 3 條（`codex:gpt-5.6-luna`、`codex:gpt-6.1-terra`、`codex:gpt-6.1-sol`）；全表 38 條（1.0.78 新增的 1 條為 `ocgo:`，與 codex 無關） |
 
 2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式；**未實際呼叫模型**，守門之 CPU 實測為套件同日之紀錄，本技能未重驗）：
 

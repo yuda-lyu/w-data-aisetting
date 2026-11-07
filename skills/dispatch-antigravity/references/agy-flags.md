@@ -8,6 +8,8 @@
 - [Antigravity 官方無介面模式文件](https://antigravity.google/docs/cli/headless/)
 - [Antigravity CLI 官方儲存庫](https://github.com/google-antigravity/antigravity-cli)
 
+2026-11-07 增補（`--input-format` 與提示詞走 stdin 的行為）之來源：`w-dispatch-ai` **1.0.80** 之 `src/dispatchAntigravity.mjs` 檔頭與其實測紀錄（agy 1.5.2；本檔**未重跑**）。
+
 模型型錄由伺服器提供，可能獨立於本文件變更。修改固定模型前，須重新執行 `agy models`。
 
 ## 非互動語法
@@ -17,7 +19,7 @@ agy --print "prompt" [flags]
 agy -p "prompt" [flags]
 ```
 
-提示詞是 `--print` 的必要參數值；單次執行不會從 stdin 讀取提示詞。因此 `dispatchAntigravity()` 會把提示詞當成命令列參數，並套用 30,000 字元上限。
+提示詞是 `--print` 的必要參數值；單次執行不會從 stdin 讀取純文字提示詞（純文字塞 stdin 而不帶 `--print` 會進互動模式卡住）。因此 `dispatchAntigravity()` 在提示詞不超過 30,000 字元時把它當成命令列參數（argv 路徑）；1.0.80 起預設（`promptVia: 'auto'`）超過 30,000 字元改走 stdin 的 `--input-format stream-json`（stream 輸入必須搭配 stream 輸出，須 agy ≥ 1.1.15），做法與限制見 SKILL.md〈提示詞傳輸〉。
 
 ## 必要模型與最深推理
 
@@ -88,7 +90,7 @@ MSYS_NO_PATHCONV=1 agy -p /effort --model gemini-3.8-flash --output-format json
 | `--print-timeout <duration>` | 限制 print 模式等待時間；**預設 `0s`＝等到完成**。到期時 agy 以 exit 0 交回部分輸出，不是錯誤。`dispatchAntigravity()` 未給 `printTimeout` 時推導為 `timeoutMs` 秒數 + 30，令外層先逾時 |
 | `--add-dir <path>` | 增加工作區目錄；可重複使用 |
 | `--output-format text\|json\|stream-json` | 選擇 print 模式輸出格式 |
-| `--input-format text\|stream-json` | 選擇 print 模式輸入格式；stream 輸入必須搭配 stream 輸出 |
+| `--input-format text\|stream-json` | 選擇 print 模式輸入格式；stream 輸入必須搭配 stream 輸出。`stream-json` 自 agy 1.1.15 起（`agy changelog`）；輸入為每行一個 JSON 事件，如 `{"event":"user","message":{"role":"user","content":"…"}}`，**不得同時帶 `-p`**（離開碼 2）；**斜線指令**（`/usage`、`/effort` 等）在此輸入格式下被 CLI 拒絕（離開碼 2）。`dispatchAntigravity()` 的 stdin 路徑即使用此格式 |
 | `--json-schema <schema-or-path>` | 限制最終結果結構 |
 | `-c`、`--continue` | 延續最近一次對話 |
 | `--conversation <id>` | 以 ID 恢復對話 |
@@ -143,6 +145,9 @@ agy 的非成功結局多半是 **exit 0**，只看離開碼分不出來：
 | 權限閘門擋下（未加 `--dangerously-skip-permissions`，工具需要寫入） | 0 | 空 | `jetski: no output produced — a tool required the "write_file" permission that headless mode cannot prompt for, so it was auto-denied. …`（2026-10-18 於 1.4.2 實測；1.1.27 時同段訊息印在 stdout、權限名為 `command`） |
 | `--print-timeout` 到期 | 0 | 已產出之部分，可能為空 | `[agy] print timeout after <t> with turn in progress; returning partial output` |
 | 指定了不存在的模型 | 1 | — | 錯誤訊息（不會靜默退回其他模型） |
+| stream-json 輸入：未知的 `event` 值（如 `user_message`） | **0** | 只有 `init` 事件、沒有 `result` | warning；**離開碼 0 不代表成功**，須以有無 `result` 事件判斷（2026-11-07 套件於 agy 1.5.2 實測） |
+| stream-json 輸入：缺 `event` 欄，或 `event` 為 `user` 但缺 `message` | 1 | — | 如 `stream input message is missing the "event" field` |
+| `-p` 併 `--input-format` | 2 | — | 提示詞不得同時由命令列給 |
 
 ## 工作區與認證
 

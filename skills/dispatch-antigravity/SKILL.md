@@ -5,7 +5,7 @@ description: 當任務需要委派給 Antigravity，或需要使用其提供的 
 
 # dispatch-antigravity
 
-使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.73；固定旗標與自用鍵自 1.0.17 起未變動（1.0.73 另加自用鍵 `spawnGate`：每次 spawn 前有機器級守門，agy 預設不限，見〈逾時分層〉選項表），**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-10-18 以 1.4.2 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
+使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.80；固定旗標與自用鍵自 1.0.17 起未變動（1.0.73 另加自用鍵 `spawnGate`：每次 spawn 前有機器級守門，agy 預設不限，見〈逾時分層〉選項表；1.0.80 另加自用鍵 `promptVia`：提示詞不超過 30,000 字元仍走 `--print`、逐位元不變，超過才改走 stdin，見〈提示詞傳輸〉；1.0.79 起遞補層對 agy 條目於送出前先看額度，見〈逾時分層〉選項表之 `quotaGate`），**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-10-18 以 1.4.2 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
 
 需要變更模型 slug、effort、print 模式旗標、逾時或工作區可視範圍時，讀取 [references/agy-flags.md](references/agy-flags.md)。
 
@@ -113,9 +113,23 @@ Antigravity 也接受 `--effort`（各模型實際可用值以「必要預設值
 
 ## 提示詞傳輸
 
-與另外三個轉接器不同，agy 要求提示詞作為 `--print` 的值，單次任務不會從 stdin 讀取提示詞。因此 `dispatchAntigravity()` 會將提示詞限制為 30,000 個字元，以保留 Windows 命令列長度的安全空間。
+與另外三個轉接器不同，agy 的 `--print` 是帶值旗標，提示詞作為它的值（命令列），單次任務不會從 stdin 讀取純文字提示詞；把純文字塞進 stdin 而不帶 `--print`，agy 會進互動模式卡住。命令列受 Windows 長度上限約束，所以 1.0.80 起 `dispatchAntigravity()` 提供選項 `promptVia`（預設 `'auto'`）：
 
-輸入更長時，應先把內容寫入允許存取目錄內的檔案，再派送一段引用該路徑的短提示詞。
+| `promptVia` | 做法 | 限制 |
+|---|---|---|
+| `'argv'` | `--print <prompt>`（舊行為） | 超過 30,000 字元回 `prompt too long`（`errorType: 'params'`、`attempts: 0`，不 spawn） |
+| `'stdin'` | 不帶 `--print`，固定加 `--input-format stream-json --output-format stream-json`，自 stdin 送**一行** NDJSON `{"event":"user","message":{"role":"user","content":<prompt>}}` | 不受命令列長度限制（套件以 agy 1.5.2 實測 37,504 與 36,060 字元成交）；須 agy ≥ 1.1.15 |
+| `'auto'`（預設） | 不超過 30,000 字元走 argv（與舊版逐位元相同），超過走 stdin | — |
+
+**stdin 路徑的注意事項**（套件檔頭記載，agy 1.5.2 實測）：
+
+- **判成敗只看輸出中最後一個 `result` 事件**：`status` 為 `SUCCESS` 才 `ok: true`，`stdout` 是 `result.response`（純回覆文字，`validate` 對它判定），原始 NDJSON 放結果的 `raw` 欄；`status` 不為 `SUCCESS`（如 `ERROR`）或**沒有 `result` 事件一律 `ok: false`**（`errorType: 'exec'`）。agy 對不認得的輸入事件只在 stderr 印 warning、stdout 只留 `init`、**離開碼為 0**，所以離開碼 0 或 stdout 非空都不能判成功。此失敗在 execCli 回報成功之後才判定，**不受 `maxRetries` 重試**。
+- **`extraArgs` 不得含 `--output-format`、`--input-format`、`--print`／`-p`／`--prompt`、`-i`／`--prompt-interactive`**（含 `=值` 與單橫線寫法），否則回 `params` 錯誤、不 spawn。預設 `'auto'` 下，帶 `--output-format` 的呼叫一旦提示詞超過 30,000 字元，也會因此回 `params`（見〈結構化輸出〉）。
+- **版本**：spawn 前先以 `agy --version`（約 0.15 秒）探測，低於 1.1.15 直接回 `params` 錯誤並指引 `agy update`；探測不確定時放行，若 agy 回「flags provided but not defined: -input-format」則 `error` 改寫為同樣的升級指引。輸入訊息形狀**只在 agy 1.5.2 實測**，1.1.15～1.5.1 未驗證（本技能的版本下限 1.1.25 已高於 1.1.15，但實測依據只有 1.5.2）。
+- **斜線指令不可用**：`/usage`、`/effort` 等斜線指令在 stream-json 輸入下被 agy 拒絕（離開碼 2）；〈必要預設值〉的 `/effort` 實查走 `agy -p`（argv），不受影響。
+- **升版後的行為變化**：超過 30,000 字元的呼叫此前整個被擋（`params`、`attempts: 0`，遞補層整組跳過），現在會真的派給 agy（耗額度、耗時）；依賴「超長必失敗」而讓遞補鏈略過 agy 的呼叫端，要略過的明給 `promptVia: 'argv'`。要全面改走 stdin（連帶避開含大量引號而長度未過上限者的轉義膨脹 `ENAMETOOLONG`）則明給 `promptVia: 'stdin'`，同時須確認各機 agy ≥ 1.1.15。
+
+輸入很長時，仍可先把內容寫入允許存取目錄內的檔案，再派送一段引用該路徑的短提示詞（審計、複審本來就要被派對象自行讀檔，見〈權限〉）；要把整段長文直接當提示詞者，用上述 stdin 路徑。
 
 ## 逾時與等待：正式派工一律 4 小時，以 detached 行程執行
 
@@ -168,7 +182,7 @@ catch (err) {
 fs.writeFileSync(out('result.json'), JSON.stringify(result, null, 2));
 ```
 
-提示詞以 `--print` 傳入，上限 30,000 字元（見〈提示詞傳輸〉）；更長的內容寫成檔案，`prompt.md` 只放引用該路徑的短提示詞。走遞補鏈或工作流時，同樣用這支腳本包住整個呼叫（把 `dispatchAntigravity` 換成 `dispatchAiFallback` 或工作流函數），步驟 2、3 不變。
+提示詞預設不超過 30,000 字元走 `--print`、超過自動改走 stdin（`promptVia: 'auto'`，見〈提示詞傳輸〉）；更長的內容仍可寫成檔案，`prompt.md` 只放引用該路徑的短提示詞。走遞補鏈或工作流時，同樣用這支腳本包住整個呼叫（把 `dispatchAntigravity` 換成 `dispatchAiFallback` 或工作流函數），步驟 2、3 不變。
 
 **步驟 2：以 detached 啟動。** 用前景 Bash 執行，立即返回；**不要**用 `run_in_background` 跑派工本身，那會讓它受上表時限約束：
 
@@ -231,6 +245,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /quota/i.test(r.stderr \|\| '')`。agy 額度用盡時的實際字樣與離開碼套件未驗證，先觀察到再寫 |
 | `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
 | `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**antigravity 預設不限**（只有 opencode 預設啟用，其 `opencode.exe` 單次短呼叫實測約占 1.1 核心）。**未驗證處**：`agy.exe` 在套件實測機上沒有行程，**其 CPU 占用從未量測**——預設不限是「未證實會占核故不擋」，不是「已證實不占核」，有實測後預設可能改為限制。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `agy.exe`〔非 Windows 為 `agy`〕之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
+| `quotaGate` | 未給＝**預設開**（antigravity 條目自 1.0.79 起；此鍵為遞補層與 `createAiCaller` 的選項，不是 `dispatchAntigravity()` 的自用鍵、不轉傳轉接器） | 遞補層選到 agy 條目（**無 `keys` 者**）、呼叫轉接器前，先看**額度帳**（`store.quota`，`now < until` 即略過、不查不派），再以 `getQuotaAntigravity`（`agy -p "/usage"`，唯讀、不耗額度）查用量，**任一視窗 `usedPercent ≥ 95` 即略過、不派**——事件 `quota-skip`（帶 `source`：`'usage-api'`／`'ledger'`／`'limit-text'`）、`tried[].outcome: 'quota-skip'`、合成失敗結果 `errorType: 'quota'`、`failureKind: 'no-credit'`、`error` 以 `QUOTA_COOLDOWN:` 開頭、`attempts: 0`；**不寫條目冷卻**（`cooldownMs` 之既有語意不變）。此前額度滿期間，每輪每席都先空試一次（可達逾時）。視窗依 `model` 對到 `/usage` 的群組：`gemini-4-argon*`→「Gemini 4 Argon」、`gemini-*`→「Gemini Models」、`claude-*`／`gpt-oss-*`→「Claude and GPT models」，**對不到取全部視窗**——所以 `agy:claude-*` 條目看的是「Claude and GPT models」群組（含 5 小時窗），不是 Gemini 的。**入帳**：判定為被擋且被擋視窗的重置時刻可解析時，寫入 `store.quota`（`until` 為被擋視窗重置時刻之最晚者，上限現在＋8 天，跨行程經既有 `store` 持久化；`store` 無效時退回行程內記憶體），之後 `now < until` 不再查詢，過期才重查；agy 的額度字樣本套件未見過、**不內建**，要靠失敗文字入帳者由呼叫端注入 `quotaUntilOf(r)`（以 `entry:<id>` 入帳，只對明給 `id` 的條目有效）。**預設只作用於 `exe` 為真的 `agy`（或未給 `exe`）**，假 CLI 與包裝腳本不被預設查詢，明給 `quotaGate: true` 或物件才不論 `exe`。**fail-open**：讀者逾時、拋錯、未授權、欄位缺漏、`usedPercent` 缺漏或非數字一律不擋（另發 `quota-gate-error`）。**成本**：agy `/usage` 較慢（套件本機實測 1 次 9.5 秒；套件 README 稱 10～60 秒），讀者結果預設快取 300 秒（`antigravityCacheMs`）、查詢逾時 60 秒（`antigravityTimeoutMs`），首次呼叫與快取到期後的第一次呼叫會多等這段。**關閉**：`quotaGate: false`（遞補層頂層或單一條目；查用量、讀帳、寫帳三處全關）；只想調門檻用 `antigravityMax`（`false` 關閉該家）或 `windowMax`。帳在重置前不重查，期間若升級方案或補充額度，須清除 `store.quota` 之該鍵或 `quotaGate: false` |
 
 遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰。
 
@@ -320,7 +335,9 @@ await wda.dispatchAntigravity(prompt, {
 
 使用 `stream-json` 時，應將 stdout 當成 JSONL 解析，且不可使用單一文件的 JSON 驗證器。`--json-schema` 可接受行內 schema 字串或 schema 檔案路徑。
 
-## 轉接器契約（w-dispatch-ai 1.0.53）
+**提示詞超過 30,000 字元時**，預設的 `promptVia: 'auto'` 會改走 stdin（固定 `--output-format stream-json`，`stdout` 已還原為純回覆文字、原始 NDJSON 在 `raw`；見〈提示詞傳輸〉），此時 `extraArgs` 若帶 `--output-format`（如上例）會回 `params` 錯誤、不 spawn。超長提示詞的呼叫請去掉該旗標；要保留該旗標者明給 `promptVia: 'argv'` 並把提示詞縮到 30,000 字元內。
+
+## 轉接器契約（w-dispatch-ai 1.0.80）
 
 | 選項 | 轉接器預設值 | 行為 |
 |---|---:|---|
@@ -330,7 +347,8 @@ await wda.dispatchAntigravity(prompt, {
 | `skipPermissions` | `true` | 加入 `--dangerously-skip-permissions` |
 | `printTimeout` | `timeoutMs` 秒數 + 30 | agy 內層逾時；預設推導值恆晚於外層，只作後備。明給小於 `timeoutMs` 的值會讓慢回合變成 `ok: true` 的截斷輸出 |
 | `addDirs` | 實際 `cwd` | 重複展開為 `--add-dir`；明確傳入 `[]` 可停用自動加入 |
-| `extraArgs` | `[]` | 插入在 `--print <prompt>` 之前 |
+| `promptVia` | `'auto'` | **1.0.80 新增**，自用鍵、不轉交 `execCli`。`'argv'`／`'stdin'`／`'auto'`（無效值回退 `'auto'`）：不超過 30,000 字元走 `--print`、超過走 stdin 的 `--input-format stream-json`；細節見〈提示詞傳輸〉 |
+| `extraArgs` | `[]` | 接在固定旗標之後、`--print <prompt>`（argv 路徑）或 `--input-format stream-json --output-format stream-json`（stdin 路徑；此路徑下不得含衝突旗標，見〈提示詞傳輸〉）之前 |
 | `timeoutMs` | `300000` | 外層程序樹逾時 |
 | `cwd` | 目前目錄 | 子程序工作目錄。**它本身不會讓 agy 看得到檔案**——agy 以自身 scratch 目錄為工作區，可視範圍只由 `--add-dir` 決定；未給 `addDirs` 時轉接器自動把有效 `cwd` 加進去，就是為了補這個落差 |
 | `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`；以淺層副本轉傳，物件不可讀（拋錯之 getter 等）時於啟動前回 `errorType: 'params'` |
@@ -338,7 +356,7 @@ await wda.dispatchAntigravity(prompt, {
 | `spawnGate` | 未給＝不限 | **1.0.73 新增**，自用鍵、不轉交 `execCli`。每次 spawn 前守門（驗證不過而重試者每次重守）；預設與依據見〈逾時分層〉選項表 |
 | `maxRetries`、`retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
 
-回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`（守門實際等過時另帶 `gateWaitedMs`，逾時放行者再帶 `gateFailOpen: true`，`durationMs` 不含守門等待）；必須檢查 `ok`。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`；`durationMs` 含驗證時間。轉接器會捕捉提示詞過長與 spawn 失敗，維持不 reject 的契約。
+回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`（守門實際等過時另帶 `gateWaitedMs`，逾時放行者再帶 `gateFailOpen: true`，`durationMs` 不含守門等待）；必須檢查 `ok`。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`；`durationMs` 含驗證時間。stdin 路徑另帶 `raw`（agy 原始 NDJSON 輸出，離開碼 0 之結果才有）。轉接器會捕捉提示詞過長（`promptVia: 'argv'`）與 spawn 失敗，維持不 reject 的契約。
 
 請使用 UMD 預設匯出：`import wda from 'w-dispatch-ai'`。
 
@@ -350,17 +368,18 @@ await wda.dispatchAntigravity(prompt, {
 
 | 想知道 | 讀哪個檔 |
 |---|---|
-| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchAntigravity.mjs`（旗標順序為 `--dangerously-skip-permissions` → `--print-timeout` → `--model` → `--effort` → 各 `--add-dir` → `extraArgs` → `--print <prompt>`；自用鍵八個：`exe`／`model`／`effort`／`skipPermissions`／`printTimeout`／`addDirs`／`extraArgs`／`input`，其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`（`validate` 除外，由該檔自行判定）；提示詞上限 30000 字元、`printTimeout` 推導公式（`timeoutMs` 秒數 + 30，封頂於計時器上限）亦在此） |
+| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchAntigravity.mjs`（旗標順序為 `--dangerously-skip-permissions` → `--print-timeout` → `--model` → `--effort` → 各 `--add-dir` → `extraArgs` → `--print <prompt>`〔argv 路徑；stdin 路徑改為 `--input-format stream-json --output-format stream-json`、不帶 `--print`〕；自用鍵九個：`exe`／`model`／`effort`／`skipPermissions`／`printTimeout`／`addDirs`／`extraArgs`／`input`／`promptVia`，其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`（`validate` 除外，由該檔自行判定）；提示詞上限 30000 字元（僅 argv 路徑）與 `promptVia` 的傳法、stdin 路徑判成敗與舊版 agy 的處置、`printTimeout` 推導公式（`timeoutMs` 秒數 + 30，封頂於計時器上限）亦在此；stdin 輸出的解析與版本探測在 `src/parseAgyStream.mjs`、`src/checkAgyStdinSupport.mjs`） |
 | 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
 | 實際可用且已被實測過的模型條目（含權限鎖、`addDirs`、實測耗時） | `src/providers.mjs` |
 | `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。agy 被權限擋下（stdout 空）只靠 `nonempty` 擋得住，這個字更不能打錯 |
-| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`，含命令列過長、權限不足、非有效執行檔；前置檢查擋下的提示詞過長則為 `params`；1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時亦回 `aborted`） |
+| `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`，含命令列過長、權限不足、非有效執行檔；前置檢查擋下的提示詞過長（`promptVia: 'argv'`）則為 `params`，stdin 路徑的 `extraArgs` 衝突旗標與 agy 版本過舊亦為 `params`，stdin 路徑無 `result` 事件或 `result` 非 `SUCCESS` 為 `exec`；1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時亦回 `aborted`；1.0.79 起 `quotaGate` 略過條目之合成失敗結果為 `quota`） |
+| 遞補層送出前的額度門檻（`quotaGate`）與額度帳 | `src/subQuotaGate.mjs` 檔頭（訂閱類條目的適用範圍、agy 群組對照、選項與快取）、`src/quotaLedger.mjs`（`store.quota` 形狀與 8 天上限）、`src/quotaJudge.mjs`（視窗判定與快取）；agy 讀者為 `src/quota/getQuotaAntigravity.mjs` |
 | 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000；其註解已更正：agy 1.4.0 之 `print-timeout` 預設為 `0s`，此值不再以「對齊 5m0s」為依據）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
 | spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
 | 多供應商遞補、金鑰輪替、條目 id 命名規則 | `src/dispatchAiFallback.mjs` 檔頭 |
 
-**檔頭註解是實測紀錄，不是設計說明**：`src/dispatchAntigravity.mjs` 檔頭記著一組最容易誤判的實測（2026-08-13，以隨機 token 驗證）——**只給 `cwd` 而沒有 `--add-dir` 時，弱模型直接回「找不到檔案」、強模型自行摸索（116 秒，對照帶 `--add-dir` 的 6 秒），而且兩者都是 `ok: true`**；這種情況極易被誤判成「模型能力不足」，實際是可視範圍沒開。同檔另記載 `--print` 為帶值旗標（塞 stdin 會進互動模式卡住）、model 與 effort 的衝突規則（帶檔位 slug 與 `--effort` **檔位不一致才拒絕**，一致則放行）、未給 model 時 agy 預設為 Gemini 4 Argon (Medium)、雙逾時改為外層先到的理由，以及權限被擋時 stderr 的訊息。與本技能所述不一致時，以原始碼與其實測註記為準，並回頭修技能。
+**檔頭註解是實測紀錄，不是設計說明**：`src/dispatchAntigravity.mjs` 檔頭記著一組最容易誤判的實測（2026-08-13，以隨機 token 驗證）——**只給 `cwd` 而沒有 `--add-dir` 時，弱模型直接回「找不到檔案」、強模型自行摸索（116 秒，對照帶 `--add-dir` 的 6 秒），而且兩者都是 `ok: true`**；這種情況極易被誤判成「模型能力不足」，實際是可視範圍沒開。同檔另記載 `--print` 為帶值旗標（純文字塞 stdin 會進互動模式卡住）、1.0.80 起的【提示詞兩種傳法】（`promptVia` 與預設取 `'auto'` 的理由）、【stdin路徑之判成敗】與【舊版agy → 明確錯誤】三段、model 與 effort 的衝突規則（帶檔位 slug 與 `--effort` **檔位不一致才拒絕**，一致則放行）、未給 model 時 agy 預設為 Gemini 4 Argon (Medium)、雙逾時改為外層先到的理由，以及權限被擋時 stderr 的訊息。與本技能所述不一致時，以原始碼與其實測註記為準，並回頭修技能。
 
 ## 執行期驗證
 
@@ -400,6 +419,15 @@ agy update       # 版本低於 1.1.25 時升級
 ```
 
 無人值守／無介面執行前，須先以互動方式完成 Google 認證。
+
+2026-11-07 對照：以 `w-dispatch-ai` **1.0.80** 之原始碼與 README 行為變更紀錄第 67、68 條核對（讀 `src/dispatchAntigravity.mjs`〔檔頭與程式本體〕、`src/subQuotaGate.mjs`、`src/quotaLedger.mjs`、`src/dispatchAiFallback.mjs` 檔頭；**未實際呼叫模型、未重跑 agy**，stdin 路徑之 agy 1.5.2 實測與 `/usage` 讀者耗時為套件同日之紀錄，本技能未重驗）：
+
+| 項目 | 結果 |
+|---|---|
+| `dispatchAntigravity()` 固定旗標與自用鍵 | argv 路徑旗標順序不變（`--dangerously-skip-permissions`、`--print-timeout`、`--model`、`--effort`、`--add-dir`、`extraArgs`、`--print <prompt>`）；**新增自用鍵 `promptVia`**（自用鍵八個 → 九個），預設 `'auto'`：不超過 30,000 字元走 argv、逐位元不變，超過改走 stdin（旗標尾端改為 `--input-format stream-json --output-format stream-json`、不帶 `--print`）；結果新增 `raw` 欄（僅 stdin 路徑） |
+| stdin 路徑 | 判成敗只看最後一個 `result` 事件，無 `result` 事件一律 `ok: false`（`errorType: 'exec'`，不受 `maxRetries` 重試）；`extraArgs` 衝突旗標回 `params`；agy 低於 1.1.15 回 `params` 並指引 `agy update`；輸入訊息形狀僅在 agy 1.5.2 實測；斜線指令在 stream-json 輸入下被 agy 拒絕 |
+| `quotaGate`（1.0.79） | 擴及 antigravity 條目（無 `keys` 者），預設開：額度帳 → `getQuotaAntigravity` 查 `/usage` → 任一適用視窗 ≥95% 即略過；快取預設 300 秒、查詢逾時 60 秒；agy 額度字樣不內建；讀者失敗一律不擋 |
+| `providers.mjs` | agy 條目仍 4 條（`agy:gemini-3.8-flash-high`、`agy:gemini-4-argon-high`、`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`）；全表 38 條（1.0.78 新增的 1 條為 `ocgo:`，與 agy 無關） |
 
 2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式；**未實際呼叫模型、未重跑 agy**）：
 

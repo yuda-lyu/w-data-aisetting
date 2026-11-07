@@ -5,7 +5,7 @@ description: 當任務需要委派給 Claude，或需要把 Claude 納入多代�
 
 # dispatch-claude
 
-使用 `w-dispatch-ai` 的 `dispatchClaude()` 執行 Claude Code（本技能對照 1.0.73；`dispatchClaude()` 之固定旗標自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，claude 預設不限，見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉；1.0.56 起可帶 Anthropic Console 之 API 金鑰改走 API 額度計費，見〈以 Anthropic Console API 額度派工〉；1.0.57 起帶金鑰之失敗結果多帶 `failureKind`，沒額度與上下文過長分開處置，見〈失敗判讀：以 API 回應為準，不查餘額〉）。轉接器會呼叫 `claude -p`、透過 stdin 傳入提示詞、管理逾時與程序樹清理，並一律回傳結果物件，不會因一般 CLI 失敗而 reject。
+使用 `w-dispatch-ai` 的 `dispatchClaude()` 執行 Claude Code（本技能對照 1.0.80；`dispatchClaude()` 之固定旗標自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，claude 預設不限，見〈逾時分層〉選項表；1.0.79 起遞補層對**無金鑰**之 `claude` 條目於呼叫前先看額度、用量 ≥95% 即略過（`quotaGate`，遞補層選項、非 `dispatchClaude()` 的自用鍵），見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉；1.0.56 起可帶 Anthropic Console 之 API 金鑰改走 API 額度計費，見〈以 Anthropic Console API 額度派工〉；1.0.57 起帶金鑰之失敗結果多帶 `failureKind`，沒額度與上下文過長分開處置，見〈失敗判讀：以 API 回應為準，不查餘額〉）。轉接器會呼叫 `claude -p`、透過 stdin 傳入提示詞、管理逾時與程序樹清理，並一律回傳結果物件，不會因一般 CLI 失敗而 reject。
 
 需要變更 CLI 旗標、排查版本差異或改用非預設模型時，讀取 [references/claude-flags.md](references/claude-flags.md)。
 
@@ -321,9 +321,10 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**；給得比 `timeoutMs` 小，4 小時等於白設 |
 | `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
 | `cooldownMs` | `0`（關閉） | 只對**有明給 `id`** 的條目記冷卻；內建觸發只有 HTTP 429 與逾時，而 **429 僅 REST 類偵測得到**；CLI 類的限流埋在輸出文字裡，內建規則抓不到 |
-| `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣。Claude Code 的執行期失敗印在 **stdout** 的 result（套件 README 引官方 headless 文件），兩邊都要看：`(r) => r.errorType !== 'validation' && /<觀察到的限流字樣>/i.test((r.stdout \|\| '') + (r.stderr \|\| ''))`；字樣由觀察到的呼叫端維護，套件不內建 |
+| `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣。Claude Code 的執行期失敗印在 **stdout** 的 result（套件 README 引官方 headless 文件），兩邊都要看：`(r) => r.errorType !== 'validation' && /<觀察到的限流字樣>/i.test((r.stdout \|\| '') + (r.stderr \|\| ''))`；字樣由觀察到的呼叫端維護，套件不內建（1.0.79 起唯一例外：Claude Code 官方額度訊息的**重置時刻**會被解析、供 `quotaGate` 入帳，見下列 `quotaGate` 列；它不觸發冷卻） |
 | `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
 | `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**claude 預設不限**（只有 opencode 預設啟用）。依據：套件在 8 核心 Windows 機觀察現役 `claude.exe`（2 個）數十秒窗內僅 0.0%／4.9% 單核——等候模型回應時幾乎不占 CPU（CPU 花在其子行程）；若比照 opencode 以 `核心數−1` 計數，同時派多個 `claude -p`（或開著多個互動 `claude.exe`）反而讓新派工白等。**未驗證處**：這是對現役行程之觀察，**未以真實 `claude -p` 派工量測**（會耗訂閱額度）。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `claude.exe` 之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
+| `quotaGate` | 未給＝**預設開**（claude 無金鑰者自 1.0.79 起；此鍵為遞補層與 `createAiCaller` 的選項，不是 `dispatchClaude()` 的自用鍵、不轉傳轉接器） | 遞補層選到**無金鑰之 `claude` 條目**（訂閱登入態：條目無 `keys`／`key`、`env` 無有效 `ANTHROPIC_API_KEY`；條目 `env.CLAUDE_CONFIG_DIR` 另指設定目錄者，讀者改查該目錄）、呼叫轉接器前，先看**額度帳**（`store.quota`，`now < until` 即略過、不查不派），再以 `getQuotaClaude`（OAuth usage API，讀本機登入態，唯讀、不耗額度）查用量，**任一視窗 `usedPercent ≥ 95` 即略過、不派**——事件 `quota-skip`（帶 `source`：`'usage-api'`／`'ledger'`／`'limit-text'`）、`tried[].outcome: 'quota-skip'`、合成失敗結果 `errorType: 'quota'`、`failureKind: 'no-credit'`、`error` 以 `QUOTA_COOLDOWN:` 開頭、`attempts: 0`；**不寫條目冷卻**（`cooldownMs` 之既有語意不變）。此前這類條目撞額度時走「失敗 → `cooldownMs` 降鏈尾 → 之後每輪再試一次」，額度滿期間每輪每席都先空試一次（Claude 數秒）。**模型別視窗只在 model 相符時計入**：視窗帶 `scope`（如「7天(Fable)」）者，只在條目 `model` 含該 scope（忽略大小寫與非英數）時計入——他模型的週限額到頂不擋本條目；無 `scope` 的視窗一律計入。**入帳**：判定為被擋且被擋視窗的重置時刻可解析時，寫入 `store.quota`（`until` 為被擋視窗重置時刻之最晚者，上限現在＋8 天，跨行程經既有 `store` 持久化；`store` 無效時退回行程內記憶體），之後 `now < until` 不再查詢，過期才重查；另外 `claude` 條目的失敗結果若命中 Claude Code 官方額度字樣（形如 `You've hit your weekly limit · resets Nov 9, 5pm (<IANA 時區名>)`，以括號內 IANA 時區解析），或呼叫端注入的 `quotaUntilOf(r)` 回傳時刻，以 `entry:<id>` 入帳（事件 `source: 'limit-text'`，只對明給 `id` 的條目有效；字樣解析不到時只是少一次入帳）。**預設只作用於 `exe` 為真的 `claude`（或未給 `exe`）**，假 CLI 與包裝腳本不被預設查詢，明給 `quotaGate: true` 或物件才不論 `exe`；**帶金鑰之 `claude`（API 計費，`claude-api:` 條目）不適用**，行為不變。**fail-open**：讀者逾時、拋錯、未授權（如 Claude 權杖逾 8 小時未刷新）、欄位缺漏、`usedPercent` 缺漏或非數字一律不擋（另發 `quota-gate-error`）。**成本**：讀者約 1.4 秒（套件本機實測 1 次），claude／codex 讀者結果預設快取 60 秒（`cacheMs`）、查詢逾時 15 秒（`timeoutMs`）。**關閉**：`quotaGate: false`（遞補層頂層或單一條目；查用量、讀帳、寫帳三處全關）；只想調門檻用 `claudeMax`（`false` 關閉該家）或 `windowMax`。帳在重置前不重查，期間若升級方案或補充額度，須清除 `store.quota` 之該鍵或 `quotaGate: false` |
 
 遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰。
 
@@ -383,13 +384,14 @@ await wda.dispatchClaude(prompt, {
 
 | 想知道 | 讀哪個檔 |
 |---|---|
-| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchClaude.mjs`（固定旗標順序為 `-p` → `--dangerously-skip-permissions` → `--model` → `extraArgs`；`exe`／`model`／`skipPermissions`／`extraArgs`／`input` 為自用鍵，其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`（`validate` 除外，由該檔自行判定）） |
+| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchClaude.mjs`（固定旗標順序為 `-p` → `--dangerously-skip-permissions` → `--model` → `extraArgs`；`exe`／`model`／`key`／`skipPermissions`／`extraArgs`／`input`／`crossCheck`／`crossCheckBaseURL`／`crossCheckModel`／`fetch` 為自用鍵（`key` 1.0.56 起、`crossCheck` 等 1.0.57 起），其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`（`validate` 除外，由該檔自行判定）） |
 | 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
 | 實際可用且已被實測過的模型條目（含權限鎖、金鑰環境變數、實測耗時） | `src/providers.mjs` |
 | `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。validate 字串要逐字核對，或直接傳自訂函數 |
 | `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（`params`／`timeout`／`spawn`／`validation`／`exec`／`http`／`fetch`…；子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`；1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時亦回 `aborted`） |
 | 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
 | spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
+| 遞補層送出前的額度門檻（`quotaGate`）與額度帳（1.0.79 起） | `src/subQuotaGate.mjs` 檔頭（適用範圍、選項、fail-open）、`src/quotaLedger.mjs`（`store.quota` 形狀與 8 天上限）、`src/claudeLimitUntil.mjs`（Claude Code 官方額度訊息的重置時刻解析，只認實見字樣）、`src/quotaJudge.mjs`（視窗判定與快取）；claude 讀者為 `src/quota/getQuotaClaude.mjs` |
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
 | 多供應商遞補、金鑰輪替、條目 id 命名規則 | `src/dispatchAiFallback.mjs` 檔頭 |
 
@@ -422,6 +424,14 @@ npm install -g @anthropic-ai/claude-code@latest
 claude --version
 claude --help
 ```
+
+2026-11-07 對照：以 `w-dispatch-ai` **1.0.80** 之原始碼與 README 行為變更紀錄第 67 條核對（讀 `src/subQuotaGate.mjs`、`src/quotaLedger.mjs`、`src/claudeLimitUntil.mjs`、`src/dispatchAiFallback.mjs` 檔頭與 `dispatchClaude.mjs` 之自用鍵；**未實際呼叫模型**，讀者耗時為套件同日之本機實測紀錄，本技能未重驗）：
+
+| 項目 | 結果 |
+|---|---|
+| `dispatchClaude()` 固定旗標與自用鍵 | 固定旗標不變（`-p`、`--dangerously-skip-permissions`、`--model`）；README 第 67 條未載本轉接器之異動，`quotaGate`／`quotaUntilOf` 為遞補層（`dispatchAiFallback`／`createAiCaller`）選項，不是本轉接器的自用鍵、不轉傳，**呼叫方式不變** |
+| `quotaGate`（1.0.79） | 擴及**無金鑰之 `claude` 條目**，預設開：額度帳 → `getQuotaClaude` → 任一適用視窗 ≥95% 即略過；模型別視窗只在 model 相符時計入；Claude Code 官方額度字樣的重置時刻會入帳；讀者失敗一律不擋；帶金鑰之 `claude`（`claude-api:`）不適用、行為不變 |
+| `providers.mjs` | claude 條目仍 5 條（`claude:sonnet`、`claude:opus-5.5`、`claude-api:` 3 條）；全表 38 條（1.0.78 新增的 1 條為 `ocgo:`，與 claude 無關） |
 
 2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式；**未實際呼叫模型**，守門之 CPU 實測為套件同日之紀錄，本技能未重驗）：
 

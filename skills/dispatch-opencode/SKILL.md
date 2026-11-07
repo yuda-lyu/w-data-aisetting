@@ -7,7 +7,7 @@ description: 當任務需要委派給 OpenCode，或需要使用 OpenCode 支援
 
 使用 `w-dispatch-ai` 的 `dispatchOpencode()` 執行自動化 OpenCode 任務。轉接器會呼叫 `opencode run`、選擇代理與模型、透過 stdin 傳入提示詞、視需要注入僅限當次程序的供應商設定與憑證，並以結果物件回報失敗。
 
-**本技能對照的是 1.0.77**（opencode 條目表〔含 `ocgo:` Go 條目〕、`filterOpencodeFree`、`opencodeGoUsage` 與 Console 端點路徑／診斷對照 1.0.72；1.0.73 新增 spawn 前機器級守門 `spawnGate` 與 Go 用量略過 `quotaGate`，見〈逾時與等待〉選項表；1.0.77 新增放行最小間隔與 `database is locked` 重試，見〈逾時與等待〉；其餘段落之實測多為 1.0.54 時所做。`dispatchOpencode()` 之固定參數自 1.0.17 起未變動；1.0.34 新增 `useStoredAuth` 選項，見「免費模型走匿名」；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。但**條目會隨版本增刪改名，改動頻率遠高於轉接器本身**：1.0.40 到 1.0.54 之間，opencode 免費條目新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free` 與三條 `nemotron-*`，`space-bunny-free` 恢復真名改為 `minimax-m3.1-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`（**1.3 曾是本技能的必要預設模型**）；1.0.60 再移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`、新增 `flint-40b-free`，另有 `ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` 四條在 1.0.42 之後加入、幾週內又因自 CLI 型錄消失而移除。更早還有 1.0.25 把 `oc:agnes-ai/agnes-2.5-flash` 改名為 `oc:agnes-ai/agnes-3.0-flash`、1.0.34 把 opencode 自家條目全改為匿名取用；1.0.72 新增 8 條 `ocgo:` Go 條目（月費訂閱，**須金鑰、不匿名**）與 `opencodeGoUsage`，OpenCode Zen 並已改稱 Console（見「OpenCode Go」「Console 免費層閘門」）。**寫死 id 前先對安裝版核一次**，不要照抄本技能或別處的字面值；`pick` 打錯或用到已移除的 id 會靜默少一條（接法見「展開條目」）。實際安裝版一律讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
+**本技能對照的是 1.0.80**（opencode 條目表〔含 `ocgo:` Go 條目〕、`filterOpencodeFree`、`opencodeGoUsage` 與 Console 端點路徑／診斷對照 1.0.72；1.0.73 新增 spawn 前機器級守門 `spawnGate` 與 Go 用量略過 `quotaGate`，見〈逾時與等待〉選項表；1.0.77 新增放行最小間隔與 `database is locked` 重試，見〈逾時與等待〉；1.0.78 新增 `ocgo:opencode-go/crouton-alpha-free`〔條目 37 → 38、`ocgo:` 8 → 9〕並把免費額度的說法更正為逐模型計，見「條目表」「OpenCode Go」與 429 診斷列；1.0.79 起 `quotaGate` 擴及訂閱類條目〔claude 無金鑰者、codex、antigravity〕，見〈逾時與等待〉選項表；1.0.80 只涉及 agy 的提示詞傳法，與本技能無關；其餘段落之實測多為 1.0.54 時所做。`dispatchOpencode()` 之固定參數自 1.0.17 起未變動；1.0.34 新增 `useStoredAuth` 選項，見「免費模型走匿名」；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。但**條目會隨版本增刪改名，改動頻率遠高於轉接器本身**：1.0.40 到 1.0.54 之間，opencode 免費條目新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free` 與三條 `nemotron-*`，`space-bunny-free` 恢復真名改為 `minimax-m3.1-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`（**1.3 曾是本技能的必要預設模型**）；1.0.60 再移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`、新增 `flint-40b-free`，另有 `ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` 四條在 1.0.42 之後加入、幾週內又因自 CLI 型錄消失而移除。更早還有 1.0.25 把 `oc:agnes-ai/agnes-2.5-flash` 改名為 `oc:agnes-ai/agnes-3.0-flash`、1.0.34 把 opencode 自家條目全改為匿名取用；1.0.72 新增 8 條 `ocgo:` Go 條目（月費訂閱，**須金鑰、不匿名**）與 `opencodeGoUsage`，OpenCode Zen 並已改稱 Console（見「OpenCode Go」「Console 免費層閘門」）。**寫死 id 前先對安裝版核一次**，不要照抄本技能或別處的字面值；`pick` 打錯或用到已移除的 id 會靜默少一條（接法見「展開條目」）。實際安裝版一律讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
 
 需要變更模型、供應商、variant、認證或輸出旗標時，讀取 [references/opencode-flags.md](references/opencode-flags.md)。
 
@@ -85,7 +85,7 @@ console.log(result.stdout);
 
 此設定走 OpenCode 自家供應商（`opencode`）的匿名免費存取，不需要登入，也不需要金鑰。**免費模型的資料政策各異**：套件條目註解記載 deepseek-v4.1-flash-free 之官方說明為「限時免費、供應商零保留且不以資料訓練」；beam-free 為「輸入不用於訓練、為安全理由保留 30 天」；`big-pickle` 載明免費期間所收資料可能用於改進模型；三條 `nemotron-*` 為 NVIDIA 免費端點、僅供試用、勿送個人或機密資料——敏感內容派工前先查該模型的政策。若型錄或實跑出問題，應明確回報，不可靜默切換成其他模型。
 
-需要換模型時，同供應商的其他免費條目都有套件之實測紀錄（見「條目表」，1.0.54 起型錄上的免費模型都已收為條目）。型錄上新出現、條目表還沒有的，改用前先照「型錄驗證」查 `status`／`toolcall`／`variants`，再實跑一次；清單見 [references/opencode-flags.md](references/opencode-flags.md)。
+需要換模型時，同供應商的其他免費條目都有套件之實測紀錄（見「條目表」；1.0.54 起型錄上的免費模型曾全數收為條目，但 2026-11-07 `opencode models opencode --refresh` 列了 11 個免費模型、條目表只收 8 個，另 3 個未收：`crouton-alpha-free`〔已另以 Go 路徑收為 `ocgo:` 版〕、`iceman-free`、`inkling-2-small-free`）。型錄上新出現、條目表還沒有的，改用前先照「型錄驗證」查 `status`／`toolcall`／`variants`，再實跑一次；清單見 [references/opencode-flags.md](references/opencode-flags.md)。
 
 **走遞補鏈時，這個預設模型在條目表內已有現成條目**：`oc:opencode/deepseek-v4.1-flash-free`（見「條目表」一節），且已是匿名。但該條目**自帶唯讀鎖**、**variant 是 `high` 不是 `max`**——要 `max` 得自己覆寫 `extraArgs`，要寫檔得放開 `config.permission`，兩者都不會自動跟著本節的必要預設值走。
 
@@ -126,9 +126,9 @@ await wda.dispatchOpencode(prompt, {
 
 `opencode models` 只列得出 CLI 已認證或已設定的供應商，但 `config` 注入是**當次程序**生效的，所以型錄查不到的供應商照樣派得動。**`Provider not found` 只代表沒註冊在 CLI 端，不是「這個模型不能用」的結論**——要判斷能不能用，看的是有沒有 provider 定義與金鑰。
 
-## 條目表：`providers.mjs` 的 18 個 opencode 條目（`oc:` 10 條＋`ocgo:` 8 條）
+## 條目表：`providers.mjs` 的 19 個 opencode 條目（`oc:` 10 條＋`ocgo:` 9 條）
 
-`w-dispatch-ai` 自帶一份實測可用的條目表 `w-dispatch-ai/src/providers.mjs`，直接引用即可，不必自己重試一遍。**它是本技能所有模型資訊的上游**，與本技能不一致時以它為準。截至 1.0.72 全表 37 條，其中 `kind: 'opencode'` 者 18 條：`oc:` 10 條在下表（依表內順序，即全取時的遞補優先序；各條之 `model` 即 id 去掉 `oc:` 前綴），`ocgo:` 8 條接在 `oc:opencode/*` 之後，見下方「OpenCode Go」一節。免費條目會逐日漂移，組鏈或評比前先以 `wda.filterOpencodeFree(providers)` 對一次（1.0.60 起，見 references/opencode-flags.md）：
+`w-dispatch-ai` 自帶一份實測可用的條目表 `w-dispatch-ai/src/providers.mjs`，直接引用即可，不必自己重試一遍。**它是本技能所有模型資訊的上游**，與本技能不一致時以它為準。截至 1.0.80 全表 38 條，其中 `kind: 'opencode'` 者 19 條：`oc:` 10 條在下表（依表內順序，即全取時的遞補優先序；各條之 `model` 即 id 去掉 `oc:` 前綴），`ocgo:` 9 條接在 `oc:opencode/*` 之後，見下方「OpenCode Go」一節。免費條目會逐日漂移，組鏈或評比前先以 `wda.filterOpencodeFree(providers)` 對一次（1.0.60 起，見 references/opencode-flags.md）：
 
 | 條目 id | 取用方式 | 自帶 variant | 備註（條目註解之實測紀錄） |
 |---|---|---|---|
@@ -147,11 +147,11 @@ await wda.dispatchOpencode(prompt, {
 
 **條目自帶的 variant 是 `high`，不是本技能必要預設值的 `max`**：套件 2026-09-30 起把各家條目的思考強度統一設為 `high`，opencode 側即 `extraArgs: ['--variant','high']`。但**只有實際有檔位的模型才帶**——`big-pickle`、`mimo`、`nemotron-3.5-lightning` 沒有檔位，第三方自訂 provider 亦無，那些條目就不帶（Go 條目中 `mimo-v2.6-flash`、`iceman-contributor-free` 同理）。**opencode 條目中唯一不為 `high` 的是 `ocgo:opencode-go/qwen3.8-flash`，取 `xhigh`**（CLI 型錄該模型只有 low／medium／xhigh，沒有 `high`）。照抄條目只有 high；要本技能的 `max` 得自己覆寫，且**覆寫 `extraArgs` 時要把原本的 variant 一併帶回**。
 
-**條目換得很快，照抄舊 id 會落入 `missing`**：1.0.34 移除 `deepseek-v4-flash-free` 與 `union-alpha`、換上 `big-pickle` 與 `mimo-v2.6-flash-free`；1.0.40 加 `space-bunny-free`；1.0.42 至 1.0.54 之增刪見本技能開頭。已移除之 id 做 `pick` 時，`hints` 只是字串最接近者，**不保證是同模型的替代**：`space-bunny-free` 的 `oc:` 與 `zen:` 兩個 id 都已移除，同一模型現為 `oc:opencode/minimax-m3.1-flash-free`，要自己改 id；muse-spark-1.3、fledge、ling、cat-jam、step-5 則無替代模型。全表由 20 條（1.0.26）縮到 15 條（1.0.34，zen REST 系大量退場，見免費層閘門），其後 17 條（1.0.40）、22 條（1.0.50）、21 條（1.0.53）、24 條（1.0.54）、29 條（1.0.60；opencode 條目由 12 減為 10：移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`〔已自型錄消失、呼叫回 `UnknownError`〕，新增 `flint-40b-free`）、37 條（1.0.72；新增 8 條 `ocgo:`，既有 29 條逐欄不變，opencode 條目由 10 增為 18）。`minimax-m3.1-flash-free` 下架後無替代模型。
+**條目換得很快，照抄舊 id 會落入 `missing`**：1.0.34 移除 `deepseek-v4-flash-free` 與 `union-alpha`、換上 `big-pickle` 與 `mimo-v2.6-flash-free`；1.0.40 加 `space-bunny-free`；1.0.42 至 1.0.54 之增刪見本技能開頭。已移除之 id 做 `pick` 時，`hints` 只是字串最接近者，**不保證是同模型的替代**：`space-bunny-free` 的 `oc:` 與 `zen:` 兩個 id 都已移除，同一模型現為 `oc:opencode/minimax-m3.1-flash-free`，要自己改 id；muse-spark-1.3、fledge、ling、cat-jam、step-5 則無替代模型。全表由 20 條（1.0.26）縮到 15 條（1.0.34，zen REST 系大量退場，見免費層閘門），其後 17 條（1.0.40）、22 條（1.0.50）、21 條（1.0.53）、24 條（1.0.54）、29 條（1.0.60；opencode 條目由 12 減為 10：移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`〔已自型錄消失、呼叫回 `UnknownError`〕，新增 `flint-40b-free`）、37 條（1.0.72；新增 8 條 `ocgo:`，既有 29 條逐欄不變，opencode 條目由 10 增為 18）、38 條（1.0.78；新增 `ocgo:opencode-go/crouton-alpha-free` 1 條，`oc:`／`zen:` 與既有 8 條 `ocgo:` 之內容與順序不變，opencode 條目由 18 增為 19；1.0.79、1.0.80 條目未動）。`minimax-m3.1-flash-free` 下架後無替代模型。
 
 **Poolside 的 `model` 是三段**：供應商名 `poolside` ＋ 模型 id `poolside/laguna-s-2.1`（模型 id 本身就含斜線），不是寫錯。
 
-**全取條目表時會混進非文字生成的條目**：kind `api-typesafe-systemone`（決策模型，輸入是待評估狀態、輸出是型別化答案，呼叫時必須另給 `questions`）至 1.0.72 仍為 2 條（`typesafe:jev-latest`、`zen:jev-1.13-free`；後者之 `baseURL` 於 1.0.46 之後改為 `https://opencode.ai/inference/v1`，**1.0.71 起為 `https://opencode.ai/inference/systemone/v1`**——2026-11-03 對齊官方〈Models〉頁端點欄 `…/inference/systemone/v1/systemone`；舊路徑同日仍通，但官方文件已不列，條目不留舊路徑，自行以舊網址組同類條目者請改新 `baseURL`）。它的輸出形狀與文字生成完全不同，**不可與文字生成條目混在同一條遞補鏈**；全取時它會因缺 `questions` 以 `params` 錯誤在 0ms 失敗後換下一家，不影響其他家，但要它就得用 `pick` 單獨取出。
+**全取條目表時會混進非文字生成的條目**：kind `api-typesafe-systemone`（決策模型，輸入是待評估狀態、輸出是型別化答案，呼叫時必須另給 `questions`）至 1.0.80 仍為 2 條（`typesafe:jev-latest`、`zen:jev-1.13-free`；後者之 `baseURL` 於 1.0.46 之後改為 `https://opencode.ai/inference/v1`，**1.0.71 起為 `https://opencode.ai/inference/systemone/v1`**——2026-11-03 對齊官方〈Models〉頁端點欄 `…/inference/systemone/v1/systemone`；舊路徑同日仍通，但官方文件已不列，條目不留舊路徑，自行以舊網址組同類條目者請改新 `baseURL`）。它的輸出形狀與文字生成完全不同，**不可與文字生成條目混在同一條遞補鏈**；全取時它會因缺 `questions` 以 `params` 錯誤在 0ms 失敗後換下一家，不影響其他家，但要它就得用 `pick` 單獨取出。
 
 ### Console（原 Zen）免費層閘門：REST 直呼免費模型一律 403，只能走 CLI
 
@@ -175,20 +175,21 @@ await wda.dispatchOpencode(prompt, {
 |---|---|---|
 | HTTP 500 | **端點型別錯配**：Console 的端點依模型家族而異，例如已下架的 muse-spark 系走 `/responses` 不走 `/chat/completions`（回 500 而非 404，極易被誤判成暫時故障而反覆重試） | 改用對的 kind，或改走 `oc:` 版 |
 | HTTP 403 `FreeTierError` | **政策性阻擋**：免費層只開放 opencode 客戶端（官方 Console 文件現已載明同一政策：免費對話模型離開 OpenCode 一律 403，即使帶金鑰） | **只能收 `oc:` 版**，再等再試也不會通 |
-| HTTP 429 `FreeUsageLimitError`（`Free usage limit reached…subscribe to OpenCode Go`） | **免費額度用盡**，與金鑰無關；2026-11-03 實測 CLI 與 REST **共用同一免費額度**（匿名與兩把金鑰直呼皆 0.3～0.7s 回此錯；同時段 CLI 匿名呼叫三個免費模型皆逾時並見同字樣）。同日 REST 免費對話模型是**先遇此 429 而非 403**，兩者並存時的先後次序未驗證；何時恢復官方無說明、未驗證 | 視為**整個免費層暫不可用**：改走 `oc:` 無濟於事，遞補層換付費或 Go 條目（`ocgo:`，免費池用盡時 Go 路徑照常，見「OpenCode Go」） |
+| HTTP 429 `FreeUsageLimitError`（`Free usage limit reached…subscribe to OpenCode Go`） | **該免費模型之免費額度用盡**，與金鑰無關；**額度逐模型計，不是整個免費層共用一池**（2026-11-07 提出端實測：同日某免費模型經 CLI 回報當日額度用盡後，另一個免費模型 `deepseek-v4.1-flash-free` 經 CLI 連續 32 回皆成交）。同一模型的 CLI 與 REST 共用該模型之額度（2026-11-03 實測：匿名與兩把金鑰直呼 `mimo-v2.6-flash-free` 皆 0.3～0.7s 回此錯；同時段 CLI 匿名呼叫三個免費模型皆逾時並見同字樣，與逐模型計並不衝突——當時各模型各自皆已用盡）。同日 REST 免費對話模型是**先遇此 429 而非 403**，兩者並存時的先後次序未驗證；何時恢復官方無說明、未驗證 | 只代表**該模型當日額度用盡**：改走同一模型的 `oc:` 版無濟於事，但**換其他免費條目（`oc:opencode/*`）仍可能可用**，呼叫端在免費層宜依角色列多家、不要只押一家；全部免費條目都見此字樣才視為免費層暫不可用，此時遞補層換付費或 Go 條目（`ocgo:`，免費模型額度用盡時 Go 路徑照常，見「OpenCode Go」）。套件程式不依此字樣自動處置，此為給呼叫端的判讀與組鏈建議 |
 | HTTP 429 `Upstream request failed: Policy budget exceeded` | **預算用盡**（Console 的預算功能，非限流）；免費模型與 Go 額度內的用量不計預算 | 等預算重置或管理者調高；換成屬於另一預算的金鑰可能可通（未實測） |
 | HTTP 400 `MissingSessionID` | 打 Go 基底（`/inference/go/…`）**未帶 `x-opencode-session` 標頭**，先於金鑰檢查即回（以假金鑰實測） | 本目錄不收 REST 類 Go 條目；自行打 REST 須經 `opt.headers` 帶標頭並自負其責（見「OpenCode Go」） |
 
-### OpenCode Go（月費訂閱）：`ocgo:` 8 條，須金鑰、不匿名
+### OpenCode Go（月費訂閱）：`ocgo:` 9 條，須金鑰、不匿名
 
-1.0.72 起套件收了 8 條 CLI 類 Go 條目（`ocgo:opencode-go/<id>`）。Go 是 OpenCode 的月費訂閱（Go／Go Plus／Go Teams 三種方案；以美元月額計，**每個模型的月額各異且隨方案而異**，5 小時視窗＝月額 20%、週 50%、月 100%），與免費池、按量餘額是**不同的額度池**。
+1.0.72 起套件收了 8 條 CLI 類 Go 條目、1.0.78 增為 9 條（`ocgo:opencode-go/<id>`）。Go 是 OpenCode 的月費訂閱（Go／Go Plus／Go Teams 三種方案；以美元月額計，**每個模型的月額各異且隨方案而異**，5 小時視窗＝月額 20%、週 50%、月 100%），與免費池、按量餘額是**不同的額度池**。
 
 - **provider 分流**：同一把工作區金鑰（前綴 `oc_sk_`）對應兩個 provider：model `opencode/<id>`（provider `opencode`）走免費池或按量餘額，model `opencode-go/<id>`（provider `opencode-go`）走 Go 額度。條目即 `provider: 'opencode-go'` ＋ `model: 'opencode-go/<id>'`，轉接器以 `provider` 為鍵注入 `OPENCODE_AUTH_CONTENT`，**轉接器本身不必改**；key／provider／model 仍須同一組。付費或 Go 專屬 id 誤用 `opencode/` 前綴會回 `Model access is disabled`（提出端自述）。
-- **金鑰變數是 `OPENCODE_GO_KEYS`，不沿用 `OPENCODE_KEYS`，且不匿名**：Go 訂閱綁工作區。本機同一份 `OPENCODE_KEYS` 的兩把金鑰，第 1 把已訂閱、第 2 把未訂閱；未訂閱的金鑰打 Go 模型（連免費期的 `beam-free` 也一樣）要 **77.2s** 後才以 `An active OpenCode Go subscription is required to use Go models.` 失敗（`errorType: 'exec'`，1 次實測），沿用會讓全取遞補對每把未訂閱的金鑰空耗約 77 秒。所以 `.env` 的 `OPENCODE_GO_KEYS` **只放已訂閱 Go 的金鑰**；缺變數時 8 條自動列入 `skipped`（opt-in，不影響既有使用端），有設時全取遞補鏈多 8 條（建議仍以 `pick` 自選）。查某把金鑰是否已訂閱：`opencodeGoUsage({ key })`（見「額度查詢」）。
+- **金鑰變數是 `OPENCODE_GO_KEYS`，不沿用 `OPENCODE_KEYS`，且不匿名**：Go 訂閱綁工作區。本機同一份 `OPENCODE_KEYS` 的兩把金鑰，第 1 把已訂閱、第 2 把未訂閱；未訂閱的金鑰打 Go 模型（連免費期的 `beam-free` 也一樣）要 **77.2s** 後才以 `An active OpenCode Go subscription is required to use Go models.` 失敗（`errorType: 'exec'`，1 次實測），沿用會讓全取遞補對每把未訂閱的金鑰空耗約 77 秒。所以 `.env` 的 `OPENCODE_GO_KEYS` **只放已訂閱 Go 的金鑰**；缺變數時 9 條自動列入 `skipped`（opt-in，不影響既有使用端），有設時全取遞補鏈多 9 條（建議仍以 `pick` 自選）。查某把金鑰是否已訂閱：`opencodeGoUsage({ key })`（見「額度查詢」）。
 
 | 條目 id（`ocgo:opencode-go/…`） | 自帶 variant | 資料政策（官方〈Privacy〉） | 實測狀態（2026-11-03，opencode 1.19.5） |
 |---|---|---|---|
 | `beam-free` | `high` | 不訓練、保留 30 天、**限地區**（不可用地區含中國〔含港澳〕、俄羅斯、伊朗、北韓等，完整清單見套件檔頭） | **〔本機實測〕**：簡答 5.5s／6.1s、推理題 4.9s 答對、read 6.0s 正確、寫檔被唯讀鎖擋下；約 84.5 萬 token 針在乾草堆答對（未逼近型錄 1,048,576，故不寫「完整 1M」）；官方標 Free（限時）、Unlimited，用量三視窗前後不變 |
+| `crouton-alpha-free`（1.0.78 新增，置於 `beam-free` 之後） | `high` | 不訓練、保留 30 天、**限地區**（官方不可用地區含歐盟、中國〔含港澳〕、俄羅斯、伊朗、北韓等，完整清單見套件該條目註解） | **〔本機實測〕**（套件 2026-11-07，opencode 1.19.5，variant high）：簡答 25.3s、推理題 25.2s 答對、read 12.2s 正確、寫檔被唯讀鎖擋下（**回空字串而 `ok: true`**）；官方標 Free（限時）、三方案皆 Unlimited（不計額度），用量三視窗前後不變。**脈絡長度未測**，不得假設等於型錄的 1,048,576；**`--variant high` 的實效未證**（本機同題不帶／minimal／high／max 各跑 1 次，最後一步 reasoning tokens 皆為 0、耗時不隨檔位單調）。限時免費，會下架；**本機 opencode 型錄快取舊時不認此模型**（依條目呼叫 1.6～3.5 秒即 `Exit code 1`），須先 `opencode models opencode-go --refresh` |
 | `deepseek-v4.1-flash` | `high` | 不訓練、保留 0 天（零保留協議逐月續約，官方載至 2026-11-30）；須工作區 Regions 選 Global | 〔提出端〕簡答 7.2s；**本機未實測**。同名免費版的脈絡只到約 239K，本條付費版的實際上限未測，不假設為型錄的 1M |
 | `minimax-m3.1-flash` | `high` | 不訓練、保留 0 天 | 〔提出端〕簡答 8.7s；**本機未實測**。月額最低（5 小時視窗僅 $4），密集使用最先到頂 |
 | `qwen3.8-flash` | **`xhigh`** | 不訓練、保留 0 天 | 〔提出端〕簡答 9.1s；**本機未實測** |
@@ -197,19 +198,20 @@ await wda.dispatchOpencode(prompt, {
 | `iceman-contributor-free` | 無檔位 | **以請求資料訓練、非零保留**；須開訓練開關；**敏感內容勿走** | **〔本機實測〕**：簡答 6.5s、推理題 8.0s 答對、read 12.0s 正確、寫檔被擋；約 18.9 萬 token 答對、輸入約 23.6 萬加 opencode 預留的 32,000 completion 超過伺服器上限 262,139 而被拒，長提示詞宜控制在約 18 萬 token 以下 |
 | `muse-spark-1.3-contributor` | `high` | **以請求資料訓練、非零保留**，限 Meta 地理政策允許的地區；須開訓練開關；**敏感內容勿走** | 〔提出端〕簡答 12.6s（須先開開關）；**本機未實測** |
 
-標〔提出端〕者是 issue 提出端自述的簡答成功與耗時，**不得當成已驗證**；5 條付費條目（deepseek、minimax、qwen、mimo、muse）本機都沒跑過，glm 也只有 1 次簡答，其餘 22 個 Go 模型更未收。順序上不訓練者在前、會訓練的 iceman 與 muse 殿後。
+標〔提出端〕者是 issue 提出端自述的簡答成功與耗時，**不得當成已驗證**；5 條付費條目（deepseek、minimax、qwen、mimo、muse）本機都沒跑過，glm 也只有 1 次簡答，其餘 21 個 Go 模型更未收。順序上不訓練者在前、會訓練的 iceman 與 muse 殿後。
 
 - **隱私前提**（工作區 Settings›Privacy，僅 owner／admin 可改）：Go 繼承工作區設定，預設擋「以請求資料訓練的付費端點」，允許地區為歐洲與美國。DeepSeek 須 Regions 選 Global，Muse／Iceman Contributor 須開「Allow paid endpoints that train on request data」，否則各回一句要求改設定的錯誤（字樣見 references/opencode-flags.md，**〔提出端〕自述，本機工作區已開、未重現**）。
-- **免費池與 Go 互不牽動**：Go 訂閱不改變 `opencode/*` 的免費上限，但免費池用盡（`Free usage limit reached…subscribe to OpenCode Go`，`run` 不結束）時，同一模型改走 `opencode-go/` 仍可用——同一分鐘內匿名 `oc:opencode/beam-free` 逾時、`ocgo:opencode-go/beam-free` 6.1s 成功。
+- **免費池與 Go 互不牽動**：Go 訂閱不改變 `opencode/*` 的免費上限，但某免費模型的當日額度用盡（逐模型計；`Free usage limit reached…subscribe to OpenCode Go`，`run` 不結束）時，同一模型改走 `opencode-go/` 仍可用——同一分鐘內匿名 `oc:opencode/beam-free` 逾時、`ocgo:opencode-go/beam-free` 6.1s 成功。
 - **為何只收 CLI 類、不收 REST 類 Go 條目**：Go 基底必帶穩定的 `x-opencode-session` 標頭（缺則 400 `MissingSessionID`），官方載明 Go 給 OpenCode 與同類 coding agent 使用；本套件 REST 轉接器是一般 HTTP 呼叫，是否被允許官方未載，保守不收。opencode CLI 本身是官方支援的客戶端，走 CLI 才是明確認可的路。
 - **額度到頂的行為未知**：Go 額度到頂時 `opencode run` 的行為與字樣**沒有人撞過、未查明**（免費池到頂是 `run` 不結束、只到逾時；Go 是否同樣不返回未知）。1.0.73 起遞補層預設以 `quotaGate` 於用量 ≥95% 時略過該把金鑰（見〈逾時與等待〉），那是「到頂前即停」，不倚賴到頂時的行為；呼叫端排程時仍一律以 `timeoutMs` 封頂，不要假設到頂會快速失敗。
-- 其餘 22 個 Go 模型未收；要用時以 `resolveCatalogue` 的 `extraProviders` 自帶條目，形狀比照上列（`kind: 'opencode'`、`provider: 'opencode-go'`、`model: 'opencode-go/<id>'`、`envVar: 'OPENCODE_GO_KEYS'`、`config: { permission: { edit: 'deny', bash: 'ask' } }`），檔位先以 `opencode models opencode-go --verbose` 實查。
+- **`quotaGate` 擋的是整把金鑰，不分模型**（1.0.78 檔頭註明）：用量端點只回該把金鑰「整把」的三視窗百分比，沒有逐模型分項，而官方月額逐模型獨立；`quotaGate` 以單一百分比（任一視窗 ≥95）擋該把金鑰的**全部** `ocgo:` 條目，無從得知是哪個模型用掉額度。Unlimited 的免費期模型（`beam-free`、`crouton-alpha-free`、`iceman-contributor-free`）不計額度，但該把金鑰因付費模型被擋時，它們也一併被略過；要單獨使用它們者以 `quotaGate: false` 或逐條覆寫處理。
+- 其餘 21 個 Go 模型未收（2026-11-07 公開型錄 30 個＝已收 9＋未收 21；清單與型錄漂移見 references/opencode-flags.md）；要用時以 `resolveCatalogue` 的 `extraProviders` 自帶條目，形狀比照上列（`kind: 'opencode'`、`provider: 'opencode-go'`、`model: 'opencode-go/<id>'`、`envVar: 'OPENCODE_GO_KEYS'`、`config: { permission: { edit: 'deny', bash: 'ask' } }`），檔位先以 `opencode models opencode-go --verbose` 實查。各模型的官方月額表（美元／月：Go／Go Plus／Go Teams）已抄入套件 `providers.mjs` 檔頭【OpenCode Go】段，2026-11-07 抄錄、**未實測**，依月額選模型時查它。
 
 ### 推理模型長提示詞回空字串或被截斷：單次輸出上限
 
 - **症狀**：推理模型配 `--variant high` 跑長提示詞（約 3 萬字元）時 `ok: true`、離開碼 0，stdout 卻是空的或半截，stderr 只有標頭，日誌沒有 ERROR。容易誤判成模型能力不足而去降檔位。
 - **根因**：opencode CLI 端單次輸出預設上限 32000 token，reasoning 加 output 合計，**不是閘道限制**。請求之 `max_tokens` ＝ min(型錄 `limit.output`, `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX` 或 32000)，無效值被 CLI 靜默忽略。1.0.75 起 `dispatchOpencode` 預設調為 128000，`opt.outputTokenMax` 可覆寫。
-- **診斷**：`opencode session list --format json` 取 sessionID，`opencode export <id>` 看 `finish` 與 tokens；`finish=length` 且 reasoning＋output 等於上限即中。條目開 `detectTruncation: true` 時（`ocgo:` 8 條已開），截斷回 `ok: false`、`errorType: 'incomplete'`、`truncated: true`。
+- **診斷**：`opencode session list --format json` 取 sessionID，`opencode export <id>` 看 `finish` 與 tokens；`finish=length` 且 reasoning＋output 等於上限即中。條目開 `detectTruncation: true` 時（`ocgo:` 9 條已開），截斷回 `ok: false`、`errorType: 'incomplete'`、`truncated: true`。
 - **處置**：調高上限，不要降檔位。調高後長推理會跑完（3 萬字元加 high 實測 382～511 秒），`timeoutMs` 要給足，建議至少 900000。截斷是確定性的，不要重試同一請求，也不要靠加大 `timeoutMs` 解決，遞補下一條目。
 - **代價**：上限每調高 N，可用輸入約少 N（伺服器以輸入加 `max_tokens` 驗 context），所以 context 26 萬級之條目維持 32000；單次 token 用量也會上升。
 
@@ -394,7 +396,7 @@ config: { permission: { edit: 'deny', bash: 'ask' } }   // 1.0.34 起之唯讀�
 
 **但這把鎖有一個前提：呼叫端不可另傳 `--auto`**。`--auto` 會自動核准未被明確拒絕的權限，等於把 `ask` 整個放行，鎖就沒了。
 
-`w-dispatch-ai/src/providers.mjs` 內建的**十八個** opencode 條目（`oc:` 10 條＋`ocgo:` 8 條，1.0.72 實查全數 `{ edit:'deny', bash:'ask' }`）都帶這把唯讀鎖（套件內以 `OC_READONLY` 常數單一來源管理）——因為那些條目是給純文字生成與遞補用的。**派審計、寫測試時要把對應項目放開**（`edit` 給 `allow`，要跑測試把 `bash` 也給 `allow`），否則就是本技能「權限」開頭講的那種下限不足。走條目表時，放開的正規作法是 `resolveProviders` 的 `patch`（見「展開後的後處理」），且因 `patch` 為淺合併，覆寫 `config` 要把第三方條目原本的 `provider` 定義一起寫回。
+`w-dispatch-ai/src/providers.mjs` 內建的**十九個** opencode 條目（`oc:` 10 條＋`ocgo:` 9 條，1.0.80 實查全數 `{ edit:'deny', bash:'ask' }`）都帶這把唯讀鎖（套件內以 `OC_READONLY` 常數單一來源管理）——因為那些條目是給純文字生成與遞補用的。**派審計、寫測試時要把對應項目放開**（`edit` 給 `allow`，要跑測試把 `bash` 也給 `allow`），否則就是本技能「權限」開頭講的那種下限不足。走條目表時，放開的正規作法是 `resolveProviders` 的 `patch`（見「展開後的後處理」），且因 `patch` 為淺合併，覆寫 `config` 要把第三方條目原本的 `provider` 定義一起寫回。
 
 ### 權限不足是 exit 0 的假成功，連轉錄都會顯示完成
 
@@ -536,16 +538,16 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**；給得比 `timeoutMs` 小，4 小時等於白設 |
 | `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
 | `cooldownMs` | `0`（關閉） | 內建觸發只有 HTTP 429 與逾時，**429 僅 REST 類（`zen:`／`agnes:`／`poolside:`）偵測得到**；`oc:` 這類 CLI 條目的限流埋在 stderr 文字裡，內建規則抓不到。觸發後該條目**只被移到鏈尾不被移除**（前面全敗時仍會被試到，任一次成功立即解除），啟用期間「providers 順序即優先序」會被暫時重排。套件記載之實測：一次 107 秒請求中 72 秒耗在重複踩同一家，開冷卻後降至 15 秒。**只對有明給 `id` 的條目生效** |
-| `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /FreeUsageLimitError/i.test(r.stderr \|\| '')`。注意 opencode 1.18.32 遇 Zen 免費層 429 時 `run` **不會結束**、stderr 只有 session 標頭，直到逾時才以 `TIMEOUT` 回報（內建逾時觸發已涵蓋）；要讓字樣出現在 stderr 須於 `extraArgs` 加 `--print-logs --log-level ERROR`（套件 2026-09-23 實測；2026-11-03 於 opencode 1.19.5 再證：免費額度用盡時 `run` 仍不結束，只到逾時）。**`FreeUsageLimitError`（`Free usage limit reached…subscribe to OpenCode Go`）代表整個免費池用盡**（CLI 與 REST 共用額度），冷卻只是把該條移到鏈尾，**不會恢復額度**，也不必逐個免費條目冷卻；`opencode-go/` 前綴（`ocgo:` 條目）不受影響。**Go 額度到頂時的字樣與 `run` 行為未知**（沒人撞過），別為它預寫簽章 |
+| `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /FreeUsageLimitError/i.test(r.stderr \|\| '')`。注意 opencode 1.18.32 遇 Zen 免費層 429 時 `run` **不會結束**、stderr 只有 session 標頭，直到逾時才以 `TIMEOUT` 回報（內建逾時觸發已涵蓋）；要讓字樣出現在 stderr 須於 `extraArgs` 加 `--print-logs --log-level ERROR`（套件 2026-09-23 實測；2026-11-03 於 opencode 1.19.5 再證：免費額度用盡時 `run` 仍不結束，只到逾時）。**`FreeUsageLimitError`（`Free usage limit reached…subscribe to OpenCode Go`）代表該免費模型當日額度用盡**（額度逐模型計，同一模型的 CLI 與 REST 共用該模型之額度；其他免費條目可能仍可用），冷卻只是把該條移到鏈尾，**不會恢復額度**；`opencode-go/` 前綴（`ocgo:` 條目）不受影響。**Go 額度到頂時的字樣與 `run` 行為未知**（沒人撞過），別為它預寫簽章 |
 | `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
 | `spawnGate` | 未給＝預設啟用（1.0.73 起） | CLI 類（`oc:`／`ocgo:` 條目亦是）**每次 spawn 前**的機器級守門：機器上 `opencode.exe` 數 ≥ `max(1, 核心數−1)`、RAM 已用 >85%、全機 CPU >90% 任一成立即等，每 10 秒再查，累計等逾 10 分鐘即放行；計數或取樣本身失敗亦放行（fail-open，守門不會成為新的失敗來源）。**預設只對 opencode 啟用**——依據是套件在 8 核心 Windows 機之實測：`opencode.exe` 單次短呼叫約占 1.1 核心，而 claude／codex 等候回應時幾乎不占 CPU，故另三家預設不限（見其技能；`agy` 未測）。只守 `exe` 為真的 `opencode`（假 CLI、包裝腳本不守，明給 `true` 或物件才守）。`false` 關閉；物件逐鍵覆寫 `maxCli`／`ramUsedMax`／`cpuMax`（各可 `false` 關該項）、`pollMs`、`gateWaitMaxMs`，非預期之值改用預設而不報錯；放在遞補層頂層為各條目共用，條目自帶者**整個取代**、不逐鍵合併。等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算。結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true`。成本（套件實測）：首次檢查或閒置逾 10 秒後約 +1.1 秒，之後約 +0.07 秒 |
-| `quotaGate` | 未給＝預設開（1.0.73 起） | 只作用於 `ocgo:` Go 條目且有金鑰者：選到某把金鑰前先以 `opencodeGoUsage` 查**該金鑰所屬工作區**之用量，任一視窗（5 小時／週／月）`percent ≥ 95`（`rollingMax`／`weeklyMax`／`monthlyMax` 可調、`false` 關該視窗）或端點明說 `rate-limited` 即**略過該把金鑰**、不派，視同沒額度（事件 `quota-skip`、`tried[].outcome: 'quota-skip'`）；組內每把皆略過時，整條鏈最後一筆失敗若屬此類，`error` 為 `QUOTA_EXHAUSTED: …`、`errorType: 'quota'`。結果快取 60 秒（`cacheMs`）、到期重查，用量降回門檻即恢復，**不盲信 `resetsAt` 冷卻到該時刻**。端點是實測所得、官方未載，所以**端點失敗、欄位缺少、`percent` 非數字、未知狀態字一律不擋**（另發 `quota-gate-error` 事件）；`false` 關閉。這是「到頂前即停」；撞限實況（`rate-limited` 字樣、到頂後 `run` 的行為）仍未實測 |
+| `quotaGate` | 未給＝預設開（Go 條目 1.0.73 起；訂閱類條目 1.0.79 起） | **對 `ocgo:` Go 條目**（有金鑰者）：選到某把金鑰前先以 `opencodeGoUsage` 查**該金鑰所屬工作區**之用量，任一視窗（5 小時／週／月）`percent ≥ 95`（`rollingMax`／`weeklyMax`／`monthlyMax` 可調、`false` 關該視窗）或端點明說 `rate-limited` 即**略過該把金鑰**、不派，視同沒額度（事件 `quota-skip`、`tried[].outcome: 'quota-skip'`）；組內每把皆略過時，整條鏈最後一筆失敗若屬此類，`error` 為 `QUOTA_EXHAUSTED: …`、`errorType: 'quota'`。結果快取 60 秒（`cacheMs`）、到期重查，用量降回門檻即恢復，**不盲信 `resetsAt` 冷卻到該時刻**。端點是實測所得、官方未載，所以**端點失敗、欄位缺少、`percent` 非數字、未知狀態字一律不擋**（另發 `quota-gate-error` 事件）；`false` 關閉。這是「到頂前即停」；撞限實況（`rate-limited` 字樣、到頂後 `run` 的行為）仍未實測。**1.0.79 起同一個 `quotaGate` 鍵另作用於訂閱類條目**（`claude` 無金鑰者、`codex`、`antigravity`；預設只對真的 claude／codex／agy 執行檔）：先讀額度帳（`store.quota`）、再查用量，任一視窗 ≥95% 即略過整個條目，細節見 skill[dispatch-claude]、skill[dispatch-codex]、skill[dispatch-antigravity]；Go 條目的判定、快取與事件逐案不變，`quota-skip` 事件與 `tried` 項僅多一個 `source: 'usage-api'`。`quotaGate: false`（遞補層頂層或單一條目）一併關閉兩類 |
 
 遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `config` 不可序列化、`env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰——第三方兩條有多把金鑰時，依 `next-key`／`skip-group` 計數的數字會因此變小。
 
 **`budgetFor()` 有陷阱，不要照抄**：它**只累加條目自己的 `timeoutMs`**（未帶者以統一預設 300000 計），讀不到你寫在 opt／`defaults` 的那一個；而套件內建的 providers 條目**刻意一條都不帶 `timeoutMs`**（1.0.54 實查 24 條皆無），所以 `budgetFor(內建條目)` 恆為「條目數 × 300000」（24 條就是 120 分鐘）——比你的 4 小時還小，反而把它壓下去。**本技能教的「直接引用 `providers.mjs`」正好踩中這一點**：要用 `budgetFor()` 就得先把 `timeoutMs: 14_400_000` 逐條寫進每個條目（用 `resolveProviders` 的 `patch` 逐 id 覆寫，別自己 map 回傳值），否則直接寫 `K × 14_400_000`。
 
-**4 小時派工要留觀測點**：`dispatchAiFallback` 的 `onEvent` 會逐步回報 `'try'`／`'ok'`／`'next-key'`／`'skip-group'`／`'budget-out'`／`'aborted'`（`spawnGate` 守門等待中被 `shouldStop` 中止亦同，此時 `tried` 末項 `outcome` 為 `'aborted'`）／`'cooled'`，以及一組試完仍無成交時的 `'group-exhausted'`（1.0.39 起，帶 `attempted`／`by`／`errorTypes`；`attempted` 不計 `quota-skip` 者），失敗事件另帶 `errorType`、被拒回覆與 stderr；1.0.73 起另有 `'quota-skip'`（`quotaGate` 因 Go 用量略過某把金鑰，帶 `windows`／`until`）與 `'quota-gate-error'`（用量查詢失敗、該把照派，同一把金鑰快取期間只發一次）。沒掛它的話，四小時內看不出是卡在哪一家、還是早就跳完整條鏈在空轉。detached 執行時把事件一併落檔，等待期間隨時可讀：`onEvent: (ev) => fs.appendFileSync(out('events.log'), JSON.stringify(ev) + '\n')`（事件皆為純欄位物件；回呼拋出例外或回傳被 reject 的 Promise 都不影響主流程，也不會被等待）。
+**4 小時派工要留觀測點**：`dispatchAiFallback` 的 `onEvent` 會逐步回報 `'try'`／`'ok'`／`'next-key'`／`'skip-group'`／`'budget-out'`／`'aborted'`（`spawnGate` 守門等待中被 `shouldStop` 中止亦同，此時 `tried` 末項 `outcome` 為 `'aborted'`）／`'cooled'`，以及一組試完仍無成交時的 `'group-exhausted'`（1.0.39 起，帶 `attempted`／`by`／`errorTypes`；`attempted` 不計 `quota-skip` 者），失敗事件另帶 `errorType`、被拒回覆與 stderr；1.0.73 起另有 `'quota-skip'`（`quotaGate` 因 Go 用量略過某把金鑰，帶 `windows`／`until`；1.0.79 起另帶 `source`：`'usage-api'`／`'ledger'`／`'limit-text'`，`tried[].outcome: 'quota-skip'` 亦帶 `source`，Go 條目恆為 `'usage-api'`，訂閱類條目被略過時略過的是整個條目）與 `'quota-gate-error'`（用量查詢失敗、該把照派，同一把金鑰快取期間只發一次）。沒掛它的話，四小時內看不出是卡在哪一家、還是早就跳完整條鏈在空轉。detached 執行時把事件一併落檔，等待期間隨時可讀：`onEvent: (ev) => fs.appendFileSync(out('events.log'), JSON.stringify(ev) + '\n')`（事件皆為純欄位物件；回呼拋出例外或回傳被 reject 的 Promise 都不影響主流程，也不會被等待）。
 
 **opencode 派工會先等守門**：預設受 `spawnGate` 約束，同機同時有多個 opencode 派工（含他專案、他行程）時，後到者可能在 spawn 前先等，最久 10 分鐘才放行。detached 派工腳本之等待估算（觀測點、`STILL-RUNNING` 的最長總時長）要預留這段——它不計入 `timeoutMs`，所以 4 小時逾時不會變短，但牆鐘時間會變長。要看有沒有在等：看結果之 `gateWaitedMs`，或在 `spawnGate` 物件掛 `onTrace`（同步回調，事件 `check`／`wait`／`pass`／`fail-open`）一併落檔。要嚴格上限者由單一行程派工（跨行程之預約只是提示、不是鎖，兩行程同一毫秒內仍可能各放行）。
 
@@ -570,11 +572,11 @@ Bash({ run_in_background: true, timeout: 7200000,
 **唯一例外是 Go 訂閱：1.0.72 起匯出 `opencodeGoUsage({ key, baseURL, timeoutMs })`**（`src/opencodeGoUsage.mjs`，不在 `src/quota/`），以已訂閱 Go 的工作區金鑰查 5 小時／週／月三個視窗的用量：
 
 - **端點是實測所得，官方文件全文沒載**（Go 頁只說「可在 Console 追蹤用量」）：`GET …/inference/go/v1/usage` ＋ `Authorization: Bearer`，已訂閱 200、未訂閱 403 `EntitlementError`、無金鑰／假金鑰／只給 `x-api-key` 一律 401。上游 PR 的回應形狀與今日實測不同（形狀曾變），所以函數對形狀逐項驗證、不符即以 `errorType: 'parse'` 失敗，不猜測、不補預設——**不是官方承諾，可能無預警改變**。
-- **回三視窗原值，不換算金額**：`usage.rolling`／`weekly`／`monthly`，各為 `{ status, percent, resetsAt }`（`percent` 為 0～100 整數）。端點無分模型用量、無金額，「某模型還剩幾次」得依官方各模型月額表自行換算。
+- **回三視窗原值，不換算金額**：`usage.rolling`／`weekly`／`monthly`，各為 `{ status, percent, resetsAt }`（`percent` 為 0～100 整數）。端點無分模型用量、無金額（只回整把金鑰的百分比），「某模型還剩幾次」得依官方各模型月額表自行換算（該表已抄入套件 `providers.mjs` 檔頭，2026-11-07 抄錄、未實測）。
 - **判讀用 `available`（三視窗皆在且 `status` 皆為 `'ok'`），不要用 `!limited`**：`limited` 只在某視窗恰為 `'rate-limited'` 時為真（`limitedWindows` 列出是哪些），視窗缺漏或出現未知狀態字時 `available` 為 `false`、`unknownStatus` 列出它們——未知值不得當正常。
 - **`nextResetAt` 取被限視窗 `resetsAt` 的最晚者**（同時被限的多個視窗須全部重置才恢復；取最早者會在其餘視窗仍被限時誤判可用），被限視窗有任一個缺漏或無法解析時為 `null`；此為依狀態語意的推論，**本機沒撞過限，撞限後實際何時恢復未驗證**。`'rate-limited'` 這個狀態字本身也來自第三方記載，本機只見過 `'ok'`。
 - **永不 reject**：失敗以 `ok: false` 加 `errorType`（`params`／`auth`／`forbidden`／`ratelimit`／`http`／`parse`／`timeout`／`network`／`toolarge`／`other`，是額度查詢共用的詞彙，與轉接器的不同）回報；403 且本文為 `EntitlementError` 時另帶 `noGoSubscription: true`（金鑰有效但其工作區沒有 Go 訂閱，與一般 403 區分）。`key` 須為 6 字元以上、無空白的可見 ASCII，否則 `params` 失敗且不發請求；金鑰只放在 `Authorization` 標頭，不入結果、錯誤訊息與日誌，但**會送往 `baseURL`，勿指向不信任的主機**；`baseURL` 非 http(s) 網址時視為未給、改用預設官方網址。
-- **遞補層 1.0.73 起預設以 `quotaGate` 接這個函數**（見〈逾時與等待〉選項表）：選到 `ocgo:` 條目之某把金鑰前先查用量，任一視窗 `percent ≥ 95` 即略過該把金鑰；判定只認「成功回應且 `percent` 為有效數字 ≥ 門檻」或「`status` 明確 `rate-limited`」，查詢失敗與未知形狀一律不擋。它是「到頂前即停」，Go 到頂時 `run` 的行為仍未查明（見「OpenCode Go」），所以單次派工、自訂排程仍由呼叫端自己查（例如派工前先查 `available`），並一律以 `timeoutMs` 封頂。
+- **遞補層 1.0.73 起預設以 `quotaGate` 接這個函數**（見〈逾時與等待〉選項表）：選到 `ocgo:` 條目之某把金鑰前先查用量，任一視窗 `percent ≥ 95` 即略過該把金鑰；判定只認「成功回應且 `percent` 為有效數字 ≥ 門檻」或「`status` 明確 `rate-limited`」，查詢失敗與未知形狀一律不擋。它是「到頂前即停」，Go 到頂時 `run` 的行為仍未查明（見「OpenCode Go」），所以單次派工、自訂排程仍由呼叫端自己查（例如派工前先查 `available`），並一律以 `timeoutMs` 封頂。因端點只回整把金鑰的百分比，`quotaGate` 擋的是該把金鑰的全部 `ocgo:` 條目（含不計額度的免費期模型），見「OpenCode Go」。同一個 `quotaGate` 鍵自 1.0.79 起另作用於訂閱類條目，與本節的 Go 用量無關，見〈逾時與等待〉選項表。
 
 ## 轉接器契約（w-dispatch-ai 1.0.54）
 
@@ -606,14 +608,14 @@ Bash({ run_in_background: true, timeout: 7200000,
 
 | 想知道 | 讀哪個檔 |
 |---|---|
-| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchOpencode.mjs`（固定旗標順序為 `run` → `--agent <值>` → `-m` → `extraArgs`；`exe`／`model`／`key`／`provider`／`useStoredAuth`／`agent`／`config`／`extraArgs`／`input`／`env` 為自用鍵，`env` 由轉接器與憑證、設定、`PWD` 注入合併後再交出；其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`，`validate` 除外、由該檔自行判定） |
+| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchOpencode.mjs`（固定旗標順序為 `run` → `--agent <值>` → `-m` → `extraArgs`；`exe`／`model`／`key`／`provider`／`useStoredAuth`／`agent`／`config`／`extraArgs`／`input`／`env`／`outputTokenMax`／`detectTruncation`／`reshapeResult` 為自用鍵（後三者 1.0.75 起），`env` 由轉接器與憑證、設定、`PWD` 注入合併後再交出；其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`，`validate` 除外、由該檔自行判定） |
 | **實際可用、已實測過的模型與供應商條目**（含第三方 provider 的完整 `config`、金鑰環境變數、權限鎖、實測耗時與失敗碼） | `src/providers.mjs`——**本技能所有模型資訊的上游**，改模型前先讀它 |
 | 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
 | `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。validate 字串要逐字核對，或直接傳自訂函數 |
 | `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽。CLI 類（本轉接器）用得到的只有 `params`／`timeout`／`spawn`／`validation`／`exec`（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`），**其餘失敗一律歸 `exec` 不再細分**（各家 CLI 字樣隨版本漂移，套件刻意不維護簽章表）；`http`／`fetch`／`tool-unsupported`／`invalid-response`／`incomplete` 只出現於 REST 類，`budget` 只出現於遞補層；`aborted` 以遞補層為主，1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時 CLI 轉接器亦回此值（`error` 為 `ABORTED`、`attempts` 為 0），`quota`（`quotaGate` 略過之合成失敗結果，`error` 以 `QUOTA_COOLDOWN` 開頭、`failureKind` 為 `no-credit`）只出現於遞補層。要細分 CLI 失敗就自己用 `coolDetect` 式注入判斷 |
-| 額度查詢（**opencode 免費池無**）之函數、結構與詞彙 | `src/quota/`（三家訂閱制 CLI）；其 `errorType` 是另一套詞彙，與上列轉接器的不共用。Go 用量為 `src/opencodeGoUsage.mjs`（檔頭記端點來源、回應形狀、判讀語意與錯誤詞彙）；遞補層據以略過金鑰之 `quotaGate` 為 `src/goQuotaGate.mjs`（檔頭記判定、快取、不誤判到頂之規則） |
+| 額度查詢（**opencode 免費池無**）之函數、結構與詞彙 | `src/quota/`（三家訂閱制 CLI）；其 `errorType` 是另一套詞彙，與上列轉接器的不共用。Go 用量為 `src/opencodeGoUsage.mjs`（檔頭記端點來源、回應形狀、判讀語意與錯誤詞彙）；遞補層據以略過金鑰之 `quotaGate` 為 `src/goQuotaGate.mjs`（檔頭記判定、快取、不誤判到頂之規則，及「用量端點只回整把金鑰百分比」之限制）；訂閱類條目（claude 無金鑰者、codex、antigravity，1.0.79 起）為同一個 `quotaGate` 鍵之 `src/subQuotaGate.mjs`、額度帳 `src/quotaLedger.mjs`、共用判定與快取 `src/quotaJudge.mjs` |
 | spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open、逾時歸屬 | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
-| OpenCode Go 之全貌（provider 分流、金鑰變數、隱私前提、錯誤字樣、為何不收 REST 類） | `src/providers.mjs` 檔頭【OpenCode Go】段與 `src/dispatchOpencode.mjs` 檔頭【OpenCode Go】段；各 `ocgo:` 條目註解逐項標〔本機實測〕／〔提出端〕／〔CLI型錄〕 |
+| OpenCode Go 之全貌（provider 分流、金鑰變數、隱私前提、錯誤字樣、為何不收 REST 類；1.0.78 起另含 Go 型錄漂移紀錄、未收模型清單、官方月額表與用量端點限制） | `src/providers.mjs` 檔頭【OpenCode Go】段與 `src/dispatchOpencode.mjs` 檔頭【OpenCode Go】段；各 `ocgo:` 條目註解逐項標〔本機實測〕／〔提出端〕／〔CLI型錄〕 |
 | Console 端點分流、診斷流程（429／400／403／500 各代表什麼） | `src/providers.mjs` 檔頭【OpenCode Console】段（含權威來源網址） |
 | 條目展開、`pick`／`exes`／`patch`、拼寫提示 | `src/resolveProviders.mjs`（檔頭記載「後處理收進本函數」之理由與單邊套用殷鑑） |
 | 工作流配套工具 | `src/wkf/`：`createFileStore`（跨行程持久化遞補游標與冷卻狀態，排程任務每次都是新行程故記憶體版每次歸零）、`createUsageCounter`（逐日用量計帳，純觀測不據以節流）、`salvageTruncatedArray`（截斷 JSON 陣列之前段搶救，刻意不併入預設解析） |
@@ -675,6 +677,18 @@ opencode run --help
 ```
 
 `w-dispatch-ai` 裝在技能根、由使用者統籌更新（見「套件裝在哪」），**不要在專案裡 `npm install w-dispatch-ai`**。
+
+2026-11-07 對照：以 `w-dispatch-ai` **1.0.80** 之原始碼與 README 行為變更紀錄第 66～68 條核對（讀 `src/providers.mjs` 檔頭與 `ocgo:` 條目、`src/filterOpencodeFree.mjs`、`src/subQuotaGate.mjs`、`src/goQuotaGate.mjs`、`src/dispatchAiFallback.mjs` 檔頭；條目數以唯讀腳本對 `providers` 實際計數；**未重跑 opencode、未實際呼叫模型**，條目註解所載之金絲雀與逐模型額度的實測皆為套件或提出端於 2026-11-07 的紀錄，本技能未重驗）：
+
+| 項目 | 結果 |
+|---|---|
+| `providers.mjs` | 全表 **38 條**（byKind：opencode 19、claude 5、antigravity 4、codex 3、api-anthropic 3、api-typesafe-systemone 2、api-openai-compat 2）；`oc:` 10 條與 1.0.72 同 id、同順序；`ocgo:` 由 8 條增為 9 條（`beam-free` 之後新增 `crouton-alpha-free`，`detectTruncation: true`、`--variant high`）；19 條 opencode 條目權限皆為 `{ edit:'deny', bash:'ask' }` |
+| 匯出 | `WDispatchAi` 仍 **34** 個鍵 |
+| Go 型錄 | 2026-11-07 公開型錄 30 個＝已收 9＋未收 21（套件記載之漂移：新增 `hy4`〔未收〕與 `crouton-alpha-free`〔已收〕，公開型錄已無 `mimo-v2.5`／`mimo-v2.5-pro`）；官方月額表入套件檔頭（未實測） |
+| 免費額度 | 診斷段改為**逐模型計**（提出端 2026-11-07 實測），原「整個免費層暫不可用」之說法已更正；免費池核對：`/zen/v1/models` 單價 0 者 11 個、目錄 `oc:opencode/*` 收 8 個皆仍在，另 3 個未收（`crouton-alpha-free`、`iceman-free`、`inkling-2-small-free`） |
+| `quotaGate`（1.0.79） | 擴及訂閱類條目（claude 無金鑰者、codex、antigravity），預設開；Go 條目判定、快取、事件逐案不變，`quota-skip` 事件與 `tried` 項多 `source` 欄；`goQuotaGate.mjs` 檔頭新增「用量端點只回整把金鑰百分比」之限制（不改行為） |
+| `filterOpencodeFree` | 讀 1.0.80 原始碼：只判 `kind` 為 `opencode` 且 `model` 以 `opencode/` 開頭者，其餘含 `free` 字樣者歸 `unchecked`；故 `ocgo:` 條目中含 `free` 字樣者現為三條（`beam-free`、`crouton-alpha-free`、`iceman-contributor-free`，此前兩條），皆歸 `unchecked`（讀碼所得，未實跑） |
+| `dispatchOpencode()` | README 第 66～68 條未涉及此轉接器；1.0.80 僅改 `dispatchAntigravity` |
 
 2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式，讀 `src/cliSpawnGate.mjs`、`src/goQuotaGate.mjs`、`src/runExecCli.mjs`、`src/dispatchAiFallback.mjs`、`src/dispatchOpencode.mjs`、`src/WDispatchAi.mjs`、`src/providers.mjs` 與 README 新段；**未重跑 opencode、未實際呼叫模型**，守門與 Go 用量之實測數字為套件於同日之紀錄，本技能未重驗）：
 
