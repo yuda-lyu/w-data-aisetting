@@ -414,7 +414,7 @@ await wda.dispatchCodex(prompt, {
 | `spawnGate` | 未給＝不限 | **1.0.73 新增**，自用鍵、不轉交 `execCli`。每次 spawn 前守門（驗證不過而重試者每次重守）；預設與依據見〈逾時分層〉選項表 |
 | `maxRetries`、`retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
 
-提示詞透過 stdin 傳入。回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`（守門實際等過時另帶 `gateWaitedMs`，逾時放行者再帶 `gateFailOpen: true`，`durationMs` 不含守門等待）；應檢查 `ok`，不要假設失敗會造成 reject。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`（1.0.48 起回結果物件，此前部分情形會 reject）；`durationMs` 含驗證時間。
+提示詞透過 stdin 傳入。回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`（守門實際等過時另帶 `gateWaitedMs`，逾時放行者再帶 `gateFailOpen: true`，`durationMs` 不含守門等待）；應檢查 `ok`，不要假設失敗會造成 reject。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`（1.0.48 起回結果物件，此前部分情形會 reject）；`durationMs` 含驗證時間。1.0.81 起：失敗（非零離開、訊號結束、逾時）之 `error` 為 `Exit code N: <尾段>`／`TIMEOUT after Ns: <尾段>`（尾段取子進程輸出之真正尾端並遮金鑰），另帶 `errorDetail: { exitCode, stderrTail, stdoutTail? }`；成功另帶 `finish`、`outputChars`。勿以 `error === 'Exit code 1'` 精確比對，改看 `errorDetail.exitCode`；`coolDetect` 之字樣判定照舊讀 `stderr`，不讀 `error`。
 
 請使用套件的 UMD 預設匯出：`import wda from 'w-dispatch-ai'`。
 
