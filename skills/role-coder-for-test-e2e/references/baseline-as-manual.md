@@ -49,7 +49,7 @@
 | 下載類（無畫面終態） | 只有點擊前那張 | 整個 case 無圖 |
 | 點擊前：畫布內的圖徵（點／線／面，無 DOM） | 由可讀資訊反算的位置外擴數 px（點圖示含錨點偏移；線／面取游標將放大之處） | 框整個畫布 |
 | 放大／平移後顯示圖徵 | 畫布本身，且截圖前以圖徵顏色像素計數證明主體在框內 | 主體已離開視野的畫布（海面／背景一片） |
-| 點擊前：點背景／任意處以關閉覆蓋層 | 將點的位置外擴之小方框，該處下方不得有會誤導的 UI（被壓暗的選單項、按鈕） | 框在被壓暗的選單項上（讀者以為要點選單） |
+| 點擊前：點遮罩、看圖視窗背景、透明攔截層或面板以外之處，以關閉面板或進行下一步 | 「點擊即會使面板隱藏或消失之區域」中面積最大之矩形，四邊內縮後繪框（判定、點擊處另選與參考實作見 §3.1） | 框點擊處之小方框（讀者以為該處有按鈕）；只框其中一小塊（讀者以為框外可點者不能點）；避開被遮罩所蓋之選單項或按鈕（讀者以為被蓋者不能點；遮罩在上，點其上任一處只會關閉面板，被蓋者亦屬可點區） |
 | 全畫面覆蓋層開啟（圖片瀏覽器） | 大圖本身；工具列另一張框各鈕之聯集 | 框整個覆蓋層或透明整條工具列 |
 | 彈窗分頁切換 | 分頁列（各分頁名之聯集）或被點的分頁名；切換後框內容區可視範圍 | 框整個彈窗 |
 | 鍵盤觸發的提示區出現 | 提示區整塊面板；之後各步框面板內的查詢列／筆數與標籤／項目列 | 框編輯器 |
@@ -82,7 +82,7 @@
 | 圖片於內部捲動容器 | 圖片矩形 ∩ 內容區矩形（可視部分）；點擊點取可視部分中心，不取圖片幾何中心（常在容器外） |
 | 工具列（圓鈕群） | 各按鈕矩形之聯集，不取容器（容器常是透明整條或含 `pointer-events:none` 外殼） |
 | 浮層（Teleport 到 body 的提示區／色盤） | 「寬高為面板級且內含識別文字」的可見浮層，不取第一個同 class 元素（tooltip 常共用 class） |
-| 覆蓋層背景點擊位置 | 呼叫端直接給定矩形；給定前以 `elementFromPoint` 確認該點命中覆蓋層本身而非大圖／工具列／面板 |
+| 點擊外側之可點區與點擊處 | 依 §3.1 先判定可點區再取其最大矩形、四邊內縮；框與點擊處分開選（原點擊處在框內即沿用，否則取框內最近之純背景點），點擊處以 `elementFromPoint` 守門 |
 | 樹狀列被展開的子清單撐高時 | 以子清單上緣為界切出上半列（列本體），不沿用整列矩形 |
 
 通用規則：
@@ -91,6 +91,198 @@
 - **目標在內部捲動容器可視範圍外時先捲入再量**：`el.scrollIntoView({block:'start'})` 後把文件捲動歸零（`window.scrollTo(0,0)`，否則頁首被切數 px）；表格本身是虛擬捲動時再把表格的內部捲動區（各表格庫之 body viewport）捲到底或回頂。`fullPage` 截圖延伸不到內部捲動容器，紅框會被夾到畫面外變成「沒框」。
 - **每個 rect helper 上線前用真圖驗一次**：改了 helper 就重產受影響的圖並用眼睛看，不是只跑 `--check`。
 - 直接給定矩形 `{x,y,w,h}` 的介面要保留（供無穩定 selector 的區域由呼叫端自行量測，如拖曳把手外擴）。
+
+### 3.1 點擊外側之可點區：判定、框與點擊處分開、參考實作
+
+適用：點遮罩、看圖視窗背景、透明攔截層或面板以外之處，其反應是面板隱藏或消失、或進行下一步。**框的是「點到哪裡都會使面板隱藏或消失（或進行下一步）」之整個區域，不是點擊處**。三種錯法都會讓讀者誤讀：框點擊處之小方框，讀者以為該處有按鈕；只框其中一小塊，讀者以為框外可點者不能點；避開被遮罩所蓋之選單項或按鈕，讀者以為被蓋者不能點，與事實相反（遮罩在上，點其上任一處只會關閉面板，被蓋之選單項、按鈕、卡片皆屬可點區）。殷鑑：依舊規則畫點擊處之小方框，使用者指出讀者會誤以為該處有按鈕；改為「避開遮罩下按鈕之空白處」，又被指出遮罩在上、被蓋者亦可點；無遮罩之彈窗只框「無文字之背景」，框成彈窗旁一小塊，被指出四周皆可點。
+
+**一、判定可點區：先分三型，不憑外觀猜**
+
+| 型 | 可點區 | 判法 |
+|---|---|---|
+| 有遮罩（半透明遮罩、看圖視窗之背景、透明攔截層） | 最上層為該遮罩元素之點，**不論其下為何** | 視窗每 step 像素取一點，以 `elementFromPoint` 判定最上層是否為點擊處之遮罩元素；於網格上取全為遮罩之最大矩形（逐列累計高度，以堆疊求直方圖下之最大矩形） |
+| 無遮罩，點外部任一處即關閉（以 document 層級偵測外部點擊之彈窗、選單） | 整個視窗（或指定外側範圍）扣掉面板；疊於其上之工具列等照算（點它們同樣會關閉面板，只是點擊處不選它們，見二） | 取面板左、右、上、下 4 側中面積最大之一側（例：彈窗在左，即其右緣往上下延伸、再往右之整片）；示例碼用同一網格引擎，條件改為「不與面板相交」，單一面板時與取 4 側最大者之結果相同 |
+| 無遮罩，只在點特定區域時才關閉（例：地圖彈窗只在點地圖畫布時關閉，點標題列、清單皆不關閉） | 限於該區域，且**最上層須為該區域之元素**，疊於其上之工具列、圖例、座標列、縮放鈕不算；點了會重新開啟該面板之錨點（如彈窗所指之圖示）避開 | 網格法，條件改為「最上層元素符合該區域之選擇器」並排除錨點矩形 |
+
+**無遮罩者先讀元件之關閉機制（原始碼）再分型**：同為無遮罩之彈窗，有「點外部任一處即關閉」者，也有「只在點特定區域才關閉」者，兩者可點區差很大，不能由外觀猜。
+
+**各型共同處理**：四邊內縮（例 16px，**不得小於取樣間距**，且須大於共用層紅框之外擴量約 6px 再加半格，step 10 時 16 已足）使框線不貼面板與畫面邊緣；網格取樣之邊界誤差至多一格，內縮即吸收；小於取樣間距之細障礙（分隔線、捲軸）可能漏判，必要時調小 step。可點區若非矩形（例：L 形），取其中面積最大之矩形，框外仍有可點處屬預期（一圖一框只取最大一塊，spec 視覺項括號註明「可點區中最大一塊」）；SKILL §7.6-4 之目視問題只在另有更大之可點矩形未被選時才退件。
+
+**二、判定可點區與選點擊處是兩件事**
+
+框照實框住全部可點區。點擊處另選：原點擊處在框內即沿用（其後之畫面與原標準圖一致）；否則於框內取最近原點擊處之**純背景**點，避開點下去另有作用之處（數據圖、站點與圖徵、按鈕、連結、輸入框、帶文字之容器），否則其後之畫面會改變而須重產（殷鑑：點擊處落在數據圖上，點擊後頁面變動，其後各張與原標準圖不同；落在地圖上，畫面上隨游標位置顯示之資訊（如座標）隨之改變）。純背景之判斷：一般 DOM 以「非可操作元件（button、a[href]、input、role、cursor:pointer、tabindex）、非圖像、無自身文字之元素」，遮罩本身即預期之點擊目標，不受此限（即使帶 cursor:pointer）；畫布（地圖、圖表）內有無圖徵因程式庫而異，由呼叫端注入回呼 `hasFeatureAt`，未注入則畫布一律不當純背景。
+
+**三、參考實作（通用化；與專案耦合者一律由呼叫端注入）**
+
+關鍵步驟：①依型建立「一格是否可點」之判定（遮罩型：格中心之最上層元素即遮罩；區域型：最上層元素符合選擇器；外部型：格不與面板相交；錨點矩形一律以矩形相交排除）→ ②網格取樣＋直方圖求最大矩形 → ③四邊內縮成框 → ④原點擊處在框內即沿用，否則取框內最近之純背景點 → ⑤守門（點擊處須仍在可點區、框過小即拋錯）。回傳之框同 `locator.boundingBox()` 格式，交共用層之紅框合成；點擊用真滑鼠 `page.mouse.click(click.x, click.y)`。呼叫前須就緒（遮罩與面板之進場動畫結束、矩形連續數次不變），否則取樣失準。
+
+```js
+// 求「點擊即會使面板隱藏或消失」之最大矩形（框），並另選點擊處。座標為視窗座標。
+// opt.point         原點擊處 { x, y }
+// opt.mode          'mask'（有遮罩）| 'region'（無遮罩，只在點特定區域時關閉）| 'outside'（無遮罩，點外部任一處即關閉）
+// opt.region        mode='region' 必填：該區域元素之 CSS 選擇器（只比對最上層元素本身，例：地圖畫布）
+// opt.panel         mode='outside' 必填，其餘模式供點擊處避開：面板之 CSS 選擇器（取可見者）
+// opt.area          可選：外側範圍之 CSS 選擇器（預設整個視窗）
+// opt.avoidRects    點了會重新開啟面板之錨點矩形 [{ x, y, width, height }]
+// opt.hasFeatureAt  可選，由呼叫端注入：(x, y, el, r) => boolean，畫布 el 上視窗座標（x, y）附近 r 像素有無圖徵；
+//                   需局部座標者由回呼自行以 el.getBoundingClientRect() 換算。於頁面內以 String(fn) + new Function 重建，
+//                   須為自足之箭頭函式或 function 表達式（方法簡寫與已綁定函式重建時會 SyntaxError，亦不可引用外層變數）
+// opt.step / inset / minSize   取樣間距 10 / 內縮 16（不得小於 step）/ 最小邊長 40
+// 回傳 { x, y, width, height, click: { x, y } }
+async function outsideClickRegion(page, opt) {
+    let { point, mode, region = '', panel = '', area = '', avoidRects = [], hasFeatureAt = null, step = 10, inset = 16, minSize = 40 } = opt
+    if (inset < step) {
+        throw new Error('outsideClickRegion: inset 不得小於 step')
+    }
+    if (!['mask', 'region', 'outside'].includes(mode)) {
+        throw new Error("outsideClickRegion: mode 須為 'mask'、'region' 或 'outside'")
+    }
+    let r = await page.evaluate((a) => {
+        let { point, mode, region, panel, area, avoidRects, step, inset, minSize } = a
+        let hasFeature = a.hasFeatureAtSrc ? new Function(`return (${a.hasFeatureAtSrc})`)() : null
+        let W = window.innerWidth
+        let H = window.innerHeight
+        let visible = (e) => {
+            let b = e.getBoundingClientRect()
+            let cs = getComputedStyle(e)
+            return b.width > 0 && b.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden'
+        }
+        let rectOf = (e) => {
+            let b = e.getBoundingClientRect()
+            return { x0: b.left, y0: b.top, x1: b.right, y1: b.bottom }
+        }
+        let inRect = (x, y, q) => x >= q.x0 && x <= q.x1 && y >= q.y0 && y <= q.y1
+        let panels = panel ? [...document.querySelectorAll(panel)].filter(visible).map(rectOf) : []
+        let ea = area ? [...document.querySelectorAll(area)].find(visible) : null
+        if (area && !ea) {
+            return { err: `找不到外側範圍 ${area}` }
+        }
+        let A = ea ? rectOf(ea) : { x0: 0, y0: 0, x1: W, y1: H }
+        A = { x0: Math.max(0, A.x0), y0: Math.max(0, A.y0), x1: Math.min(W, A.x1), y1: Math.min(H, A.y1) }
+        let blockers = avoidRects.map((q) => ({ x0: q.x, y0: q.y, x1: q.x + q.width, y1: q.y + q.height }))
+        let maskEl = mode === 'mask' ? document.elementFromPoint(point.x, point.y) : null
+        if (mode === 'mask' && (!maskEl || maskEl === document.body || maskEl === document.documentElement)) {
+            return { err: '原點擊處不在遮罩上' }
+        }
+        if (mode === 'mask' && panels.some((q) => inRect(point.x, point.y, q))) {
+            return { err: '原點擊處在面板上，不在遮罩上' }
+        }
+        if (mode === 'region' && !region) {
+            return { err: "mode='region' 須給 region" }
+        }
+        if (mode === 'outside') {
+            if (panels.length === 0) {
+                return { err: `找不到開啟中之面板 ${panel}` }
+            }
+            blockers = blockers.concat(panels)
+        }
+        //一格（或一點）是否可點：幾何排除用矩形相交；最上層元素之判定用中心點
+        let okBox = (x0, y0, x1, y1) => {
+            if (x0 < A.x0 || y0 < A.y0 || x1 > A.x1 || y1 > A.y1) {
+                return false
+            }
+            if (blockers.some((q) => x0 < q.x1 && x1 > q.x0 && y0 < q.y1 && y1 > q.y0)) {
+                return false
+            }
+            if (mode === 'outside') {
+                return true
+            }
+            let t = document.elementFromPoint((x0 + x1) / 2, (y0 + y1) / 2)
+            return mode === 'mask' ? t === maskEl : !!t && t.matches(region)
+        }
+        //網格取樣 + 直方圖下之最大矩形（單調堆疊）
+        let nc = Math.floor(W / step)
+        let nr = Math.floor(H / step)
+        let h = new Array(nc).fill(0)
+        let best = null
+        for (let r = 0; r < nr; r++) {
+            for (let c = 0; c < nc; c++) {
+                h[c] = okBox(c * step, r * step, (c + 1) * step, (r + 1) * step) ? h[c] + 1 : 0
+            }
+            let st = []
+            for (let c = 0; c <= nc; c++) {
+                let hc = c < nc ? h[c] : 0
+                let start = c
+                while (st.length > 0 && st[st.length - 1].h >= hc) {
+                    let t = st.pop()
+                    let s = t.h * (c - t.c)
+                    if (t.h > 0 && (!best || s > best.s)) {
+                        best = { s, c0: t.c, c1: c, r0: r - t.h + 1, r1: r + 1 }
+                    }
+                    start = t.c
+                }
+                st.push({ c: start, h: hc })
+            }
+        }
+        if (!best) {
+            return { err: '找不到可點區' }
+        }
+        let b = { x: best.c0 * step + inset, y: best.r0 * step + inset, width: (best.c1 - best.c0) * step - inset * 2, height: (best.r1 - best.r0) * step - inset * 2 }
+        if (b.width < minSize || b.height < minSize) {
+            return { err: `可點區過小（內縮後 ${Math.round(b.width)}x${Math.round(b.height)}），請查面板與遮罩，或調整 step／inset` }
+        }
+        //純背景：點下去不會另有作用之處
+        let interactive = 'button, a[href], input, select, textarea, label, summary, [role="button"], [role="link"], [role="checkbox"], [role="switch"], [role="tab"], [role="menuitem"], [role="option"]'
+        let isInteractive = (e) => {
+            for (let n = e; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+                if (n.matches(interactive) || getComputedStyle(n).cursor === 'pointer' || (n.tagName !== 'CANVAS' && n.hasAttribute('tabindex') && n.tabIndex >= 0)) {
+                    return true
+                }
+            }
+            return false
+        }
+        let isPure = (x, y) => {
+            let t = document.elementFromPoint(x, y)
+            if (!t || panels.some((q) => inRect(x, y, q))) {
+                return false
+            }
+            if (t === maskEl) {
+                return true //遮罩本身即預期之點擊目標（即使帶 cursor:pointer）
+            }
+            if (t.tagName === 'CANVAS') {
+                return !!hasFeature && !hasFeature(x, y, t, step)
+            }
+            if (/^(IMG|VIDEO|IFRAME|PICTURE|OBJECT|EMBED)$/i.test(t.tagName) || t.closest('svg') || isInteractive(t)) {
+                return false
+            }
+            return ![...t.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim() !== '')
+        }
+        //點擊處：原點擊處在框內即沿用，否則取框內最近原點擊處之純背景點
+        let click = inRect(point.x, point.y, { x0: b.x, y0: b.y, x1: b.x + b.width, y1: b.y + b.height }) ? { x: point.x, y: point.y } : null
+        if (!click) {
+            let bestD = Infinity
+            for (let y = b.y + step; y <= b.y + b.height - step; y += step) {
+                for (let x = b.x + step; x <= b.x + b.width - step; x += step) {
+                    let d = Math.hypot(x - point.x, y - point.y)
+                    if (d < bestD && isPure(x, y)) {
+                        bestD = d
+                        click = { x: Math.round(x), y: Math.round(y) }
+                    }
+                }
+            }
+        }
+        if (!click) {
+            return { err: '框內找不到可安全點擊之純背景點（畫布內之點須注入 hasFeatureAt 才會被判為純背景）' }
+        }
+        if (!okBox(click.x - 1, click.y - 1, click.x + 1, click.y + 1)) {
+            return { err: '點擊處不在可點區內' } //守門
+        }
+        return { ...b, click }
+    }, { point, mode, region, panel, area, avoidRects, step, inset, minSize, hasFeatureAtSrc: hasFeatureAt ? String(hasFeatureAt) : '' })
+    if (r.err) {
+        throw new Error(`outsideClickRegion: ${r.err}`)
+    }
+    return r
+}
+```
+
+呼叫端：先取框與點擊處，截圖時以 `r`（去掉 `click`）為紅框矩形，再 `page.mouse.click(r.click.x, r.click.y)`。注入之回呼例（地圖畫布，依各程式庫自寫）：`hasFeatureAt: (x, y, el, r) => <以該程式庫查詢（x, y）±r 範圍內之渲染圖徵，有則 true>`。
+
+**四、守門與盤查**
+
+- 目視：點擊外側之框是否為可點區中最大之一塊？框外是否還有可點而未框之處？（SKILL §7.6-4，§6.3 清單）。可點區非矩形而框外仍有可點處屬預期（見上〈各型共同處理〉），只在另有更大之可點矩形未被選時才退件。
+- 盤查既有標準圖：**不以紅框之顏色量框大小判定「已是大框」**——地圖之紅色圖層、粉紅圖示等會被當成框而誤判；以程式碼（呼叫之框選函式是否為本節之作法）確認。此限定於框之大小與作法；有無框仍依 SKILL §7.3-7 以像素掃描證明。
+- 既有之小方框圖屬類別缺陷：同類全掃（§6.2-3），重產依 SKILL §7.9 取得授權，只重產受影響者；其後之結果圖若因點擊處改變而不同（例：點擊處落在地圖上、畫面上隨游標位置顯示之資訊隨之改變），一併列入。
 
 ## 4. 已知缺陷協定（壞畫面不凍結為標準圖）
 
@@ -165,7 +357,8 @@ function installFakeClock(anchorIso, g = globalThis, isShifted = false) {
 ```
 - [ ] 先讀圖名與檢查點之用途(操作前／操作後／兼任),定出此圖要指的是哪一個元素,再看框是否正好框住它;兼任圖只框下一步之目標(SKILL §7.1)
 - [ ] 檔名之序號、階段序、kebab 名與 spec 視覺項一致
-- [ ] 點擊前的圖：框在將被點的那個元素上，元素整顆入框
+- [ ] 點擊前的圖：框在將被點的那個元素上，元素整顆入框（點擊外側者改依下一項）
+- [ ] 點擊外側（遮罩、背景、面板以外）之圖：框是否為可點區中最大之一塊？框外是否還有可點而未框之處？框不是點擊處之小方框（§3.1）
 - [ ] 點擊後的圖：框在 spec 括號所寫的反應對象上；對象整顆；不含大片空白
 - [ ] 只有一個框
 - [ ] 框沒被夾到畫面外、沒超出所在容器（彈窗 / 抽屜）
