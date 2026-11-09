@@ -62,7 +62,7 @@
 ## 5. 圖片
 
 - 路徑以 md 所在資料夾解析；圖檔不存在即 reject。md 圖語法之路徑含空白時用角括號：`![說明](<圖 資料夾/a.png>)`，否則整段被當成文字。
-- 報告內之圖以固定最大寬度顯示，窄圖會被放大；最小圖寬之墊寬作法屬產圖，依各報告類技能（例：role-writer-report-final〈產圖規範〉）。
+- 報告內之圖以固定最大寬度顯示，窄圖會被放大；最小圖寬之墊寬作法屬產圖，依各報告類技能（自繪圖：role-writer-report-final〈產圖規範〉；操作手冊之截圖：role-writer-report-e2e-to-manual 之 genFigs，最小圖寬取寬版截圖中較窄者）。
 - 過寬之圖之畫質靠範本之 `doNotAutoCompressPictures`（SKILL 第 4 節）。
 - 同一張圖檔被多處引用時，docx 內嵌媒體數少於圖數（轉檔器去重），版面不受影響，驗證時說明；SVG 之圖則每張內嵌 svg 與 png 預覽兩份，媒體數可大於圖數（SKILL 第 7 節）。
 - md 內含數學式或程式碼區塊時，產出 docx 會多出名稱為 CSS 類別之樣式（如 `mord`、`hljs-keyword`），屬 HTML 帶入之樣式，另列計數、不算範本問題（SKILL 第 4 節判準三）。

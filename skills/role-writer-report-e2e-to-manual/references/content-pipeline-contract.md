@@ -6,7 +6,7 @@
 
 ```
 spec/流程_<系統>_<瀏覽|編輯>.md ──parseSpec──▶ cases[{ head, title, kind, description, imgs[] }]
-test/pics/<流程前綴>/<流程前綴>-<圖鍵>.png ──genFigs──▶ report/pics/（檔名沿用）
+test/pics/<流程前綴>/<流程前綴>-<圖鍵>.png ──genFigs──▶ report/pics/（檔名沿用；窄圖墊寬）
 src/content/<流程前綴>.mjs（figs / text / skipImgs）──┐
 config.mjs（systemName / version / flows[{chapter, spec, lead?}]）──┼──genMd──▶ report/<報告名>.md ──genDocx──▶ report/<報告名>.docx
 報告總則 data.json（封面、日期、單位）──────────────────┘
@@ -73,6 +73,10 @@ export default {
 ## 6. genFigs 與 genDocx
 
 - genFigs：只複製已撰寫案例引用之圖，檔名沿用；標準圖重產後重跑即同步；找不到來源即拋錯。
+- **窄圖墊寬**：寬小於最小圖寬（minW）之標準圖，複製時以 `padFigWidth`（作法見 skill[role-writer-report-final] 之 `references/figure-production.md`〈最小圖寬墊寬〉，sharp 左右對稱補透明畫布，內容不縮放）墊至 minW；寬 ≥ minW 者原樣複製。只施於 `report/pics/` 之複本，**不得寫回 `test/pics/`**。
+  - **minW 之取法**：目標是窄版截圖之顯示比例不大於寬版截圖中較窄者，故取該專案 e2e 寬版視窗中較窄之寬度（例：寬版有 1600 與 1280 時取 1280；截圖 deviceScaleFactor 為 1）。自繪圖之字級公式（設計字級 × 倍數 × 顯示寬 ÷ 目標字級）不適用於截圖：曾依公式取 700，640×900 之截圖在 docx 只由 14.7×20.6 公分縮為 13.4×18.9 公分，幾無差別；取 1280 後為 7.4×10.3 公分，與 1280 寬截圖同比例。**定值前先量 docx 內之實際顯示尺寸**（`word/document.xml` 之 `<wp:extent cx cy>`，EMU ÷ 360000 ＝ 公分）。
+  - 墊寬後直式圖之高寬比至多約 0.7，原為直式圖所設之高度上限（如 `imgRatioHeightMax`）不再起作用，可保留作保險。
+  - **對照清單**（如 `report/pics/_figs.json`）：每張記來源標準圖之雜湊、產物之雜湊、是否墊寬、是否另經重新編碼（大圖以調色盤 PNG 壓縮者接在墊寬之後）；核對依 `verification-and-report.md` §1〈用圖一致〉。
 - genDocx：走專案共用之 md→docx 模組，轉檔呼叫、共用範本與其衛生、成敗判定（以實體檔，回傳值不可信）、執行紀律、docx 大小與媒體去重之說明，一律依 skill[role-writer-report-convert-to-docx] 第 4～7 節；轉檔經本機 Word 或轉檔服務皆然。
 - **重產順序**（spec 或 content 改動後）：genMd → lint → genDocx → `verification-and-report.md` §1～§2 之核對；只重產受影響之冊。
 
