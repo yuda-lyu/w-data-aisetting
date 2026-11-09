@@ -1,8 +1,9 @@
-//檢核亮點展示圖之版面: 以實際渲染之墨跡量對齊, 另查對比、重疊與出界、圖示裁切、滿版色塊、強調色面積、同階字級、同組配色、標題位置與圖示色、大區塊對齊、間距分層; 只讀檔
+//檢核亮點展示圖之版面: 以實際渲染之墨跡量對齊, 另查對比、重疊與出界、圖示裁切、滿版色塊、強調色面積、同階字級與粗細、同組配色、標題位置與圖示色、標題色條、大區塊對齊、間距分層、實底內白框、同區強調色大字互搶、焦點內字級差、白底框蓋圖、放射等長等角; 只讀檔
 //執行(於專案根): node check-layout.mjs --dir <html 夾> [--accent #D6124F] [--max-accent 0.1] [--skip-align 名稱,名稱] [名稱...]
 //  --skip-align: 放射等非分欄版面, 略過大區塊對齊與間距分層
 //  名稱不含副檔名與路徑; 渲染時只放行 file/data/blob, 外部連線一律封鎖並記為不合格
 //標記: .stage 畫布; .ttl 標題; .ttl .mk 圓形圖示; .pic 裁切圖; .hd 欄內小標題; [data-peer] 同階標題; [data-sub="組別"] 同組子區塊; [data-minor] 次要文字; svg.ov use[fill] 同組裝飾色
+//  [data-stack] 同一焦點上下排之文字容器(直接子元素為各行); [data-core] 放射核心(有此標記時, svg.ov 內之 use 皆視為放射箭頭)
 import path from 'path'
 import { pathToFileURL } from 'url'
 import { loadDeps, parseArgs, needHex, needNum, listFigs, blockNetwork, hexToRgb, hueOf } from './lib.mjs'
@@ -27,6 +28,12 @@ let FAN_SPAN_MAX = 100
 let FAN_STEP_MIN = 6
 let FAN_FROM_ACCENT_MAX = 90
 let TITLE_ICON_FROM_ACCENT_MIN = 30
+let BIG_NUM_MIN = 56 //強調色大字之字級下限(經驗值: 版型之大數字 60、強調句 68、主要亮點 72; 小標題最大 30)
+let STACK_RATIO_MIN = 1.2 //焦點內相鄰行之字級比下限(產線自擬; 放射核心為 176/92/52)
+let COVER_RATIO_MIN = 0.3 //白底框與 .pic 之交集佔該框面積之比例下限(產線自擬)
+let COVER_AREA_MAX = 0.4 //白底框面積佔畫布之上限, 免把整頁容器當成框(產線自擬)
+let FAN_DIST_TOL = 6 //放射箭頭與核心中心之距離差上限(像素, 產線自擬)
+let FAN_ANGLE_TOL = 4 //放射相鄰角差之最大差上限(度, 產線自擬)
 
 //inkBox: 矩形內之墨跡範圍(與矩形內最常見色差異大者為墨跡), 回傳 1920 畫布之座標
 let inkBox = (p, r) => {
@@ -64,8 +71,8 @@ let inkBox = (p, r) => {
     return { cy: (t + b + 1) / 2 / SCALE }
 }
 
-//collect: 頁面內量測
-let collect = (accent) => {
+//collect: 頁面內量測(於瀏覽器內執行, 所需常數由參數帶入)
+let collect = ({ accent, coverRatio, coverAreaMax }) => {
     let solid = (c) => {
         let m = c.match(/rgba?\(([^)]+)\)/)
         if (!m) {
@@ -178,12 +185,107 @@ let collect = (accent) => {
             bleed.push(el.className || el.tagName)
         }
     }
-    let peers = [...new Set([...document.querySelectorAll('.stage [data-peer]')].map((e) => getComputedStyle(e).fontSize))]
+    let peers = [...new Set([...document.querySelectorAll('.stage [data-peer]')].map((e) => {
+        let cs = getComputedStyle(e)
+        return `${cs.fontSize}/${cs.fontWeight}`
+    }))]
     let fills = [...document.querySelectorAll('.stage svg.ov use[fill]')].map((e) => e.getAttribute('fill'))
     let ttl = document.querySelector('.stage .ttl')
     let ttlRect = ttl ? rectOf(ttl.getBoundingClientRect()) : null
     let mk = document.querySelector('.stage .ttl .mk')
     let mkColor = mk ? solid(getComputedStyle(mk).color) : null
+    let near = (c, ref, tol) => c !== null && c.every((v, i) => Math.abs(v - ref[i]) <= tol)
+    let isWhite = (c, min) => c !== null && c.every((v) => v >= min)
+    let bgOf = (el) => solid(getComputedStyle(el).backgroundColor)
+    let short = (el) => el.textContent.trim().replace(/\s+/g, ' ').slice(0, 12)
+    //實底內白框: 近白底(R、G、B 皆 ≥ 245)、面積 ≥ 600 且含字之框, 落在強調色實底之範圍內者(後代或以絕對定位疊放其上之兄弟皆算)
+    let whiteIn = new Set()
+    let accEls = all.filter((el) => near(bgOf(el), accent, 2))
+    for (let a of accEls) {
+        let ra = a.getBoundingClientRect()
+        for (let d of all) {
+            if (d === a || d.contains(a) || !isWhite(bgOf(d), 245) || !d.textContent.trim()) {
+                continue
+            }
+            let r = d.getBoundingClientRect()
+            if (r.width * r.height >= 600 && r.left >= ra.left - 0.5 && r.right <= ra.right + 0.5 && r.top >= ra.top - 0.5 && r.bottom <= ra.bottom + 0.5) {
+                whiteIn.add(short(d))
+            }
+        }
+    }
+    whiteIn = [...whiteIn]
+    //白底框蓋圖: 底色近白(≥ 250)、含字之框(含 .pic 內之標籤), 與 .pic 之交集達該框面積之一定比例; .pic 本身、包含該 .pic 之容器與整頁容器不算
+    let pics = [...document.querySelectorAll('.stage .pic')]
+    let whiteCover = []
+    for (let el of all) {
+        if (el.classList.contains('pic') || !isWhite(bgOf(el), 250) || !el.textContent.trim()) {
+            continue
+        }
+        let r = el.getBoundingClientRect()
+        let area = r.width * r.height
+        if (area === 0 || area >= 1920 * 1080 * coverAreaMax) {
+            continue
+        }
+        for (let pc of pics) {
+            if (el.contains(pc)) {
+                continue
+            }
+            let p = pc.getBoundingClientRect()
+            let w = Math.min(r.right, p.right) - Math.max(r.left, p.left)
+            let h = Math.min(r.bottom, p.bottom) - Math.max(r.top, p.top)
+            if (w > 0 && h > 0 && w * h >= area * coverRatio) {
+                whiteCover.push(short(el))
+                break
+            }
+        }
+    }
+    //焦點內字級: data-stack 之各直接子元素為一行, 取行內文字之最大字級(無字之行不計)
+    let stacks = [...document.querySelectorAll('.stage [data-stack]')].map((st) => {
+        let lines = [...st.children].map((ch) => {
+            let mx = 0
+            let w = document.createTreeWalker(ch, NodeFilter.SHOW_TEXT)
+            while (w.nextNode()) {
+                if (w.currentNode.textContent.trim()) {
+                    mx = Math.max(mx, parseFloat(getComputedStyle(w.currentNode.parentElement).fontSize))
+                }
+            }
+            return mx
+        }).filter((v) => v > 0)
+        return { label: short(st), lines }
+    })
+    //放射: data-core 之中心至各箭頭(svg.ov use)幾何中心之距離與方位角; 箭頭中心取其本身座標之外框中心, 經 getScreenCTM 轉為頁面座標, 不受旋轉影響
+    let fan = null
+    let core = document.querySelector('.stage [data-core]')
+    if (core) {
+        let cr = core.getBoundingClientRect()
+        let cx = cr.left + cr.width / 2
+        let cy = cr.top + cr.height / 2
+        fan = [...document.querySelectorAll('.stage svg.ov use')].map((u) => {
+            let b = u.getBBox()
+            let p = new DOMPoint(b.x + b.width / 2, b.y + b.height / 2).matrixTransform(u.getScreenCTM())
+            return { d: Math.hypot(p.x - cx, p.y - cy), a: ((Math.atan2(p.y - cy, p.x - cx) * 180) / Math.PI + 360) % 360 }
+        })
+    }
+    //標題色條: .ttl 及其後代(含 ::before、::after)中, 只有左框線(≥ 3px)者, 或寬 ≤ 10、高 ≥ 24 之實色條
+    let titleBar = []
+    if (ttl) {
+        for (let el of [ttl, ...ttl.querySelectorAll('*')]) {
+            for (let pe of [null, '::before', '::after']) {
+                let cs = getComputedStyle(el, pe)
+                if (pe && (cs.content === 'none' || cs.content === 'normal' || cs.display === 'none')) {
+                    continue
+                }
+                let bw = (s) => (cs[`border${s}Style`] === 'none' ? 0 : parseFloat(cs[`border${s}Width`]) || 0)
+                let leftOnly = bw('Left') >= 3 && bw('Top') === 0 && bw('Right') === 0 && bw('Bottom') === 0
+                let w = parseFloat(cs.width)
+                let h = parseFloat(cs.height)
+                let narrow = w > 0 && w <= 10 && h >= 24 && solid(cs.backgroundColor) !== null
+                if (leftOnly || narrow) {
+                    titleBar.push(`${el.tagName.toLowerCase()}${pe || ''}`)
+                }
+            }
+        }
+    }
     //並排之大矩形區塊: 依水平範圍分欄, 各欄之上下緣須對齊; 欄內小標題 .hd 算上緣, 即次邊界對齊
     let blocks = all.filter((el) => {
         if (el.closest('.pic') && !el.classList.contains('pic')) {
@@ -254,7 +356,7 @@ let collect = (accent) => {
     }
     outer.sort((a, b) => a.l - b.l)
     let majors = outer.slice(1).map((c, i) => c.l - outer[i].r)
-    return { rows, texts, clipped, peers, bleed, fills, ttlRect, mkColor, cols, subGaps, majors, accentRatio: accentArea / (1920 * 1080) }
+    return { rows, texts, clipped, peers, bleed, fills, ttlRect, mkColor, cols, subGaps, majors, accentRatio: accentArea / (1920 * 1080), whiteIn, whiteCover, stacks, fan, titleBar }
 }
 
 let lum = (c) => {
@@ -289,7 +391,7 @@ try {
             await document.fonts.ready
             await Promise.all(Array.from(document.images).map((img) => img.decode().catch(() => null)))
         })
-        let d = await page.evaluate(collect, hexToRgb(ACCENT))
+        let d = await page.evaluate(collect, { accent: hexToRgb(ACCENT), coverRatio: COVER_RATIO_MIN, coverAreaMax: COVER_AREA_MAX })
         if (!ALIGN_SKIP.includes(name)) {
             if (d.subGaps.length > 0 && d.majors.length > 0 && Math.max(...d.subGaps) >= Math.min(...d.majors)) {
                 ng(`間距分層 ${name} 子區塊間距最大 ${Math.max(...d.subGaps).toFixed(0)}, 大區塊間距最小 ${Math.min(...d.majors).toFixed(0)}`)
@@ -324,7 +426,64 @@ try {
             ng(`滿版 ${name} 色塊貼齊畫布邊界: ${d.bleed.join('、')}`)
         }
         if (d.peers.length > 1) {
-            ng(`同階字級 ${name} 同階標題字級不一: ${d.peers.join('、')}`)
+            ng(`同階字級 ${name} 同階標題字級或粗細不一: ${d.peers.join('、')}`)
+        }
+        for (let v of d.titleBar) {
+            ng(`標題色條 ${name} 標題以左側色條呈現: ${v}`)
+        }
+        for (let v of d.whiteIn) {
+            ng(`實底內白框 ${name} 「${v}」`)
+        }
+        for (let v of d.whiteCover) {
+            ng(`白底框蓋圖 ${name} 「${v}」`)
+        }
+        for (let st of d.stacks) {
+            if (st.lines.length < 2) {
+                continue
+            }
+            let mx = Math.max(...st.lines)
+            let ratios = st.lines.slice(1).map((v, i) => Math.max(v, st.lines[i]) / Math.min(v, st.lines[i]))
+            if (st.lines.filter((v) => v === mx).length > 1 || Math.min(...ratios) < STACK_RATIO_MIN) {
+                ng(`焦點字級 ${name} 「${st.label}」 各行字級 ${st.lines.join('/')}(相鄰行字級比應 ≥ ${STACK_RATIO_MIN}, 最大字級只一行)`)
+            }
+        }
+        //放射: 箭頭少於 3 支不查
+        if (d.fan && d.fan.length >= 3) {
+            let ds = d.fan.map((v) => v.d)
+            let dd = Math.max(...ds) - Math.min(...ds)
+            //相鄰角差: 含首尾繞回之一差; 開口扇形之最大缺口(大於中位數 1.5 倍)不計
+            let as = d.fan.map((v) => v.a).sort((a, b) => a - b)
+            let gaps = as.slice(1).map((v, i) => v - as[i]).concat(360 - as[as.length - 1] + as[0])
+            let mid = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]
+            let big = Math.max(...gaps)
+            if (big > mid * 1.5) {
+                gaps.splice(gaps.indexOf(big), 1)
+            }
+            let da = Math.max(...gaps) - Math.min(...gaps)
+            if (dd > FAN_DIST_TOL || da > FAN_ANGLE_TOL) {
+                ng(`放射不等長等角 ${name} 距離差 ${dd.toFixed(1)} px、角度差 ${da.toFixed(1)} 度(上限 ${FAN_DIST_TOL} px、${FAN_ANGLE_TOL} 度)`)
+            }
+        }
+        //同區強調色大字互搶: 字級 ≥ BIG_NUM_MIN 且文字色為強調色者, 依所在底塊分組; 同一行(垂直重疊過半)之字算一個(數字加量詞、前後對照), 同組 2 個以上即報
+        //直接放在白色畫布上(無底塊)者不查: 整張畫布不等於「同區」, 各格無底塊之版面會誤報
+        let accRgb = hexToRgb(ACCENT)
+        let bigs = d.texts.filter((t) => t.box && t.size >= BIG_NUM_MIN && t.color && t.color.every((v, i) => Math.abs(v - accRgb[i]) <= 2))
+        let byBox = {}
+        for (let t of bigs) {
+            let k = `${t.box.x},${t.box.y},${t.box.width},${t.box.height}`
+            byBox[k] = byBox[k] || []
+            let same = byBox[k].find((u) => Math.min(u.rect.y + u.rect.height, t.rect.y + t.rect.height) - Math.max(u.rect.y, t.rect.y) > Math.min(u.rect.height, t.rect.height) / 2)
+            if (same) {
+                same.text = `${same.text}${t.text}`
+            }
+            else {
+                byBox[k].push({ ...t })
+            }
+        }
+        for (let list of Object.values(byBox)) {
+            if (list.length >= 2) {
+                ng(`強調色大字互搶 ${name} ${list.map((t) => `「${t.text}」`).join('')}(次要者換中性色)`)
+            }
         }
         if (d.accentRatio > MAX_ACCENT_AREA) {
             ng(`配色 ${name} 強調色實底佔畫布 ${(d.accentRatio * 100).toFixed(1)}%(上限 ${MAX_ACCENT_AREA * 100}%)`)

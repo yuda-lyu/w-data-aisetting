@@ -40,6 +40,17 @@ let arrows = (cs) => `<svg class="ov" viewBox="0 0 1920 1080"><defs><path id="ar
 let good = [title(), colL, colR].join('')
 //band: 深底橫帶內兩段白字置中, 第二段以 position:relative 偏移 shift 像素(模擬高亮區大字偏上)
 let band = (shift) => `<div class="abs" style="left:60px;top:900px;width:800px;height:80px;background:#0F1E30;display:flex;align-items:center;justify-content:center;gap:12px;color:#fff;font-size:44px;font-weight:700"><span>左段文字</span><span style="position:relative;top:${shift}px">右段文字</span></div>`
+//bigNums: 同一底塊(colL)內兩個大字, 字級與兩者之顏色可調
+let bigNums = (size, c1, c2) => `<div class="abs" style="left:80px;top:300px;font-size:${size}px;color:${c1}">12 萬</div><div class="abs" style="left:80px;top:500px;font-size:${size}px;color:${c2}">34 館</div>`
+//stack: data-stack 之各排, 依序給字級
+let stack = (...sizes) => `<div class="abs" data-stack style="left:80px;top:300px;color:#0F1E30">${sizes.map((s, i) => `<div style="font-size:${s}px;line-height:1.2">第${i + 1}排字</div>`).join('')}</div>`
+let whiteBox = (x, y) => `<div class="abs" style="left:${x}px;top:${y}px;width:300px;height:80px;background:#FFFFFF;font-size:30px">白底說明框</div>`
+let picL = '<div class="pic" style="left:40px;top:112px;width:900px;height:928px"></div>'
+//放射: 核心中心 (960, 250); 各箭頭以 rotate(角度) 後沿半徑平移
+let fanCore = '<div class="abs" data-core style="left:752px;top:42px;width:416px;height:416px;border-radius:50%;background:#0E6B78"></div>'
+let fanArrows = (rs, as) => `<svg class="ov" viewBox="0 0 1920 1080"><defs><path id="fa" d="M0 -15 L60 -15 L60 15 L0 15 Z"/></defs>${as.map((a, i) => `<use href="#fa" transform="translate(960 250) rotate(${a}) translate(${rs[i]} 0)"/>`).join('')}</svg>`
+let fanAngles = [0, 36, 72, 108, 144, 180]
+let fanRadii = [232, 232, 232, 232, 232, 232]
 let cases = {
     good: { html: good, want: null },
     bleed: { html: [title(), colL, colR, '<div class="panel" style="left:0;top:0;width:1920px;height:60px"></div>'].join(''), want: '滿版' },
@@ -77,6 +88,45 @@ let cases = {
     skipalign: { html: [title(), colL, '<div class="panel" style="left:956px;top:24px;width:924px;height:1016px"></div>'].join(''), want: null, args: ['--skip-align', 'skipalign'] },
     accentopt: { html: [title(), colL, '<div class="panel" style="left:956px;top:112px;width:924px;height:928px;background:#D6124F"></div>'].join(''), want: null, args: ['--accent', '#7A3E9D'] },
     maxaccent: { html: [title(), colL, '<div class="panel" style="left:956px;top:112px;width:924px;height:928px;background:#D6124F"></div>'].join(''), want: null, args: ['--max-accent', '0.99'] },
+    //實底內白框(SKILL.md §4): 強調色實底內放白底含字之小框應報; 實底內只有白字不應報
+    whitebox: { html: [title(), colL, colR, '<div class="abs" style="left:60px;top:600px;width:500px;height:200px;background:#D6124F"><div style="margin:40px;width:300px;height:60px;background:#FFFFFF;color:#0F1E30;font-size:30px">白框內字</div></div>'].join(''), want: '實底內白框' },
+    whiteboxok: { html: [title(), colL, colR, '<div class="abs" style="left:60px;top:600px;width:500px;height:200px;background:#D6124F;color:#FFFFFF;font-size:40px;font-weight:700">實底白字</div>'].join(''), want: null },
+    //白框以絕對定位疊在實底之上(兄弟節點, 骨架常見之排法)亦應報
+    whiteboxsib: { html: [title(), colL, colR, '<div class="abs" style="left:60px;top:600px;width:500px;height:200px;background:#D6124F"></div><div class="abs" style="left:100px;top:640px;width:300px;height:60px;background:#FFFFFF;color:#0F1E30;font-size:30px">疊放白框</div>'].join(''), want: '實底內白框' },
+    //同區強調色大字互搶(§4): 同一底塊 2 個強調色大字應報; 次要者換中性色不應報; 邊界: 字級 56 報、55 不報
+    bignum2: { html: [title(), colL, colR, bigNums(60, '#D6124F', '#D6124F')].join(''), want: '強調色大字互搶' },
+    bignum1: { html: [title(), colL, colR, bigNums(60, '#D6124F', '#0F1E30')].join(''), want: null },
+    bignum56: { html: [title(), colL, colR, bigNums(56, '#D6124F', '#D6124F')].join(''), want: '強調色大字互搶' },
+    bignum55: { html: [title(), colL, colR, bigNums(55, '#D6124F', '#D6124F')].join(''), want: null },
+    //同一行之兩字(前後對照)算一個; 分屬兩個底塊者各算各的: 皆不應報
+    bignumrow: { html: [title(), colL, colR, '<div class="abs" style="left:80px;top:300px;font-size:60px;color:#D6124F">10</div><div class="abs" style="left:300px;top:300px;font-size:60px;color:#D6124F">14</div>'].join(''), want: null },
+    bignumbox: { html: [title(), colL, colR, '<div class="abs" style="left:80px;top:300px;font-size:60px;color:#D6124F">12 萬</div><div class="abs" style="left:1000px;top:300px;font-size:60px;color:#D6124F">34 館</div>'].join(''), want: null },
+    //焦點內字級差(§5): data-stack 各行同字級應報; 有明顯差異不應報; 邊界: 字級比 1.19 報、1.2 不報
+    stackflat: { html: [title(), colL, colR, stack(52, 52)].join(''), want: '焦點字級' },
+    stackok: { html: [title(), colL, colR, stack(88, 52)].join(''), want: null },
+    stack119: { html: [title(), colL, colR, stack(59.5, 50)].join(''), want: '焦點字級' },
+    stack120: { html: [title(), colL, colR, stack(60, 50)].join(''), want: null },
+    //最大字級出現在不只一排(比值雖皆 ≥ 1.2)亦應報
+    stackdup: { html: [title(), colL, colR, stack(88, 52, 88)].join(''), want: '焦點字級' },
+    //白底框蓋圖(§4): 白底含字之框疊在 .pic 上應報; 放在 .pic 外不應報
+    whitecover: { html: [title(), picL, colR, whiteBox(100, 200)].join(''), want: '白底框蓋圖' },
+    whitecoverok: { html: [title(), picL, colR, whiteBox(1000, 200)].join(''), want: null },
+    //.pic 內之白底標籤亦應報; 白底容器包住 .pic(容器本身不是蓋在圖上)不應報
+    whitecoverin: { html: [title(), '<div class="pic" style="left:40px;top:112px;width:900px;height:928px"><div class="abs" style="left:40px;top:40px;width:300px;height:80px;background:#FFFFFF;font-size:30px">圖內白底標籤</div></div>', colR].join(''), want: '白底框蓋圖' },
+    whitecoverwrap: { html: [title(), colL, colR, '<div class="abs" style="left:1000px;top:600px;width:600px;height:400px;background:#FFFFFF"><div class="pic" style="left:20px;top:20px;width:300px;height:200px"></div><div class="abs" style="left:20px;top:250px;font-size:30px">容器說明</div></div>'].join(''), want: null },
+    //放射等長等角(§5): 等半徑、等角不應報; 一支較遠、角度不均應報
+    fanok: { html: [title(), fanCore, fanArrows(fanRadii, fanAngles)].join(''), want: null },
+    fanlen: { html: [title(), fanCore, fanArrows([232, 232, 262, 232, 232, 232], fanAngles)].join(''), want: '放射不等長等角' },
+    fanangle: { html: [title(), fanCore, fanArrows(fanRadii, [0, 36, 72, 100, 144, 180])].join(''), want: '放射不等長等角' },
+    //繞一圈之等角放射(含首尾繞回之角差)不應報
+    fanring: { html: [title(), fanCore, fanArrows([150, 150, 150, 150, 150, 150], [0, 60, 120, 180, 240, 300])].join(''), want: null },
+    //標題色條(§3): h1 左框線、::before 窄條應報; 只有下框線不應報
+    titlebar: { html: [title().replace('<h1>', '<h1 style="border-left:8px solid #0E6B78;padding-left:12px">'), colL, colR].join(''), want: '標題色條' },
+    titlebarpseudo: { html: ['<style>.ttl h1::before{content:"";display:inline-block;width:6px;height:40px;margin-right:12px;background:#0E6B78}</style>', title(), colL, colR].join(''), want: '標題色條' },
+    titlenobar: { html: [title().replace('<h1>', '<h1 style="border-bottom:3px solid #0E6B78">'), colL, colR].join(''), want: null },
+    //同階標題之粗細(§5): 字級相同而粗細不同應報; 字級與粗細皆同不應報
+    peerweight: { html: [title(), colL, colR, '<div class="abs" data-peer style="left:60px;top:200px;font-size:40px;font-weight:700">甲</div><div class="abs" data-peer style="left:60px;top:300px;font-size:40px;font-weight:400">乙</div>'].join(''), want: '同階字級' },
+    peersame: { html: [title(), colL, colR, '<div class="abs" data-peer style="left:60px;top:200px;font-size:40px;font-weight:700">甲</div><div class="abs" data-peer style="left:60px;top:300px;font-size:40px;font-weight:700">乙</div>'].join(''), want: null },
 }
 let run = (name, args = []) => {
     let r = spawnSync(process.execPath, [path.join(dirSelf, 'check-layout.mjs'), '--dir', dir, ...args, name], { encoding: 'utf8', cwd: process.cwd() })
@@ -88,7 +138,8 @@ try {
         fs.writeFileSync(path.join(dir, `${name}.html`), page(c.html), 'utf8')
         let outText = run(name, c.args)
         let ngs = outText.split('\n').filter((l) => l.startsWith('NG'))
-        let ok = c.want === null ? ngs.length === 0 : ngs.some((l) => l.includes(c.want))
+        //好版面須跑完(印出「不合格 0 項」), 免得檢核程式中途出錯而 0 筆 NG 被當成通過
+        let ok = c.want === null ? ngs.length === 0 && outText.includes('不合格 0 項') : ngs.some((l) => l.includes(c.want))
         bad += ok ? 0 : 1
         console.log(`${ok ? 'OK' : 'FAIL'} ${name}: 預期 ${c.want || '無'}; 實得 ${ngs.length === 0 ? '無' : ngs.map((l) => l.split(' ')[1]).join('、')}`)
     }
@@ -149,6 +200,11 @@ try {
     fs.copyFileSync(path.join(dirPics, 'frame.png'), path.join(dir, 'other.png'))
     let ruleFile = path.join(dir, 'rules.mjs')
     fs.writeFileSync(ruleFile, "export default [{ name: '測試禁詞', re: /禁用字樣/ }]\n", 'utf8')
+    //整頁條件規則: 圖內出現時限用語者, 同圖須含適用條件之詞
+    let pageRuleFile = path.join(dir, 'pagerules.mjs')
+    fs.writeFileSync(pageRuleFile, "export default [{ name: '時限句須同圖帶適用條件', when: /\\d+\\s*(分鐘|小時)內/, need: /一般預約/ }]\n", 'utf8')
+    let badRuleFile = path.join(dir, 'badrules.mjs')
+    fs.writeFileSync(badRuleFile, "export default [{ name: '缺正則' }]\n", 'utf8')
     let pic = (src, left, top) => `<div class="pic" style="left:40px;top:112px;width:300px;height:200px"><img src="${src}" alt="測試" style="width:800px;left:${left}px;top:${top}px"></div>`
     let titleOf = (t) => title().replace('範例<em>主張句</em>', t)
     let cropCases = {
@@ -163,6 +219,17 @@ try {
         gridicon: { html: [title(), `<i class="abs" data-ic="grid-2x2" style="left:60px;top:200px">${svg}</i>`].join(''), want: '田字形' },
         gaugeicon: { html: [title(), `<i class="abs" data-ic="gauge" style="left:60px;top:200px">${svg}</i>`].join(''), want: '半圓儀表' },
         ruletext: { html: [title(), '<div class="abs" style="left:60px;top:200px">禁用字樣</div>'].join(''), want: '測試禁詞', args: ['--rules', ruleFile] },
+        //無標題列版型(放射總覽): data-title 之文字視同標題
+        yearcore: { html: '<div class="abs" data-title style="left:760px;top:200px;font-size:52px">2030 年度館藏優化</div>', want: '標期別' },
+        coloncore: { html: '<div class="abs" data-title style="left:760px;top:200px;font-size:52px">館藏優化:成果</div>', want: '標目加冒號' },
+        titlecoreok: { html: '<div class="abs" data-title style="left:760px;top:200px;font-size:52px">館藏優化全面提速</div>', want: null },
+        //圖內全文不標本期年度; 逐年座標軸(data-axis)除外
+        yearbody: { html: [title(), '<div class="abs" style="left:60px;top:200px;font-size:30px">2030 年度借閱成果</div>'].join(''), want: '圖內標年度' },
+        yearaxis: { html: [title(), '<div class="abs" data-axis style="left:60px;top:200px;font-size:24px">2028 年度 2029 年度 2030 年度</div>'].join(''), want: null },
+        yearspan: { html: [title(), '<div class="abs" style="left:60px;top:200px;font-size:24px">保存 5 年期間之借閱紀錄</div>'].join(''), want: null },
+        //整頁條件規則 { name, when, need }
+        pagerule: { html: [title(), '<div class="abs" style="left:60px;top:200px">預約於送出後 30 分鐘內發出通知</div>'].join(''), want: '時限句須同圖帶適用條件', args: ['--rules', pageRuleFile] },
+        pageruleok: { html: [title(), '<div class="abs" style="left:60px;top:200px">一般預約於送出後 30 分鐘內發出通知</div>'].join(''), want: null, args: ['--rules', pageRuleFile] },
     }
     for (let [name, c] of Object.entries(cropCases)) {
         fs.writeFileSync(path.join(dir, `${name}.html`), page(c.html), 'utf8')
@@ -171,6 +238,13 @@ try {
         let ok = c.want === null ? ngs.length === 0 && r.status === 0 : ngs.some((l) => l.includes(c.want))
         bad += ok ? 0 : 1
         console.log(`${ok ? 'OK' : 'FAIL'} ${name}: 預期 ${c.want || '無'}; 實得 ${ngs.length === 0 ? '無' : ngs.join('｜').slice(0, 80)}`)
+    }
+    //規則檔格式不符(既無 re 也無 when/need): 離開碼 2 並寫明原因
+    let rBadRule = spawnSync(process.execPath, [path.join(dirSelf, 'check-crops.mjs'), '--dir', dir, '--rules', badRuleFile, 'cropgood'], { encoding: 'utf8', cwd: process.cwd() })
+    {
+        let ok = rBadRule.status === 2 && rBadRule.stderr.includes('規則格式')
+        bad += ok ? 0 : 1
+        console.log(`${ok ? 'OK' : 'FAIL'} 規則檔格式不符離開碼 ${rBadRule.status}`)
     }
 
     //render: 尺寸隨倍率, 破圖回報且離開碼非 0

@@ -97,7 +97,7 @@ lint 之通用方法在 skill[role-writer-validate] 之《文句與因果審閱�
 6. 輸出約定（改來源、同步範例、暫存位置、不同時轉檔〔依 skill[role-writer-report-convert-to-docx]〕）。
 7. 驗收標準（lint、定稿句逐字比對、主代理審查）。
 
-判準：無對話記憶之 agent 依此第一次即產出合規內容。子代理之回報仍須抽驗；審閱與核對類之派工範本（逐句審閱、逐字校對、事實核對）見 skill[role-writer-validate] 之《文句與因果審閱》§5～§7，派工方法依 skill[dispatch-claude]、skill[dispatch-codex]、skill[dispatch-opencode]。
+判準：無對話記憶之 agent 依此第一次即產出合規內容。子代理之回報仍須抽驗；審閱與核對類之派工範本（逐句審閱、逐字校對、事實核對）見 skill[role-writer-validate] 之《派工範本》§5～§7，派工方法依 skill[dispatch-claude]、skill[dispatch-codex]、skill[dispatch-opencode]。
 
 ## 9. 新期別之接入
 

@@ -1,7 +1,8 @@
 //檢核亮點展示圖之圖源、裁切與圖內文字: 可見範圍內不得有紅框線段, 裁切四邊不得殘留紅框邊緣, 不得超出來源圖, 來源須為標準圖; 圖內文字不得有版面禁用項; 只讀檔
 //執行(於專案根): node check-crops.mjs --dir <html 夾> [--baseline test/pics/] [--rules <規則檔.mjs>] [--allow-runs <json 檔>] [名稱...]
 //  --baseline: img 之 src 須含此字串(預設 test/pics/); 給空字串時不檢查來源
-//  --rules: 專案之用字規則, 預設匯出陣列 [{ name, re }]; 逐行套用於圖內文字(以 import 載入該檔, 即會執行其程式, 只用專案自己之規則檔)
+//  --rules: 專案之用字規則, 預設匯出陣列; 每條為 { name, re }(逐行套用於圖內文字)或 { name, when, need }(整張圖文字符合 when 而不符合 need 即不合格); 格式不符離開碼 2(以 import 載入該檔, 即會執行其程式, 只用專案自己之規則檔)
+//標題: .stage .ttl h1 與 [data-title](無標題列版型之主張文字)皆套標題規則; 圖內全文([data-axis] 逐年座標軸除外)不得出現「N 年度」「N 年期」
 //  --allow-runs: 畫面內容與紅框同色而誤判者, 格式 { "圖檔名": ["橫y569@x1476"] }, 須裁切放大目視確認後才列
 import fs from 'fs'
 import path from 'path'
@@ -15,6 +16,13 @@ let names = listFigs(dir, opt._)
 let baseline = opt.baseline === undefined ? 'test/pics/' : opt.baseline
 let allowRuns = opt['allow-runs'] ? JSON.parse(fs.readFileSync(path.resolve(process.cwd(), opt['allow-runs']), 'utf8')) : {}
 let lintRules = opt.rules ? (await import(pathToFileURL(path.resolve(process.cwd(), opt.rules)).href)).default : []
+let isRe = (v) => v instanceof RegExp
+if (!Array.isArray(lintRules) || lintRules.some((r) => !r || typeof r.name !== 'string' || !(isRe(r.re) || (isRe(r.when) && isRe(r.need))))) {
+    console.error('--rules 規則格式不符: 須預設匯出陣列, 每條為 { name, re } 或 { name, when, need }(re、when、need 皆為正則)')
+    process.exit(2)
+}
+//全圖年度: 本期年度不標於圖內任何位置; 「期」單字不入(「第 2 期工程」等有正當用法), 「年期間」不算, 專案另有寫法由 --rules 補
+let yearRule = /\d+\s*(年度|年期(?!間))/
 //圖專屬之規則: 全頁文字或標題
 let pageRules = [
     { name: '左下角說明文字', sel: '.foot' },
@@ -92,21 +100,42 @@ try {
                 ng(`${name} 圖內: ${t.name}`)
             }
         }
-        let title = await page.evaluate(() => {
-            let h = document.querySelector('.stage .ttl h1')
-            return h ? h.innerText : ''
-        })
+        let title = await page.evaluate(() => [...document.querySelectorAll('.stage .ttl h1, .stage [data-title]')].map((e) => e.innerText).join('\n'))
         for (let t of titleRules) {
             if (t.re.test(title)) {
-                ng(`${name} ${t.name}: ${title}`)
+                ng(`${name} ${t.name}: ${title.replace(/\n/g, ' ')}`)
             }
         }
         let figText = await page.evaluate(() => document.querySelector('.stage').innerText)
         for (let line of figText.split('\n')) {
-            for (let r of lintRules) {
+            for (let r of lintRules.filter((v) => v.re)) {
                 if (r.re.test(line)) {
                     ng(`${name} 圖內文字 ${r.name}: ${line.slice(0, 40)}`)
                 }
+            }
+        }
+        for (let r of lintRules.filter((v) => !v.re)) {
+            if (r.when.test(figText) && !r.need.test(figText)) {
+                ng(`${name} 圖內文字 ${r.name}`)
+            }
+        }
+        //全圖年度: 暫時隱藏 data-axis 後取文字, 取完即還原(後續之量測不受影響)
+        let textNoAxis = await page.evaluate(() => {
+            let s = document.querySelector('.stage')
+            let axes = [...s.querySelectorAll('[data-axis]')]
+            let saved = axes.map((e) => e.style.display)
+            axes.forEach((e) => {
+                e.style.display = 'none'
+            })
+            let t = s.innerText
+            axes.forEach((e, i) => {
+                e.style.display = saved[i]
+            })
+            return t
+        })
+        for (let line of textNoAxis.split('\n')) {
+            if (yearRule.test(line)) {
+                ng(`${name} 圖內標年度: ${line.slice(0, 40)}`)
             }
         }
         let items = await page.evaluate(() => Array.from(document.querySelectorAll('.stage .pic img')).map((img) => {
