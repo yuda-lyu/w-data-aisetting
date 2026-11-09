@@ -427,6 +427,7 @@ agy update       # 版本低於 1.1.25 時升級
 | `dispatchAntigravity()` 固定旗標與自用鍵 | argv 路徑旗標順序不變（`--dangerously-skip-permissions`、`--print-timeout`、`--model`、`--effort`、`--add-dir`、`extraArgs`、`--print <prompt>`）；**新增自用鍵 `promptVia`**（自用鍵八個 → 九個），預設 `'auto'`：不超過 30,000 字元走 argv、逐位元不變，超過改走 stdin（旗標尾端改為 `--input-format stream-json --output-format stream-json`、不帶 `--print`）；結果新增 `raw` 欄（僅 stdin 路徑） |
 | stdin 路徑 | 判成敗只看最後一個 `result` 事件，無 `result` 事件一律 `ok: false`（`errorType: 'exec'`，不受 `maxRetries` 重試）；`extraArgs` 衝突旗標回 `params`；agy 低於 1.1.15 回 `params` 並指引 `agy update`；輸入訊息形狀僅在 agy 1.5.2 實測；斜線指令在 stream-json 輸入下被 agy 拒絕 |
 | `quotaGate`（1.0.79） | 擴及 antigravity 條目（無 `keys` 者），預設開：額度帳 → `getQuotaAntigravity` 查 `/usage` → 任一適用視窗 ≥95% 即略過；快取預設 300 秒、查詢逾時 60 秒；agy 額度字樣不內建；讀者失敗一律不擋 |
+| 額度帳之帳號比對與重探（1.0.82） | 入帳時另記帳號識別（登入 email 之雜湊，帳內不存本文）；讀帳命中後依節流以讀者重探：有帳號識別之帳每 30 分鐘、無者之長視窗（距重置逾 6 小時）每 6 小時，節流起點記於帳、跨行程有效；帳號改變或重探之用量證據已低於門檻即作廢該帳並改依現況判定（換訂閱帳號後最長約 30 分鐘自動恢復）；讀者失敗、取不到帳號或無證據一律維持帳。要立即清帳：`forgetQuota(state 或 store, 'antigravity')`（`WDispatchAi.forgetQuota`；家族名、精確鍵或 `'*'`）。作廢時記 `quota-ledger-void` 事件（帳號只記雜湊前 8 碼） |
 | `providers.mjs` | agy 條目仍 4 條（`agy:gemini-3.8-flash-high`、`agy:gemini-4-argon-high`、`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`）；全表 38 條（1.0.78 新增的 1 條為 `ocgo:`，與 agy 無關） |
 
 2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式；**未實際呼叫模型、未重跑 agy**）：

@@ -431,6 +431,7 @@ claude --help
 |---|---|
 | `dispatchClaude()` 固定旗標與自用鍵 | 固定旗標不變（`-p`、`--dangerously-skip-permissions`、`--model`）；README 第 67 條未載本轉接器之異動，`quotaGate`／`quotaUntilOf` 為遞補層（`dispatchAiFallback`／`createAiCaller`）選項，不是本轉接器的自用鍵、不轉傳，**呼叫方式不變** |
 | `quotaGate`（1.0.79） | 擴及**無金鑰之 `claude` 條目**，預設開：額度帳 → `getQuotaClaude` → 任一適用視窗 ≥95% 即略過；模型別視窗只在 model 相符時計入；Claude Code 官方額度字樣的重置時刻會入帳；讀者失敗一律不擋；帶金鑰之 `claude`（`claude-api:`）不適用、行為不變 |
+| 額度帳之帳號比對與重探（1.0.82） | 入帳時另記帳號識別（登入 email 之雜湊，帳內不存本文）；讀帳命中後依節流以讀者重探：有帳號識別之帳每 30 分鐘、無者之長視窗（距重置逾 6 小時）每 6 小時，節流起點記於帳、跨行程有效；帳號改變或重探之用量證據已低於門檻即作廢該帳並改依現況判定（換訂閱帳號後最長約 30 分鐘自動恢復）；讀者失敗、取不到帳號或無證據一律維持帳。要立即清帳：`forgetQuota(state 或 store, 'claude')`（`WDispatchAi.forgetQuota`；家族名、精確鍵或 `'*'`）。作廢時記 `quota-ledger-void` 事件（帳號只記雜湊前 8 碼） |
 | `providers.mjs` | claude 條目仍 5 條（`claude:sonnet`、`claude:opus-5.5`、`claude-api:` 3 條）；全表 38 條（1.0.78 新增的 1 條為 `ocgo:`，與 claude 無關） |
 
 2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式；**未實際呼叫模型**，守門之 CPU 實測為套件同日之紀錄，本技能未重驗）：

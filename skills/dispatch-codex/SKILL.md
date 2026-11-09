@@ -488,6 +488,7 @@ ls ~/.codex/.sandbox/setup_marker.json   # Windows：存在才代表 elevated �
 |---|---|
 | `dispatchCodex()` 固定參數與自用鍵 | 不變（`exec`、`--sandbox`、`--skip-git-repo-check`、`-m`；自用鍵 `exe`／`model`／`sandbox`／`extraArgs`／`input`）；`quotaGate`／`quotaUntilOf` 為遞補層選項，不是本轉接器的自用鍵、不轉傳，**呼叫方式不變** |
 | `quotaGate`（1.0.79） | 擴及 `codex` 條目（無 `keys` 者），預設開：額度帳 → `getQuotaCodex` → 任一適用視窗 ≥95% 即略過；codex 額度字樣不內建；讀者失敗一律不擋 |
+| 額度帳之帳號比對與重探（1.0.82） | 入帳時另記帳號識別（登入 email 之雜湊，帳內不存本文）；讀帳命中後依節流以讀者重探：有帳號識別之帳每 30 分鐘、無者之長視窗（距重置逾 6 小時）每 6 小時，節流起點記於帳、跨行程有效；帳號改變或重探之用量證據已低於門檻即作廢該帳並改依現況判定（換訂閱帳號後最長約 30 分鐘自動恢復）；讀者失敗、取不到帳號或無證據一律維持帳。要立即清帳：`forgetQuota(state 或 store, 'codex')`（`WDispatchAi.forgetQuota`；家族名、精確鍵或 `'*'`）。作廢時記 `quota-ledger-void` 事件（帳號只記雜湊前 8 碼） |
 | `providers.mjs` | codex 條目仍 3 條（`codex:gpt-5.6-luna`、`codex:gpt-6.1-terra`、`codex:gpt-6.1-sol`）；全表 38 條（1.0.78 新增的 1 條為 `ocgo:`，與 codex 無關） |
 
 2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式；**未實際呼叫模型**，守門之 CPU 實測為套件同日之紀錄，本技能未重驗）：
