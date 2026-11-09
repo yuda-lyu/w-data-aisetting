@@ -5,7 +5,7 @@
 ## 1. 資料流
 
 ```
-spec/流程_<系統>_<瀏覽|編輯>.md ──parseSpec──▶ cases[{ head, title, description, imgs[] }]
+spec/流程_<系統>_<瀏覽|編輯>.md ──parseSpec──▶ cases[{ head, title, kind, description, imgs[] }]
 test/pics/<流程前綴>/<流程前綴>-<圖鍵>.png ──genFigs──▶ report/pics/（檔名沿用）
 src/content/<流程前綴>.mjs（figs / text / skipImgs）──┐
 config.mjs（systemName / version / flows[{chapter, spec, lead?}]）──┼──genMd──▶ report/<報告名>.md ──genDocx──▶ report/<報告名>.docx
@@ -24,6 +24,8 @@ config.mjs（systemName / version / flows[{chapter, spec, lead?}]）──┼─
 | 流程前綴 | 自 spec 之「檔名前綴 `xxx-`」或「test/pics/xxx/」取得；缺即拋錯 |
 | 案例切分 | 「## 重要流程」段內以 `- **E2E-NNN**` 起始；head 後帶文字（如「（已廢止」）者略過 |
 | 必要欄位 | title、description 缺任一即拋錯（它們直接進表格） |
+| 類別 | title 之後之 `- kind:`；值須為「正常」或「非正常」，缺漏或其他值即拋錯（與 title、description 同為必要欄位），訊息指出案例編號與 spec 檔。舊 spec 未標者依 skill[role-coder-for-spec] 補上後再重產 |
+| 節序 | genMd 對每份 spec：先過濾「已撰寫之案例」，再排為「正常（spec 序）＋非正常（spec 序）」後連續編號；多份 spec 併為一章時仍以每份 spec 為單位排序。案例編號、圖鍵、圖檔名不變 |
 | 圖鍵 | 視覺段內以反引號標示且以該案例 head 開頭者，依出現順序去重；不認檔案系統；「暫時狀態」之標註不影響解析（照列） |
 | 廢止與 pending | 廢止不列節；pending 之圖由 content 之 `skipImgs` 處理，parseSpec 不判斷 |
 
@@ -58,6 +60,7 @@ export default {
 | 敘述引用不存在之 `{fig:n}` | 指出殘留字串 |
 | 圖名或表名全冊重名 | 指出首次使用處與再次出現處，提示改語意脈絡 |
 | 該章無預設導文且 config 未給 lead | 指出章名 |
+| 案例缺 `kind` 或值非「正常」「非正常」（parseSpec 即拋） | 指出案例編號、現值與 spec 檔 |
 
 輸出末行固定格式：`genMd >> <md 路徑> (案例 N 節, 圖 M 張)`；有未撰寫案例時另一行 `genMd 提示: 尚未撰寫之案例 K 個(略過): …`。子代理回報時附此末三行。
 
