@@ -122,7 +122,7 @@
 
 **觸發**:Windows 上殺程序或取 PID;以 node 調用 chrome/chromium 背景繪圖或截圖(playwright、puppeteer、w-html2png 系)且涉及常駐服務、排程重啟或清 chrome 殘留;刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄、以 robocopy 部署或覆蓋目錄、判讀 Windows 指令之離開碼;撰寫或修改會以背景方式(detached、`nohup`、排程、常駐服務)執行且會再起子行程之腳本;寫 `.bat`;只有 Windows PowerShell 5.1 之環境.命中即先調用 skill[role-command-windows].
 
-- 先記住四句:①背景行程再起之子行程,**每一處** `spawn`/`spawnSync`/`exec`/`execFile`/`fork` 皆設 `windowsHide: true`;②Git Bash 內殺程序寫 `cmd //c "taskkill /F /PID <pid> /T"`,取 PID 勿依賴 wmic(Windows 11 已移除);何時可主動 taskkill:專案 `CLAUDE.md` 明確授權或使用者明確要求,否則先回報;③不用檔案總管或 `Remove-Item -Recurse` 刪大量檔案,含目錄連結之目錄先拆連結再刪;④離開碼非 0 不代表失敗(robocopy 0~7 皆正常、≥8 才是錯誤).
+- 先記住四句:①背景行程再起之子行程,**每一處** `child_process` 呼叫(`spawn`/`spawnSync`/`exec`/`execSync`/`execFile`/`execFileSync`/`fork`)皆設 `windowsHide: true`;②Git Bash 內殺程序寫 `cmd //c "taskkill /F /PID <pid> /T"`,取 PID 勿依賴 wmic(Windows 11 已移除);何時可主動 taskkill:專案 `CLAUDE.md` 明確授權或使用者明確要求,否則先回報;③不用檔案總管或 `Remove-Item -Recurse` 刪大量檔案,含目錄連結之目錄先拆連結再刪;④離開碼非 0 不代表失敗(robocopy 0~7 皆正常、≥8 才是錯誤).
 
 ### 8.4 刪除 / 殺程序 / 重啟後必「回驗」成功(勿假設)
 

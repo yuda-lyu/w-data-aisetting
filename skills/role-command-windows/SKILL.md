@@ -110,7 +110,9 @@ Claude Code 之安全掃描會把同一指令內 robocopy 之參數(`/MIR`,`/E`)
 
 ## 7. Windows 背景行程再起之子行程一律隱藏視窗
 
-**觸發**:撰寫或修改會以背景方式執行(detached、`nohup`、排程、常駐服務)之腳本,且該腳本會再起子行程(`spawn`、`spawnSync`、`exec`、`execFile`、`fork`)時.
+**觸發**:撰寫或修改會以背景方式執行(detached、`nohup`、排程、常駐服務)之腳本,且該腳本會再起子行程(`child_process` 全家:`spawn`、`spawnSync`、`exec`、`execSync`、`execFile`、`execFileSync`、`fork`)時.
+
+- **盤點以 `child_process` 全家為準**:以只含 `spawn`／`spawnSync` 之式盤點會漏掉 `execSync`、`execFileSync` 等而低估站點數;盤點式須排除 `RegExp.prototype.exec`(`re.exec(...)`)與註解,並附防空集合之斷言(盤到 0 處即視為盤點式壞掉).
 
 - **鐵則**:Windows 上,以 detached 起之 node 行程沒有主控台;它再起之每個子行程若未設 `windowsHide: true`,系統即為該子行程開一個新的終端機視窗(Windows 11 預設為 Windows Terminal,標題為該執行檔之路徑),每起一次跳一次,干擾正在使用機器之人.故凡可能在背景執行之腳本,其**每一處**起子行程之呼叫皆設 `windowsHide: true`,不論子行程是否會再起孫行程;起背景行程本身亦同.
 - 只把最外層行程設 `windowsHide` 不夠:隱藏的是它自己的視窗,不會傳給它再起之子行程.有主控台之子行程(如經 `powershell`、`cmd` 起者)之孫行程沿用其(隱藏之)主控台,不另開視窗;沒有主控台者才會跳.
