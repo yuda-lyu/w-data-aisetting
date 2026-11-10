@@ -66,7 +66,7 @@ description: 盤點當前專案套件更新(ncu 或 npx npm-check-updates),依�
 npm i --no-audit --no-fund
 ```
 
-- timeout 給足(600000ms);超時改 detached 背景跑再輪詢(依全域 §11.6)。
+- timeout 給足(600000ms);超時改 detached 背景跑再輪詢(依全域 §8.5)。
 
 ### 6. 回驗
 

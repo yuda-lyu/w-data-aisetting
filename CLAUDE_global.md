@@ -6,6 +6,8 @@
 
 > **本檔須能單獨成立**:除本檔指名之技能(與本檔一同經技能庫同步至各機)外,不依賴任何外部檔案(會被帶到不同機器).故只留原則與可直接執行的規則:個案細節(哪個專案、哪天、賠了什麼)不寫進本檔,只保留去識別後的[典型錯誤形狀]——讓形狀本身可辨識,不必知道是哪個案子.
 
+> **篇幅上限**:本檔限 200 行且小於 25KB.特定情境所需之知識、作法與殷鑑寫入對應全域技能(無則新建),本檔只留觸發、一句原則與技能名.
+
 ## 1. 語言與詞彙
 
 **觸發**:全程適用.
@@ -28,17 +30,14 @@
 **觸發**:寫腳本,選用程式語言或 shell,寫 `.bat` 時.
 
 - **優先程式語言**:腳本優先 `.mjs`(ES modules),優先用專案內 `node_modules` 套件;非必要不寫 `.js`,`.py` 次之.
-
-- **避免使用**:避免 PowerShell;不得已要用先徵詢使用者.
-  - **環境只有 Windows PowerShell 5.1 時**(如 Windows Server 之維運)之已知雷區:①`ConvertFrom-Json` 解析含中文之內容(如 pino JSONL log)會失敗(`Unterminated string passed in`,主控台編碼所致),改以正則抓欄位:`if ($line -match '"msg":"([^"]*)"') { $msg = $Matches[1] }`;②`Select-String` 之結果不能直接 `-split`,須先 `.ToString()`:`($line.ToString() -split '│')[6]`;③無 `&&`,`||`,三元運算子,`??`;④對原生執行檔避免 `2>&1`(會產生 NativeCommandError 並使 `$?` 為 false).離開碼之判讀見 §8.7.
-
-- **bat**:寫`.bat`注意含中文一律 Big5(cp950)編碼:cmd.exe 用系統 codepage 解析,UTF-8 各種 workaround(BOM,`chcp 65001`)實測都壞.不要默默把現有 Big5 .bat 重存成 UTF-8.
+- **避免使用**:避免 PowerShell;不得已要用先徵詢使用者.只有 Windows PowerShell 5.1 之環境(如 Windows Server 之維運)之已知雷區,見 skill[role-command-windows].
+- **bat**:含中文一律 Big5(cp950)編碼,不要默默把現有 Big5 .bat 重存成 UTF-8(理由與實測見 skill[role-command-windows]).
 
 ## 3. 暫存檔一律存放於`./tmp/`
 
 **觸發**:產生任何臨時,暫存,scratch 或探索 dump 檔時,含派工子代理.
 
-**臨時/暫存/scratch/探索 dump 檔一律落在主任務 cwd 下的 `./tmp/`**(錨點＝主 agent 啟動時的 `process.cwd()`;子代理在他處須用主 cwd 絕對路徑指向同一 `./tmp/`).不可用 `/tmp`,`$TMPDIR`,`$HOME`(Git Bash 的 `/tmp` 映射到使用者 Temp,檔案跑出專案外);cwd 根目錄雜檔(`./tmp_tree.txt`,`./debug.log`)與 `./.cache/` 也不行,集中單一 `./tmp/` 才能 `rm -rf tmp/` 一鍵結案.**清 `./tmp/`(或遞迴刪除任何目錄)前先確認其下沒有目錄連結**(junction/symlink,如臨時副本之 `node_modules` 連回原專案):有則先逐一拆除連結(`cmd //c rmdir <連結>` 只拆連結、不動目標)並回驗連結目標仍完好,才遞迴刪除;列連結之法與理由見 §8.7(1).子代理探索禁用 `tree > 檔案` dump-to-disk,改 Glob/Grep/讀 stdout.**派工子代理時 prompt 須明文加上此守則**.任務結束前驗證 `./tmp/` 已清乾淨(須保留則說明).
+**臨時/暫存/scratch/探索 dump 檔一律落在主任務 cwd 下的 `./tmp/`**(錨點＝主 agent 啟動時的 `process.cwd()`;子代理在他處須用主 cwd 絕對路徑指向同一 `./tmp/`).不可用 `/tmp`,`$TMPDIR`,`$HOME`(Git Bash 的 `/tmp` 映射到使用者 Temp,檔案跑出專案外);cwd 根目錄雜檔(`./tmp_tree.txt`,`./debug.log`)與 `./.cache/` 也不行,集中單一 `./tmp/` 才能一鍵結案.**清 `./tmp/`(或遞迴刪除任何目錄)前先確認其下沒有目錄連結**(junction/symlink,如臨時副本之 `node_modules` 連回原專案):有則先逐一拆除並回驗連結目標完好,才遞迴刪除(列連結與拆除之法見 skill[role-command-windows]).子代理探索禁用 `tree > 檔案` dump-to-disk,改 Glob/Grep/讀 stdout.**派工子代理時 prompt 須明文加上此守則**.任務結束前驗證 `./tmp/` 已清乾淨(須保留則說明).
 
 ## 4. 撰寫程式碼之要點
 
@@ -55,24 +54,16 @@
 
 **觸發**:專案以 JavaScript 為主,且涉及套件依賴偵測,安裝建議,升版,使用或包裝 `wsemi` / `w-*` 套件,或修改 `wsemi` / `w-*` 套件時.
 
-- 專案內 `wsemi` 與所有 `w-*` 套件皆為**自有套件**.
-- 自有套件已自行規定並安裝其依賴(如 `wsemi` 內已含 `lodash-es` 等諸多套件);**一律不要提醒[未安裝直接依賴 / 建議安裝 X]**,不論是在套件內或專案層偵測到.
-- **安裝來源**(2026-10-28 起):自有套件只發布至使用者之私有 npm 倉庫 Verdaccio(`http://100.120.70.67:4873/`,須在 Tailscale 網內),npmjs 上之版本停在 2026-10-25 前後、不再更新(發布帳號停權).查不到新版或安裝失敗(如 `ETARGET`)時,先確認 `npm config get registry`(或專案根目錄 `.npmrc` 之 `registry=`)指向該倉庫而非 `registry.npmjs.org`;切換方式:專案根目錄 `.npmrc` 寫一行 `registry=http://100.120.70.67:4873/`(公開 repo 則改設本機 `npm config set registry ...`),`package.json` 與套件名不必改,第三方套件由該倉庫自動轉抓.不要發布任何套件到該倉庫.
-- 依賴出問題時,處置方式是針對該自有套件統一改版或升版,由開發者統籌;不在專案端個別補裝或繞道.
-- 使用或包裝自有套件時,依 skill[role-coder-for-validate] L0e.
-- 給套件主責agent,發布套件是使用者的任務,並已建置自動化流程去處理連動發布事宜,請勿把發布套件當成待辦任務/事項,然後一直說有任務未完,進而造成浪費token.若套件有`./dist`,發布套件時會自動產製,也不要一直說`./dist`未更新當成待辦任務/事項,等同浪費token.若有需要用`./dist`去測試者,則請自行編譯去使用.
+- 專案內 `wsemi` 與所有 `w-*` 套件皆為**自有套件**,已自行規定並安裝其依賴(如 `wsemi` 內已含 `lodash-es` 等);**一律不要提醒[未安裝直接依賴 / 建議安裝 X]**,不論是在套件內或專案層偵測到.
+- **安裝來源**(2026-10-28 起):自有套件只發布至使用者之私有 npm 倉庫 Verdaccio(`http://100.120.70.67:4873/`,須在 Tailscale 網內),npmjs 上之版本停在 2026-10-25 前後、不再更新.查不到新版或 `ETARGET` 時,先確認 `npm config get registry`(或專案根目錄 `.npmrc` 之 `registry=`)指向該倉庫;切換:專案根目錄 `.npmrc` 寫一行 `registry=http://100.120.70.67:4873/`(公開 repo 則改設本機 `npm config set registry ...`),`package.json` 與套件名不必改,第三方套件由該倉庫轉抓.不要發布任何套件到該倉庫.
+- 依賴出問題時,由開發者針對該自有套件統一改版或升版;不在專案端個別補裝或繞道.使用或包裝自有套件時,依 skill[role-coder-for-validate] L0e.
+- 發布套件是使用者之任務(已有自動化連動發布流程),`./dist` 於發布時自動產製:不要把發布或[`./dist` 未更新]列為待辦而一直說有任務未完;需以 `./dist` 測試者自行編譯.
 
 ### 5.2 自有套件通報修正或擴充之要點
 
 **觸發**:改code時發現自有套件有問題或須擴充時.
 
-1. 若確認自有套件有問題或須擴充或優化等,請先至:
-http://100.120.70.67:3000/semi/opensrcOper
-並閱讀其內`通知方請用gitea.md`
-
-2. 確認後,再請通過發issue將待修正問題、建議擴充或優化等需求傳遞給opensrcOper,自有套件之主控agent會輪詢並待接收,之後主控agent會其按輕重緩急、任務量與當前訂閱額度等條件進行酌情安排與處理.
-
-3. 提交後依該文件〈提交之後〉自行輪詢(建議每10min):確認主控已收件,並等issue關閉;關閉且結案留言已發布,才進行安裝與連帶更新程式碼.
+先讀 http://100.120.70.67:3000/semi/opensrcOper 內`通知方請用gitea.md`,依其發 issue 將問題或擴充需求傳給 opensrcOper(主控 agent 輪詢接收,依輕重緩急、任務量與額度安排).提交後依該文件〈提交之後〉自行輪詢(建議每10min):主控已收件、issue 已關閉且結案留言已發布,才安裝與連帶更新程式碼.
 
 ## 6. UI/UX之要點
 
@@ -88,24 +79,12 @@ http://100.120.70.67:3000/semi/opensrcOper
 
 ## 7. 實作規範:路徑與檔案 I/O
 
-**觸發**:任何組裝路徑,寫檔,跨 shell/程式傳遞路徑的操作.
+**觸發**:任何組裝路徑,寫檔,跨 shell/程式傳遞路徑的操作.細節與殷鑑見 skill[role-command-windows].
 
-### 7.1 兩種出檔場景
-
-- **場景 A:輸出落在使用者工作路徑**(測試暫存,報告,腳本產物)→ 用 cwd-relative(`./tmp/foo.json`).絕不用 `fileURLToPath(import.meta.url)`——套件被 install 後輸出會落到 `node_modules/<pkg>/`,搬動腳本時輸出位置悄悄改變.
-- **場景 B:輸出落在腳本/模組所在資料夾**(套件自帶 user_data)→ 用 `fileURLToPath(import.meta.url)` + `dirname` + `join`.
-
-### 7.2 永遠不要用 `new URL(import.meta.url).pathname` 取路徑
-
-`pathname` 回 URL-encoded 字串:空格變 `%20`,中文變 `%E9%96%8B...`,Windows 多 leading `/D:/`,fs 會把這些字面字元當實體資料夾名建立(踩過:D 槽根目錄建出多層 `%20%E9...` 垃圾資料夾).URL → 實體路徑只有 `fileURLToPath()` 一條路,且僅場景 B 用.
-
-### 7.3 git-bash 的 POSIX 路徑(`/d/...`,`/c/...`)絕不可跨界傳給 Windows 原生程式或 node
-
-[`/d/` = D 槽]映射只存在 git-bash shell 內部.把這種字串交給 Windows 原生 exe 或 node 的 path/fs,開頭 `/` 被當[當前磁碟根]:`/d/tmp/x` → `D:\d\tmp\x`(多一層 d),`/c/Users/x` → `D:\c\Users\x`(磁碟機都錯).邊界判別:路徑字串最後是誰解析——Bash 工具內 `mkdir /d/tmp/...` 對;寫進 `.mjs` 再交給 spawn / `launchPersistentContext` / node fs 就錯.改用帶磁碟機代號路徑(`D:/tmp/x`)或從 `fileURLToPath` 衍生.
-
-### 7.4 寫入前驗收
-
-路徑經組裝(join,replace,URL 轉換)後,fs 操作前先 `console.log(path.resolve(...))` 印 absolute 路徑驗收;寫入後 `ls` 確認落點;發現孤兒資料夾立刻徵求允許後刪除.警覺訊號:工作目錄含空格,中文/非 ASCII,Windows `D:\...`——任一符合就雙倍仔細.
+- **出檔場景**:輸出落在使用者工作路徑(測試暫存,報告,腳本產物)→ cwd-relative(`./tmp/foo.json`),絕不用 `import.meta.url`(套件被 install 後輸出會落到 `node_modules/<pkg>/`);輸出落在腳本/模組所在資料夾(套件自帶 user_data)→ `fileURLToPath(import.meta.url)` + `dirname` + `join`.
+- **永遠不要用 `new URL(import.meta.url).pathname` 取路徑**:它回 URL-encoded 字串(`%20`、中文、Windows 多 leading `/D:/`),fs 會把這些字面字元當實體資料夾名建立;URL → 實體路徑只用 `fileURLToPath()`.
+- **git-bash 的 POSIX 路徑(`/d/...`,`/c/...`)絕不可交給 Windows 原生程式或 node**:開頭 `/` 被當[當前磁碟根](`/c/Users/x` → `D:\c\Users\x`);判別看路徑字串最後是誰解析,交出去時改用 `D:/tmp/x` 或由 `fileURLToPath` 衍生.
+- **寫入前驗收**:組裝後先印 `path.resolve(...)` 之絕對路徑,寫入後 `ls` 確認落點;發現孤兒資料夾立刻徵求允許後刪除.工作目錄含空格、非 ASCII、`D:\...` 任一符合就雙倍仔細.
 
 ## 8. 實作規範:Shell,工具與環境
 
@@ -113,126 +92,44 @@ http://100.120.70.67:3000/semi/opensrcOper
 
 ### 8.1 Bash / PowerShell 工具內禁用之寫法:`cd` 與 `cat` 系檔案 I/O
 
-**觸發**:任何要在非 cwd 之目錄下執行的操作(解壓,安裝,建置,跑他處腳本,查看子目錄產物),以及任何建立/讀取/修改檔案之操作(寫暫存腳本,產設定檔,看檔案內容).
+**觸發**:任何要在非 cwd 之目錄下執行的操作,以及任何建立/讀取/修改檔案之操作.
 
-**共同 why**:此二類寫法會**觸發權限確認彈窗**,連續打斷使用者;專用工具(Read/Write/Edit/Glob/Grep)則無此問題,且有檔案狀態追蹤,行號顯示與 diff 呈現.
+**why**:兩類寫法都會**觸發權限確認彈窗**,連續打斷使用者;專用工具(Read/Write/Edit/Glob/Grep)無此問題,且有檔案狀態追蹤、行號與 diff 呈現.
 
-#### (1) 不用 `cd`,改用絕對路徑或指令自身之目錄參數
-
-**鐵則**:工具的工作目錄本來就是主 cwd 且**跨呼叫持續存在**,不需要也不可以用 `cd` 去切.要在別的目錄動作,用絕對路徑,或用指令自己的目錄參數:`tar -C <dir>`,`npm --prefix <dir>`,`npm pack --pack-destination <dir>`,`git -C <dir>`,`node <dir>/x.mjs`,`ls <dir>`.
-
-**why**:除觸發確認外,`cd` 會改掉後續每一次呼叫的 cwd,原本正確的相對路徑(`./tmp/x`,`db01_.../y.csv`)全部指到錯的地方,為了修正又得再 `cd` 回去,於是**每一條指令都要使用者按同意**,形成連鎖打斷.**典型錯誤形狀**:為了解壓一個套件用了 `cd ./tmp/xxx`,其後數條指令全部跳出確認,使用者反問[為何現在這指令都會跳出來要我同意].
-
-**已經誤 `cd` 出去時**:不要再用 `cd` 切回來(那是第二次觸發),直接改用絕對路徑執行後續指令即可;需要確認目前位置用 `pwd`.
-
-#### (2) 不用 `cat` / heredoc / 重導向做檔案 I/O,改用 Read / Write / Edit 工具
+- **不用 `cd`**:工作目錄本來就是主 cwd 且跨呼叫持續存在.要在別處動作用絕對路徑或指令自身之目錄參數:`tar -C <dir>`,`npm --prefix <dir>`,`npm pack --pack-destination <dir>`,`git -C <dir>`,`node <dir>/x.mjs`,`ls <dir>`.`cd` 會改掉後續每次呼叫之 cwd,原本正確的相對路徑全指錯,修正又得再 `cd`,於是每條指令都要使用者按同意.已誤 `cd` 出去時不要再 `cd` 回來,直接改用絕對路徑;要確認位置用 `pwd`.
+- **不用 `cat` / heredoc / 重導向做檔案 I/O**:
 
 | 意圖 | 禁用 | 改用 |
 |---|---|---|
 | 建立檔案(含 `./tmp/` 暫存腳本) | `cat > f << 'EOF'`,`echo ... > f`,`printf ... > f` | **Write 工具** |
 | 讀取檔案內容 | `cat f`,`head -n f`,`tail -n f`,`sed -n 'a,bp' f` | **Read 工具**(可帶 offset/limit) |
 | 修改檔案局部 | `sed -i`,`awk` 覆寫 | **Edit 工具** |
-| 找檔名 / 搜內容 | `find`,`ls -R`,`grep -r` | **Glob / Grep 工具**(見 §8.2) |
+| 找檔名 / 搜內容 | `find`,`ls -R`,`grep -r` | **Glob / Grep 工具**(§8.2) |
 
-**why**:除觸發確認外,②shell 重導向寫檔多一層引號與跳脫(中文,`$`,反引號,`!`)全得自己顧,heredoc 還受 `<<'EOF'` 與 `<<EOF` 之展開差異影響,錯了是**靜默寫出壞內容**;③Write/Edit 之改動會呈現 diff 供使用者審閱,shell 寫檔則完全不透明.**典型錯誤形狀**:以 `cat > ./tmp/xxx.mjs << 'EOF'` 寫一個暫存腳本又跳確認,使用者反問[為何又出現會要我確認指令].
-
-**例外**:確實需要接管線做流式處理(如 `node x.mjs | grep -c pattern`,`wc -l < f`)才用 shell;**產出檔案一律 Write**,不因[只是暫存腳本]而放寬.
+  shell 寫檔多一層引號與跳脫(中文,`$`,反引號,`!`;heredoc 另有 `<<'EOF'` 與 `<<EOF` 之展開差異),錯了是**靜默寫出壞內容**;Write/Edit 之改動則有 diff 供使用者審閱.**例外**:確實需要接管線做流式處理(`node x.mjs | grep -c pattern`,`wc -l < f`)才用 shell;**產出檔案一律 Write**,不因[只是暫存腳本]而放寬.
+- **典型錯誤形狀**:為了解壓一個套件 `cd ./tmp/xxx`,其後數條指令全部跳出確認;以 `cat > ./tmp/xxx.mjs << 'EOF'` 寫暫存腳本又跳確認,使用者反問[為何又要我確認].
 
 ### 8.2 搜檔案內容一律用 Grep 工具,禁用 Bash `grep -r`
 
 **觸發**:任何在專案內找字串,找引用,確認[有沒有 X]之操作.
 
-**鐵則**:搜內容用 **Grep 工具**(內建 ripgrep),找檔名用 **Glob 工具**;**不要用 Bash 的 `grep -rn` 與 `find`**.
+- 搜內容用 **Grep 工具**(ripgrep:預設尊重 `.gitignore`、多執行緒、自動跳過二進位),找檔名用 **Glob 工具**;不用 Bash `grep -rn`、`find`、`ls -R`、`tree`.資料型專案之 `_plot`,`_report`,`_selfStorage`,`_logs`,`_holes` 等目錄動輒數萬至數十萬檔,Bash `grep -r` 不知 `.gitignore` 而硬掃全樹,實測吃滿 120s timeout.
+- **最易踩之誤區**:以為加了 `--include="*.mjs"` 就安全——**不是**.`--include` 只決定讀不讀內容,仍須走遍每個目錄並 stat 每個檔,瓶頸是檔案數量而非內容大小.**典型錯誤形狀**:同一輪連續吃滿 timeout 兩次,兩次都以為加了 `--include` 就沒事.
+- 真須在 Bash 內搜(接管線統計)時二選一:`git grep -n "pattern"`(首選,範圍天然與 `.gitignore` 一致);或 `grep -rn "pattern" --include="*.mjs" --exclude-dir={node_modules,_plot,_report,_selfStorage,_logs,tmp} .`.
 
-**why**:資料型專案之 `_plot`,`_report`,`_selfStorage`,`_logs`,`_holes` 等目錄動輒數萬至數十萬檔案.Grep 工具之 ripgrep **預設尊重 `.gitignore`**(這些資料目錄通常已被 ignore),且多執行緒遍歷並自動跳過二進位檔,實測秒回;Bash `grep -r` 完全不知 `.gitignore` 存在,一律硬掃全樹,實測直接吃滿 120s timeout 被丟到背景.
+### 8.3 Windows 之程序、大量檔案、子行程與殼層
 
-**最易踩之誤區**:以為加了 `--include="*.mjs"` 就安全 —— **不是**.`--include` 只決定[要不要讀這個檔的內容],grep 仍須走遍每個目錄並對每個檔案 stat.**瓶頸是檔案數量而非內容大小**,故 `--include` 完全救不了.**典型錯誤形狀**:同一輪對話內因此連續吃滿 timeout 兩次,兩次都以為[加了 `--include` 就沒事].
+**觸發**:Windows 上殺程序或取 PID;以 node 調用 chrome/chromium 背景繪圖或截圖(playwright、puppeteer、w-html2png 系)且涉及常駐服務、排程重啟或清 chrome 殘留;刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄、以 robocopy 部署或覆蓋目錄、判讀 Windows 指令之離開碼;撰寫或修改會以背景方式(detached、`nohup`、排程、常駐服務)執行且會再起子行程之腳本;寫 `.bat`;只有 Windows PowerShell 5.1 之環境.命中即先調用 skill[role-command-windows].
 
-**真的須在 Bash 內搜**(如要接管線做統計)才用,且二選一:
-
-```bash
-git grep -n "pattern" # 只搜 git tracked 檔案,過濾範圍天然與 .gitignore 一致(首選)
-grep -rn "pattern" --include="*.mjs" \
-     --exclude-dir={node_modules,_plot,_report,_selfStorage,_logs,tmp} .
-```
-
-**同理**:`find . -name`,`ls -R`,`tree` 於同類專案亦會逾時,改用 Glob 工具;子代理探索更禁 `tree > 檔案` 之 dump-to-disk(§3).
-
-### 8.3 Windows / Git Bash 下 `taskkill` 與取 PID
-
-- `taskkill /F /PID <pid>` 在 Git Bash 會失敗(bash 把 `/F` 當路徑).正確:`cmd //c "taskkill /F /PID <pid> /T"`(雙斜線避免 bash path 翻譯).取 PID:`netstat -ano | grep ":<port> " | grep LISTENING | awk '{print $5}' | head -1`.
-- **取 PID 勿依賴 wmic**:Windows 11 已移除 wmic,靠 wmic 撈 PID 會回空輸出且不報錯(看似成功實未殺,程序續佔資源).改用 tasklist(需比對 CommandLine 時用 PowerShell `Get-CimInstance Win32_Process`)取 PID 逐一 `taskkill /F /T`,殺後必回驗(見 §8.4).
-- 何時可主動 taskkill:專案`CLAUDE.md`明確授權或使用者明確要求,否則先回報.
+- 先記住四句:①背景行程再起之子行程,**每一處** `spawn`/`spawnSync`/`exec`/`execFile`/`fork` 皆設 `windowsHide: true`;②Git Bash 內殺程序寫 `cmd //c "taskkill /F /PID <pid> /T"`,取 PID 勿依賴 wmic(Windows 11 已移除);何時可主動 taskkill:專案 `CLAUDE.md` 明確授權或使用者明確要求,否則先回報;③不用檔案總管或 `Remove-Item -Recurse` 刪大量檔案,含目錄連結之目錄先拆連結再刪;④離開碼非 0 不代表失敗(robocopy 0~7 皆正常、≥8 才是錯誤).
 
 ### 8.4 刪除 / 殺程序 / 重啟後必「回驗」成功(勿假設)
 
-kill 與 rm 皆**不保證成功**,執行後必回頭驗證,不可假設已成功:
-
-- **殺程序**:taskkill 後再 `netstat`/`tasklist` 確認該 PID **已消失,埠已釋放**.用埠號抓 PID 只殺得到「當下在監聽」者——卡住/未監聽之舊實例會漏殺.
-- **刪檔/資料夾**:`rm -rf` 後以 `[ -d 夾 ]`/`ls` 確認**真的沒了**(rm 可能因鎖定/權限靜默失敗;Windows 下數萬檔以上之刪法見 §8.7).Windows 下對 memory-mapped 檔(如 LMDB `.mdb`)之 rm 會移除目錄名,但**行程仍持有舊檔映射**,存活之舊程序會無聲**續用舊資料**(假象「刪了,重建了」).
-- **重啟服務**:健康檢查(如 `curl → 200`/ping)**無法分辨新舊實例**——存活之舊實例照樣回應,據此判定「重啟成功」是假陽性.通用判準是**確認新行程確實是當前提供服務者**:`netstat -ano`/`lsof -i` 查監聽該埠之 PID,須等於**你本次啟動的行程 PID**(或至少舊 PID 已消失,且出現一個新監聽 PID);並檢查新行程之輸出/log **無綁定失敗**(埠被占用類錯誤,各語言字樣不一,如 `EADDRINUSE`/`address already in use`/`bind: 已使用`).否則新實例常因埠被舊實例占用而**啟動即失敗退出**,舊實例續服務舊狀態(現象:「重啟了但狀態沒變/吃到舊快取」).服務專屬的「已啟動」log 字樣屬各專案細節,記於該專案設定而非此處.
+kill 與 rm 皆**不保證成功**,執行後必回頭驗證:殺程序後以 `netstat`/`tasklist` 確認該 PID **已消失、埠已釋放**;刪除後以 `[ -d 夾 ]`/`ls` 確認**真的沒了**;重啟服務時健康檢查**無法分辨新舊實例**,須確認監聽該埠之 PID 等於本次啟動之行程 PID(或舊 PID 已消失且出現新監聽 PID),並檢查新行程輸出無綁定失敗(`EADDRINUSE`/`address already in use` 類).各情境之陷阱(只殺到在監聽者、memory-mapped 檔之舊映射、新實例啟動即失敗而舊實例續服務)見 skill[role-command-windows].
 
 ### 8.5 長任務:背景指令與 `Monitor` 皆有時限,逾 115 分鐘之工作一律 detached＋分段等待
 
 **觸發**:預估超過 2 分鐘之作業(測試全跑,批次重產,派工外部 CLI AI,下載/爬取,建置);或要「現在停下,之後被叫醒再繼續」——定時任務,延後執行,等背景指令/外部程序/排程輪次完成,等檔案或日誌變化,或用到 `Monitor`/`sleep`/`CronCreate`/`ScheduleWakeup` 任一者,不論使用者要求或 agent 自發.命中即先調用 skill[role-setup-scheduler-for-session].
-
-### 8.6 Windows 背景 Chrome(playwright/puppeteer)程序回收
-
-**觸發**:任何專案以 node 調用 chrome/chromium 背景繪圖或截圖(playwright、puppeteer、w-html2png 系),涉及常駐服務、排程重啟、或需清理 chrome 殘留時.
-
-**成因**:Windows 上 playwright 以 non-detached spawn 瀏覽器且不用 Job Object,清理只掛在 node 的 exit/signal handler——node 被 **TerminateProcess**(`taskkill /F`、崩潰、OOM)時 handler 全不執行,chrome 整樹孤兒化,服務自動重啟則逐次疊加.`--remote-debugging-pipe` 斷線自關是**盡力而為非保證**(重載/卡頓機器實測不會自關),不能當防線;上游無解也不會修,須自建回收.
-
-**回收三層**:①**啟動自掃**——常駐服務埠綁定成功後(證明無其他實例服役),查 chrome.exe 之 ExecutablePath(**限定自家瀏覽器路徑**,避免誤殺使用者瀏覽器)且**父行程已死**者,樹狀殺;②**看門狗掃已停止(stopped)之 chrome**——卡死者用一般枚舉或年齡判準看不出來,須以 `w-process-status` 之 `WProcessStatus('chrome.exe')` 查 `status==='stopped'` 才找得到,交叉自家路徑後樹狀殺;③**關閉走 tree-kill**——用 `wsemi` 之 `execProcessKillPid`(Windows 內部即 `taskkill /pid X /T /F`),**不可用 `child.kill()`**(Windows 下等同 TerminateProcess 且只殺 node 本身).
-
-**鐵則**:①殺 chrome 必殺 root 帶 `/T`,逐個殺 renderer 無效(孤兒主程序會立即補生);②判準用[歸屬(父死)+健康(stopped)],**絕不用年齡**——常駐瀏覽器持續有請求時合法活數天,年齡判準會週期性處決健康現任;③`HandleCount=0` 之終止中卡死殭屍任何工具都殺不掉(回報[查無執行中實例]),屬 OS 層狀態,殺掉 root 後不增生即可接受,重開機歸零.
-
-### 8.7 Windows 大量檔案操作(robocopy)與離開碼判讀
-
-**觸發**:Windows 下刪除或複製大量檔案(數萬以上),刪除可能含目錄連結(junction/symlink)之目錄,以 robocopy 部署/覆蓋目錄,或判讀 Windows 指令之離開碼時.
-
-#### (1) 大量刪檔:robocopy 鏡像空目錄清空,再刪空目錄
-
-**不用檔案總管或 `Remove-Item -Recurse` 刪大量檔案**.檔案總管會先在記憶體建完整項目清單(數百萬筆約佔 3 GB),按[取消]後卡在[正在取消]且速度歸零、無法中止,只能結束 explorer.exe.**典型錯誤形狀**:以檔案總管刪一個數百萬小檔之資料目錄,取消不了也刪不完.
-
-```powershell
-$empty = '<專案根>\tmp\__empty__'
-New-Item -ItemType Directory -Force $empty | Out-Null
-$rcArgs = @('/MIR','/MT:32','/NFL','/NDL','/NJH','/NJS','/NC','/NS','/R:0','/W:0')
-& robocopy $empty $target @rcArgs | Out-Null
-# 另一道指令(見(2)): 刪除已清空之目錄
-Remove-Item -LiteralPath $target -Recurse -Force -Confirm:$false
-```
-
-`/MT:32` 多執行緒;`/NFL /NDL /NJH /NJS /NC /NS` 關閉輸出(印檔名會大幅拖慢);`/R:0 /W:0` 失敗不重試.**耗時取決於檔案數而非容量**(實測數百萬小檔約1小時,單檔大之 85 GB 約2分鐘).刪後依 §8.4 回驗.
-
-**目標內有目錄連結時,先拆連結再刪,不可直接用此法**:robocopy 鏡像會穿過 junction,把連結目標(他處之真實目錄)之內容一併刪光,加 `/XJ`、`/XJD` 亦同(實測 4 次皆然).動手前先以**不跟進連結**之方式列出連結——node 遞迴 `readdirSync` 配 `lstatSync().isSymbolicLink()`,遇連結不往下走;**不可用 `dir /AL /S`**,它同樣穿過連結,會列出連結目標內部之連結,照該清單拆會拆到原專案——逐一以 `rmdir <連結>`(目錄連結)或刪除連結檔本身拆除,回驗連結目標完好,再刪.Git Bash `rm -rf` 與 node `fs.rmSync(..., { recursive: true })` 實測不穿過 junction,但不以此為由略過先拆.**典型錯誤形狀**:臨時副本之 `node_modules` 以 junction 連回原專案,結案時以鏡像空目錄法清 `./tmp`,原專案之 `node_modules` 被清空.
-
-#### (2) robocopy 與 Remove-Item 不可寫在同一道指令
-
-Claude Code 之安全掃描會把同一指令內 robocopy 之參數(`/MIR`,`/E`)誤判為 `Remove-Item` 之目標路徑而攔截(`Remove-Item on system path '/MIR' is blocked.`;偶發,同一寫法有時可過).兩者一律分成兩道指令執行,且 robocopy 參數以陣列(`@rcArgs`)傳遞.
-
-#### (3) 覆蓋部署用 `/E`,`/MIR` 只用於[目標須與來源完全一致]
-
-`/E` 為疊加複製;`/MIR` 會**刪除目標端多出之檔案**.目標目錄同時放有資料(程式碼與資料目錄並存之專案根、使用者上傳區)時以 `/MIR` 部署,等同刪光資料.`/MIR` 只用於鏡像空目錄清空((1))或確定要整個取代之子目錄.
-
-#### (4) 離開碼非 0 不代表失敗,須依各指令之語意判讀
-
-| 指令 | 回傳 | 判讀 |
-|---|---|---|
-| `robocopy` | **0~7 皆為正常** | 1=有複製,2=目標有多餘檔案(`/MIR` 清空時之常見值),3=1+2;**≥8 才是錯誤**,寫 `if ($LASTEXITCODE -ge 8) { 失敗 }`,不可用 `-ne 0` |
-| `findstr` | 無符合時回 1 | 例:查埠占用查無結果 |
-| PowerShell cmdlet 搭 `-ErrorAction SilentlyContinue` | 仍可能使工具回報 exit 1 | 須真正忽略時用 `try { … -ErrorAction Stop } catch {}` |
-
-判定成敗看實際輸出與產物,不只看離開碼.
-
-### 8.8 Windows 背景行程再起之子行程一律隱藏視窗
-
-**觸發**:撰寫或修改會以背景方式執行(detached、`nohup`、排程、常駐服務)之腳本,且該腳本會再起子行程(`spawn`、`spawnSync`、`exec`、`execFile`、`fork`)時.
-
-- **鐵則**:Windows 上,以 detached 起之 node 行程沒有主控台;它再起之每個子行程若未設 `windowsHide: true`,系統即為該子行程開一個新的終端機視窗(Windows 11 預設為 Windows Terminal,標題為該執行檔之路徑),每起一次跳一次,干擾正在使用機器之人.故凡可能在背景執行之腳本,其**每一處**起子行程之呼叫皆設 `windowsHide: true`,不論子行程是否會再起孫行程;起背景行程本身亦同.
-- 只把最外層行程設 `windowsHide` 不夠:隱藏的是它自己的視窗,不會傳給它再起之子行程.有主控台之子行程(如經 `powershell`、`cmd` 起者)之孫行程沿用其(隱藏之)主控台,不另開視窗;沒有主控台者才會跳.
-- **驗收**:背景行程跑起來後,以 `Get-Process | Where-Object { $_.MainWindowHandle -ne 0 }` 查無新出現之 `WindowsTerminal`／`cmd`／`conhost`／`node` 視窗,且在其起子行程之時點過後再查一次.
-- **典型錯誤形狀**:跟跑測試之背景行程以 `spawnSync` 起測試執行器而未設 `windowsHide`,每輪測試即跳出標題為 `node.exe` 之終端機視窗;由前景 shell 起時有主控台而看不出來,改為 detached 起之後才發作.
 
 ## 9. 版本控制(Git)
 
@@ -270,51 +167,25 @@ Claude Code 之安全掃描會把同一指令內 robocopy 之參數(`/MIR`,`/E`)
 
 **觸發**:每個任務(或一輪派工)結束、交付報告之前;子代理與被派發之 agent 交回報告前亦同.
 
-- 回顧本次任務,逐項檢查有無下列情事:
-  1. **自有套件**:發現自有套件需要調整之處(缺陷、不足、用法不順),或已有足夠多之功能應抽提成為自有套件.
-  2. **全域技能**:發現全域技能需要調整之處,或已發現容易出錯且重複性高之處理機制或流程,應抽提創建新的全域技能.
-  3. **全域設定**:發現本檔需要調整之處——更正、擴充、抽提至全域技能或刪減.
-- **有則先落檔、再回報**:先寫入本次工作所在之套件或專案之 `sgud/feedback/feedback.md`(§14;一條一列:日期、類別〔自有套件/全域技能/全域設定〕、對象、內容、依據〔`檔:行`、指令輸出或事件〕),再於回報中列〈回饋〉一節(置於[需你決定]之前);無則寫[回饋:無].
-- 回饋是紀錄與提案,不等於自行修改:自有套件與全域技能、全域設定之實際修改仍走 §5.2、§13 之通報管道.
-- **why**:回饋只留在對話裡,session 結束即消失;落在各套件與專案之 `sgud/` 才有資料可供事後跨套件核實、盤點與整合,決定修哪裡、抽提成什麼.**典型錯誤形狀**:任務中已察覺同一處理流程在多個套件重複出錯,只在對話中順口一提,之後無人記得,下一個 agent 再踩一次.
-- 公開庫之 `sgud/` 依 §14 不得含金鑰、權杖、內網位址或帳號資訊,亦不寫使用端專案之名稱與案情.
+- 回顧本次任務有無:①**自有套件**需調整(缺陷、不足、用法不順),或已有足夠多之功能應抽提為自有套件;②**全域技能**需調整,或已發現易出錯且重複性高之處理流程應抽提為新技能;③**全域設定**(本檔)需更正、擴充、抽提至全域技能或刪減.
+- **有則先落檔、再回報**:先寫入本次工作所在之套件或專案之 `sgud/feedback/feedback.md`(一條一列,欄位見 skill[role-writer-sgud]),再於回報中列〈回饋〉一節(置於[需你決定]之前);無則寫[回饋:無].回饋是紀錄與提案,實際修改仍走 §5.2、§13.
+- **why**:回饋只留在對話裡,session 結束即消失;落在各 `sgud/` 才能事後跨套件核實與整合.**典型錯誤形狀**:已察覺同一處理流程在多個套件重複出錯,只在對話中順口一提,下一個 agent 再踩一次.
 
 ## 13. 全域技能與全域設定之通報
 
 **觸發**:發現全域技能(`~/.claude/skills/<技能名>`)或本檔(全域設定)有誤、過時、不足,或需要新增技能時.
 
-1. 不要直接修改 `~/.claude/skills` 或 `~/.claude/CLAUDE.md`:兩者為同步產物,原稿在`自有ai全域技能與設定庫`(GitHub `https://github.com/yuda-lyu/w-data-aisetting`),下次同步即被覆蓋.
-
-2. 與自有套件同一管道(§5.2),先至:
-http://100.120.70.67:3000/semi/opensrcOper
-並閱讀其內`通知方請用gitea.md`之「AI設定庫」線,確認後再以發 issue 傳遞需求——標題須用 `建議全域技能{技能名}修正/調整:`、`建議新增全域技能{技能名}:` 或 `建議全域設定修正/調整:`,使主控能與自有套件之建議區分;主控agent會輪詢並待接收,修改原稿並推上 GitHub 後,使用者再於各電腦執行 `sync.bat` 同步.
-
-3. 只屬單一專案之要求寫進該專案之 `CLAUDE.md`,不要提到全域;自有套件之問題依 §5.2.
+- 不要直接修改 `~/.claude/skills` 或 `~/.claude/CLAUDE.md`:兩者為同步產物,原稿在`自有ai全域技能與設定庫`(GitHub `https://github.com/yuda-lyu/w-data-aisetting`),下次同步即被覆蓋.
+- 與 §5.2 同一管道,讀`通知方請用gitea.md`之「AI設定庫」線後發 issue,標題用 `建議全域技能{技能名}修正/調整:`、`建議新增全域技能{技能名}:` 或 `建議全域設定修正/調整:`;主控修改原稿推上 GitHub 後,使用者於各電腦執行 `sync.bat` 同步.
+- 只屬單一專案之要求寫進該專案之 `CLAUDE.md`,不要提到全域;自有套件之問題依 §5.2.
 
 ## 14. 專案/套件之指引要求文件(sgud)
 
-**觸發**:接手或接續專案/套件之工作;撰寫或更新其經驗、處理要點、規則帳本、狀態類文件.
+**觸發**:接手或接續專案/套件之工作;撰寫或更新其經驗、處理要點、規則帳本、狀態、回饋類文件.命中即先調用 skill[role-writer-sgud](各檔寫法、過長整理、舊制對應、版控與 npm 發布、`.npmignore`).
 
-**why**:程式碼是強約束的檢查與執行軌跡,提示詞是弱約束的原則與要點;指引要求類文字集中於固定位置並納入版控,才能追蹤其演變、避免散落與重複讀取浪費 token.
-
-- **配置**:專案/套件根目錄之 `CLAUDE.md`(進入點,自動載入)＋ `./sgud/`:
-
-| 類 | 檔 | 內容 |
-|---|---|---|
-| 經驗 | `sgud/exp/experience.md` | 執行時之累積經驗,留給後續嘗試、執行、判斷 |
-| 處理要點 | `sgud/proc/process.md` | 業務端之特化要求與其處理流程 |
-| 規則帳本 | `sgud/rule/rulebook.md` | **藍圖**:以規則為單位記程式碼須長成什麼樣,附盤點指令、站點全集與判準,或由規格產出之測試清單 |
-| 狀態 | `sgud/state/state.md` | **現況**:當前已開發功能之最新狀態(各功能做到哪裡、對應之規則帳本條目與測試檔、已知缺口與待辦、最近一次驗證或發布之版本);與規則帳本比對即知尚未做到者 |
-| 回饋 | `sgud/feedback/feedback.md` | 任務中發現之自有套件、全域技能、全域設定之調整與抽提提案(§12.2);只增不改,處置結果另記一列,供主控核實、盤點與整合 |
-
-- **舊制對應**:根目錄之 `CLAUDE_experience.md`、`CLAUDE_process.md`、`CLAUDE_rulebook.md`、`CLAUDE_state.md` 依序對應上表四檔.遇舊制者照其現有位置讀寫,不自行遷移;遷移由該專案之主控或使用者安排(自有套件由 opensrcOper 主控於該套件下次更新時遷移).
-- **接續工作先讀 `state.md`**,不必翻經驗檔;完成一項功能或結束一輪工作時即更新 `state.md`.**只記現況、不寫過程**(過程寫入經驗).
-- **過長即整理**(判準:不好找、或整份讀入太浪費 token;約 30KB 以上即應考慮):
-  - 經驗:把舊經驗抽出為 `experience_<年月日>.md`,`experience.md` 註明何時抽出至哪檔;需要久遠經驗時再調閱.
-  - 處理要點、規則帳本:依類型拆為 `process_<類型>.md`、`rulebook_<類型>.md`(類型依專案自訂),主檔只留「哪類查哪檔」之索引.
-  - 狀態:依功能類型拆為 `state_<類型>.md`,`state.md` 只留索引.
-  - 整理時節號與標題不變,既有引用才對得上;不刪內容,只搬移.
-- **版控與發布**:**只有 `sgud/` 納入 git 版控**;`CLAUDE.md`(給 agent 之進入點)與 `CLAUDE_settings.md` 等 `CLAUDE*.md` **維持不入版控**——`.gitignore` 保留 `CLAUDE*.md`,**不得加 `!CLAUDE.md`**,也不得排除 `sgud`.`sgud/` 與程式碼同為資產,**隨 npm 包發布**;`.npmignore` 預設不提供(npm 依 `.gitignore`,`CLAUDE*.md` 自然不入包),只在須排除外部執行檔、或單一資料夾 ≥10MB 且使用端用不到之非程式碼資料時才提供——此時首段須完整抄錄 `.gitignore`(npm 有 `.npmignore` 即不讀 `.gitignore`),再逐條加排除項並註明理由.repo 為公開庫時,`sgud/` 內容不得含金鑰、權杖、內網位址或帳號資訊.
+- **配置**:專案/套件根目錄之 `CLAUDE.md`(進入點,自動載入)＋ `./sgud/`:`exp/experience.md`(經驗)、`proc/process.md`(處理要點)、`rule/rulebook.md`(規則帳本＝藍圖)、`state/state.md`(狀態＝現況)、`feedback/feedback.md`(回饋,§12.2).
+- **接續工作先讀 `state.md`**,不必翻經驗檔;完成一項功能或結束一輪工作時即更新 `state.md`,只記現況、不寫過程(過程寫入經驗).
+- **只有 `sgud/` 納入 git 版控並隨 npm 包發布**;`CLAUDE*.md` 維持不入版控(`.gitignore` 保留 `CLAUDE*.md`,不得加 `!CLAUDE.md`).公開庫之 `sgud/` 不得含金鑰、權杖、內網位址或帳號資訊,亦不寫使用端專案之名稱與案情.
 
 ## 15. AI CLI 本機對話紀錄之盤查與清理
 

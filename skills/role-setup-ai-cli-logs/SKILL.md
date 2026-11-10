@@ -31,7 +31,7 @@ description: |
 2. **`~/.claude/projects` 預設不動**。當前與他 session 的 transcripts 可能是其他工作接續（`--resume`、`--continue`）的依據；釋放空間優先調 `cleanupPeriodDays` 讓 Claude Code 自清。「派發用」專案目錄也不因此直接刪，一律列入清單待使用者確認（派發工作者與主代理 session 難以只憑目錄名分辨，分錯即丟接續依據）。
 3. **依賴續接（resume）的派工流程不得關閉 session 持久化**。`--no-session-persistence`、`--ephemeral`、`CLAUDE_CODE_SKIP_PROMPT_HISTORY` 只適用「確定不續接的一次性呼叫」；取捨見 §5。**不寫成「一律加」**。
 4. **不讀紀錄內容**。紀錄與憑證檔明文含工具輸出、`.env` 內容與金鑰；盤查只用 `du`、`ls`（路徑、大小、時間），不 `cat`、不 Read、不 Grep 對話與憑證檔。要判斷歸屬時看目錄名與修改時間，不開檔。
-5. **大量檔案與目錄連結的刪除處理**依全域設定 §3（暫存與連結）、§8.4（刪後回驗）、§8.7（robocopy 鏡像空目錄法、先拆目錄連結），本技能不重抄。
+5. **大量檔案與目錄連結的刪除處理**依全域設定 §3（暫存與連結）、§8.4（刪後回驗）與 skill[role-command-windows] §6（robocopy 鏡像空目錄法、先拆目錄連結），本技能不重抄。
 
 ## 2. 位置與保留機制（以實查為準）
 
