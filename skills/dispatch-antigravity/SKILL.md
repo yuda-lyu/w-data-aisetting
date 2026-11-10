@@ -229,7 +229,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 
 **最常見的假象**：`timeoutMs` 明明給了 4 小時，派工卻在 2 分鐘、10 分鐘、30 分鐘或 2 小時整斷掉——全是第①層砍的：派工掛在前景，或掛在 `run_in_background` 上（沒給 `timeout` 是 30 分鐘，給滿也只有 2 小時）。**只改 `timeoutMs` 沒用：派工一定要照〈執行步驟〉detached 執行（第①層），第③層則交給轉接器由 `timeoutMs` 推導、不要另給小值**。
 
-**單次派工還會乘上去的**：`timeoutMs` 是**每次嘗試**的上限，不是總時長；自訂 `validate` 的等待也算在同一次嘗試內（`src/runExecCli.mjs`）。`maxRetries: N` 時總時長約 `timeoutMs × (1+N)`，再加重試間隔（`retryDelayMs` 預設 5000，實際間隔為 `retryDelayMs × 已嘗試次數`、單次上限 15000）；**`TIMEOUT` 會被重試，每次耗滿 `timeoutMs`，且不受 `budgetMs` 約束**。不重試、立即中止的只有確定性失敗：`ENOENT`（命令不存在、不存在的 `.cmd`／`.bat`、npm shim 的入口檔缺失）、exit code 2（參數錯誤）、`cwd` 不存在，以及子進程根本起不來的同步錯誤（命令列過長、權限不足、非有效執行檔、參數含空字元；這類結果 `code` 為 `null`、`errorType` 為 `spawn`）。**`printTimeout` 於呼叫前依 `timeoutMs` 推導一次，重試沿用同一組旗標，故不會累加、也不會逐次重算**。
+**單次派工還會乘上去的**：`timeoutMs` 是**每次嘗試**的上限，不是總時長；自訂 `validate` 的等待也算在同一次嘗試內（`src/runExecCli.mjs`）。`maxRetries: N` 時總時長約 `timeoutMs × (1+N)`，再加重試間隔（`retryDelayMs` 預設 5000，實際間隔為 `retryDelayMs × 已嘗試次數`、單次上限 15000）；**`TIMEOUT` 會被重試，每次耗滿 `timeoutMs`**；1.0.86 起有 `budgetMs` 時，每次重試之逾時以剩餘預算封頂、剩餘不足 `minAttemptMs` 即不再重試（1.0.85 以前不受 `budgetMs` 約束）。不重試、立即中止的只有確定性失敗：`ENOENT`（命令不存在、不存在的 `.cmd`／`.bat`、npm shim 的入口檔缺失）、exit code 2（參數錯誤）、`cwd` 不存在，以及子進程根本起不來的同步錯誤（命令列過長、權限不足、非有效執行檔、參數含空字元；這類結果 `code` 為 `null`、`errorType` 為 `spawn`）。**`printTimeout` 於呼叫前依 `timeoutMs` 推導一次，重試沿用同一組旗標，故不會累加、也不會逐次重算**。
 
 **走遞補鏈或工作流時，三個值必須成套設，缺一即壞**（以下皆為 `w-dispatch-ai/src/dispatchAiFallback.mjs` 之實際行為）：
 
@@ -239,9 +239,9 @@ Bash({ run_in_background: true, timeout: 7200000,
 
 | 選項 | 預設 | 實際行為與陷阱 |
 |---|---|---|
-| `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**（agy 的 `printTimeout` 依壓縮後的值加 30 秒推導，仍晚於外層）；給得比 `timeoutMs` 小，4 小時等於白設 |
+| `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**（agy 的 `printTimeout` 依壓縮後的值加 30 秒推導，仍晚於外層）；給得比 `timeoutMs` 小，4 小時等於白設；1.0.86 起 `0` 與負數為「已無時間」（不送出、回 `budget`），小數取整；被預算封頂而逾時之嘗試回 `budget`（事件 `budget-cut`），不記冷卻、不計連敗 |
 | `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
-| `cooldownMs` | `0`（關閉） | 只對**有明給 `id`** 的條目記冷卻；內建觸發只有 HTTP 429 與逾時，而 **429 僅 REST 類偵測得到**；CLI 類的限流埋在輸出文字裡，內建規則抓不到 |
+| `cooldownMs` | `0`（關閉） | 只對**有明給 `id`** 的條目記冷卻；內建觸發只有 HTTP 429 與逾時，而 **429 僅 REST 類偵測得到**；CLI 類的限流埋在輸出文字裡，內建規則抓不到；1.0.86 起可加長：`cooldownGrowth`（預設 1＝固定視窗）、`cooldownMaxMs`（預設 24 小時），視窗外再觸發即乘以 growth、成交歸零；另有持久連敗 `coolAfterFails`（整組皆敗連續 N 次即降序，給 `store` 才跨行程累計） |
 | `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /quota/i.test(r.stderr \|\| '')`。agy 額度用盡時的實際字樣與離開碼套件未驗證，先觀察到再寫 |
 | `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
 | `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**antigravity 預設不限**（只有 opencode 預設啟用，其 `opencode.exe` 單次短呼叫實測約占 1.1 核心）。**未驗證處**：`agy.exe` 在套件實測機上沒有行程，**其 CPU 占用從未量測**——預設不限是「未證實會占核故不擋」，不是「已證實不占核」，有實測後預設可能改為限制。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `agy.exe`〔非 Windows 為 `agy`〕之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
