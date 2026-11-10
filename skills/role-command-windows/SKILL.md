@@ -41,6 +41,8 @@ description: |
 
 [`/d/` = D 槽]映射只存在 git-bash shell 內部.把這種字串交給 Windows 原生 exe 或 node 的 path/fs,開頭 `/` 被當[當前磁碟根]:`/d/tmp/x` → `D:\d\tmp\x`(多一層 d),`/c/Users/x` → `D:\c\Users\x`(磁碟機都錯).邊界判別:路徑字串最後是誰解析——Bash 工具內 `mkdir /d/tmp/...` 對;寫進 `.mjs` 再交給 spawn / `launchPersistentContext` / node fs 就錯.改用帶磁碟機代號路徑(`D:/tmp/x`)或從 `fileURLToPath` 衍生.
 
+反方向亦然:git-bash 呼叫 Windows 原生程式(含 `node`、`reg`、`tasklist`)時,會把**任何以 `/` 起首之參數**當 POSIX 路徑改寫,不只真正的路徑——`mocha --grep "/pattern/"` 變成 `--grep "C:/Program Files/Git/pattern/"` 而選不到任何案(0 passing 且離開碼 0,看似通過);`reg add … /v X /d Y`、`tasklist /FI …` 之 `/` 旗標同樣被改寫.對策:該次指令前加 `MSYS_NO_PATHCONV=1`,或改寫參數使其不以 `/` 起首(如以關鍵字 `--grep 關鍵字` 代替正規式).**判讀**:測試指令跑出 0 案時,先看執行紀錄中實際收到之參數.
+
 ### 2.4 寫入前驗收
 
 路徑經組裝(join,replace,URL 轉換)後,fs 操作前先 `console.log(path.resolve(...))` 印 absolute 路徑驗收;寫入後 `ls` 確認落點;發現孤兒資料夾立刻徵求允許後刪除.警覺訊號:工作目錄含空格,中文/非 ASCII,Windows `D:\...`——任一符合就雙倍仔細.
