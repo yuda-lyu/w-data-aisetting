@@ -1,7 +1,7 @@
 ---
 name: role-coder-for-vue-ui
 description: |
-  Vue UI 程式規範技能（w-component-vue / Vue 2 系）：非同步提交統一寫法（core() 五段結構、loading 用 finally 統一關、可預期錯誤走 inline 紅字，外包 runSubmit 送出流程狀態）、Vue 2 template `@event` handler 禁用 async 開頭 inline arrow（compiler 靜默編錯陷阱）、有副作用按鈕之雙擊防護（`promiseUnlock` 鎖交給 runSubmit 至請求結束、handler 不解鎖；鍵盤 Enter 與輸入框 Enter 同一流程狀態；結果訊息框期間重入仍擋；單例訊息框須了結前一等待者；後端依操作者占位）、w-component-vue 按鈕之已知缺陷與焦點色（自訂強色底須一併給焦點色）。
+  Vue UI 程式規範技能（w-component-vue / Vue 2 系）：非同步提交統一寫法（core() 五段結構、loading 成對開關——finally 只關本流程持有者、遮罩宜為持有數，可預期錯誤走 inline 紅字，外包 runSubmit 送出流程狀態）、Vue 2 template `@event` handler 禁用 async 開頭 inline arrow（compiler 靜默編錯陷阱）、有副作用按鈕之雙擊防護（`promiseUnlock` 鎖交給 runSubmit 至請求結束、handler 不解鎖；鍵盤 Enter 與輸入框 Enter 同一流程狀態；結果訊息框期間重入仍擋；單例訊息框須了結前一等待者；後端依操作者占位）、w-component-vue 按鈕之已知缺陷與焦點色（自訂強色底須一併給焦點色）。
   觸發條件：凡撰寫或修改 Vue UI 之非同步提交流程（UI 函式呼叫 async 後端函式、loading/錯誤處理）、template `@event` handler、`promiseUnlock` 按鈕、按鈕自訂底色、送出鈕／確認框／結果訊息框之防連發、或以 `show()` 回傳 promise 之單例對話框的任務——寫/改/審/重構——必先調用本技能，整篇入 context 逐項比對後才動工。
 ---
 
@@ -9,38 +9,64 @@ description: |
 
 **觸發條件**:凡撰寫或修改 Vue UI 之非同步提交流程,template `@event` handler,`promiseUnlock` 按鈕,按鈕自訂底色,送出防連發,或單例對話框的任務,本篇整篇入 context 逐項比對.
 
-## 1. 非同步提交的統一寫法:`core()` 五段 + `finally` 關 loading,外包 `runSubmit`
+## 1. 非同步提交的統一寫法:`core()` 五段 + loading 成對開關,外包 `runSubmit`
 
-[UI 函式呼叫一或多個 async 後端函式]一律走同一個 `core()` 五段結構:①初始化清空舊 inline 錯誤 → ②事先檢測(所有同步 early-return 檢查,在開 loading 之前)→ ③確定要打 API 才 `updateLoading(true)` → ④執行(每個 async 各自 catch 設自己的 inline 錯誤,`okX` 旗標 `if (!okX) return` 短路——短路是 load-bearing)→ ⑤外層 `.catch` 接非預期例外,`.finally` 統一關 loading(一處關閉不重複不漏關).可預期錯誤走 inline 紅字;成功 / 失敗通知依專案政策(如以 `showCheckYes` 訊息框呈現者,開框前先 `updateLoading(false)`).**有副作用之送出,整段再包進 `$ui.runSubmit`**(§3).
+[UI 函式呼叫一或多個 async 後端函式]一律走同一個 `core()` 五段結構:①初始化清空舊 inline 錯誤 → ②事先檢測(所有同步 early-return 檢查,在開 loading 之前)→ ③確定要打 API 才 `updateLoading(true)` → ④執行(每個 async 各自 catch 設自己的 inline 錯誤,`okX` 旗標 `if (!okX) return` 短路——短路是 load-bearing)→ ⑤外層 `.catch` 接非預期例外,`.finally` 只關本流程仍持有之 loading.可預期錯誤走 inline 紅字;成功 / 失敗通知依專案政策(如以 `showCheckYes` 訊息框呈現者,開框前先關本流程之 loading).**有副作用之送出,整段再包進 `$ui.runSubmit`**(§3).
+
+**loading 一律成對**:每一次 `updateLoading(true)` 恰對應一次 `updateLoading(false)`.以 `shown` 旗標記本流程是否持有 loading:開時設 true,關時設 false,`finally` 只在 `shown` 為 true 時關——在開 loading 之前早退者沒開過,不得關;訊息框前已先關者,`finally` 不得再關.為何:同一畫面常有多個非同步流程同時進行(開頁之身分確認、清單取得、圖表繪製),多關一次就關掉他處仍在進行中之遮罩(實例:開頁時確認登入者之流程先結束,把仍在取清單之遮罩一併關掉,遮罩分成 2 段;圖表頁在第一張圖畫完前就消失).
+
+**專案之 `updateLoading` 宜為持有數**:開一次加 1、關一次減 1,大於 0 即顯示遮罩;單一布林下任一流程之關閉即關掉其他流程之遮罩.持有數須搭配上述成對規則,否則「沒開也減」「開一次減兩次」反而扣掉他處之持有數,結果同樣是他處之遮罩提早消失;`Math.max(n - 1, 0)` 只防負數,不防扣掉他處之持有.參考寫法:
+
+```js
+let nLoading = 0 //載入中遮罩之持有數: 各流程以 updateLoading(true)/(false) 成對持有與釋放, 大於 0 即顯示
+function updateLoading(loading) {
+    nLoading = loading ? nLoading + 1 : Math.max(nLoading - 1, 0)
+    vo.$store.commit(vo.$store.types.UpdateLoading, nLoading > 0)
+    if (nLoading === 0) {
+        releaseBtnLocks() //遮罩消失時才釋放按鈕鎖(§3 第 2 點)
+    }
+}
+```
 
 Canonical 範本(API 名為 w-component-vue / Vue2 範例,他專案沿用結構替換機制):
 
 ```js
 submitXxx: function(opt = {}) {                                   //opt.pm: 按鈕之 promiseUnlock 鎖(§3), 其他入口不帶
     let vo = this
+    let shown = false                                             //本流程是否持有 loading(成對開關)
     let core = async (unlockBtn) => {
         vo.aError = ''                                            //1) 清空舊 inline 錯誤
-        if (!isestr(vo.foo)) { vo.aError = vo.$t('...');return } //2) 同步檢測, 在開 loading 之前(inline 錯誤: 流程隨即結束, 鎖由 runSubmit 釋放)
+        if (!isestr(vo.foo)) { vo.aError = vo.$t('...');return } //2) 同步檢測, 在開 loading 之前(inline 錯誤: 流程隨即結束, 鎖由 runSubmit 釋放; 未開 loading, finally 不關)
         if (vo.bar === 0) { unlockBtn();await vo.$dg.showCheckYes(vo.$t('...'));return } //  早退且開訊息框者: 開框前 unlockBtn()
         vo.$ui.updateLoading(true)                                //3) 確定打 API 才開 loading
+        shown = true
         let okA = false                                           //4) 每個 async 各自 catch + 旗標短路
         await vo.$fapi.doA(...)
             .then((res) => { okA = true })
             .catch((err) => { console.log('doA',err);vo.aError = vo.$t('...') })
-        if (!okA) return
-        vo.$ui.updateLoading(false)                               //   訊息框前先關 loading(同時釋放按鈕鎖)
+        if (!okA) return                                          //   可預期錯誤: 由 finally 關本流程之 loading
+        vo.$ui.updateLoading(false)                               //   訊息框前先關本流程之 loading
+        shown = false
         await vo.$dg.showCheckYes(vo.$t('saveSuccess'), { type: 'success' }) //流程涵蓋至結果訊息框關閉
         return 'ok'                                               //5) 全成功才回傳, 中途失敗回 undefined
     }
     return vo.$ui.runSubmit('submitXxx', (unlockBtn) => {         //同 key 進行中再觸發即略過(§3)
         return core(unlockBtn)
-            .catch((err) => { console.log('catch',err);return vo.$dg.showCheckYes(vo.$t('anUnexpectedErrorOccurred'),{ type: 'error' }) }) //以訊息框呈現者回傳其 Promise
-            .finally(() => { vo.$ui.updateLoading(false) })
+            .catch((err) => {
+                console.log('catch',err)
+                if (shown) { vo.$ui.updateLoading(false);shown = false } //訊息框前先關
+                return vo.$dg.showCheckYes(vo.$t('anUnexpectedErrorOccurred'),{ type: 'error' }) //以訊息框呈現者回傳其 Promise
+            })
+            .finally(() => {
+                if (shown) { vo.$ui.updateLoading(false);shown = false } //只關本流程仍持有者
+            })
     }, opt)
 }
 ```
 
-特例:登入重導(成功後跳轉)——成功路徑不關 loading(否則跳轉前閃滅),把 `updateLoading(false)` 從 `finally` 移到 `catch`,且 `runSubmit` 帶 `hold: (r) => r === 'redir'` 保持占位與按鈕鎖至頁面離開.套用前先 grep 專案既有 canonical 範例沿用,不要每檔自創;看到不符寫法應提報並經同意後改齊.
+特例:登入重導(成功後跳轉)——成功路徑不關 loading(否則跳轉前閃滅):轉址前把 `shown` 設為 false(遮罩移交給頁面離開,`finally` 不關),其餘路徑(可預期錯誤之短路、非預期例外)照範本由 `catch`/`finally` 關;`runSubmit` 帶 `hold: (r) => r === 'redir'` 保持占位與按鈕鎖至頁面離開.不可只把關閉移到 `catch`:可預期錯誤之短路不經 `catch`,遮罩會一直留著.套用前先 grep 專案既有 canonical 範例沿用,不要每檔自創;看到不符寫法應提報並經同意後改齊.
+
+檢查:`rg -n "updateLoading\((true|false)\)" src` 列全集,逐一確認每條路徑成對——開 loading 前之早退不關、訊息框前已關者 `finally` 不再關;兩者數量相等不代表成對(早退路徑之多關與他處之少關會互相抵銷).
 
 ## 2. Vue 2 template 內 `@event` handler 一律用 method 名,禁用 `async` 開頭 inline arrow
 
@@ -55,11 +81,11 @@ Vue 2 compiler 對 `@event="async (args)=>{...}"` 會靜默編錯(fnExpRE 不匹
     ```js
     onClickSaveBtn: function(msg) {     //非 async
         let vo = this
-        vo.submitXxx({ pm: msg.pm })    //鎖由 runSubmit 於請求結束(updateLoading(false))或流程結束時釋放
+        vo.submitXxx({ pm: msg.pm })    //鎖由 runSubmit 於請求結束(遮罩消失, §1)或流程結束時釋放
     },
     ```
 
-2. **送出流程狀態(`$ui.runSubmit(key, fn, opt)`)**:核心為純邏輯模組 `src/plugins/submitGuard.mjs`(可單元測試;新專案自已實作之既有專案複製),`mUI` 匯出 `runSubmit`,並於 `updateLoading(false)` 呼叫 `releaseBtnLocks()`.規則:
+2. **送出流程狀態(`$ui.runSubmit(key, fn, opt)`)**:核心為純邏輯模組 `src/plugins/submitGuard.mjs`(可單元測試;新專案自已實作之既有專案複製),`mUI` 匯出 `runSubmit`,並於遮罩消失時(持有數歸零之 `updateLoading(false)`,§1;遮罩仍為單一布林之舊專案即每次 `updateLoading(false)`)呼叫 `releaseBtnLocks()`——遮罩仍在即按鈕鎖仍在,釋放時點不因他流程多關或先關而提早;重入一律由流程狀態擋,不靠按鈕鎖.規則:
     - 同 key 之流程進行中(自觸發至流程結束,**含結果訊息框開啟期間**)再觸發即略過,被略過之觸發立即釋放其按鈕鎖.
     - **同一操作之所有入口共用一個 key**:按鈕滑鼠 / 鍵盤、輸入框 Enter(不帶 pm)、快捷鍵.
     - `fn` 收到 `unlockBtn`:未打 API 即開訊息框之早退路徑、**先開確認框之流程**(自開確認框起整段包進 runSubmit)於開框前呼叫,按鈕鎖只涵蓋請求期間;重入仍由流程狀態擋.
