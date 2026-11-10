@@ -61,7 +61,7 @@ variant：low、high、max
 
 各模型的檔位名稱並不一致（有的只到 `high`、有的跳過 `medium`、有的到 `xhigh` 為止、有的沒有檔位），換模型時以 `--verbose` 實查，不要套用別支的檔位。型錄上新出現、尚未收為套件條目的，用之前先照下節查核並實跑。
 
-**組遞補鏈或評比名單前，先以 `wda.filterOpencodeFree(providers)` 對一次**（w-dispatch-ai 1.0.60 起）：它以 `opencode models` 之輸出篩出目錄中確實仍供應之免費條目，回 `available`／`removed`（目錄有、CLI 型錄已無）／`unchecked`／`uncatalogued`（CLI 有、目錄未收）；查詢失敗（`opencode` 不存在、非零離開、逾時、空輸出）回 `ok: false` 與 `errorType`，各清單為 `null`——**不可把 `null` 當成「全部下架」**。`refresh: true` 會加 `--refresh` 重抓型錄（`opencode models` 有本機快取，剛下架者可能仍列一次）。型錄有列仍不等於可用（見下節 nvidia 之例），關鍵派工仍以實跑為準。**它只判 `model` 以 `opencode/` 開頭的條目**（讀 1.0.80 原始碼所得，未實跑）：`ocgo:` 的 `opencode-go/…` 前綴不符，含 `free` 字樣的 `beam-free`、`crouton-alpha-free`、`iceman-contributor-free` 三條會列入 `unchecked`（不判下架），其餘 Go 條目不含 `free` 字樣、不被處理。
+**組遞補鏈或評比名單前，先以 `wda.filterOpencodeFree(providers)` 對一次**（w-dispatch-ai 1.0.60 起）：它以 `opencode models` 之輸出篩出目錄中確實仍供應之免費條目，回 `available`／`removed`（目錄有、CLI 型錄已無）／`unchecked`／`uncatalogued`（CLI 有、目錄未收）；查詢失敗（`opencode` 不存在、非零離開、逾時、空輸出）回 `ok: false` 與 `errorType`，各清單為 `null`——**不可把 `null` 當成「全部下架」**。`refresh: true` 會加 `--refresh` 重抓型錄（`opencode models` 有本機快取，剛下架者可能仍列一次）。型錄有列仍不等於可用（見下節 nvidia 之例），關鍵派工仍以實跑為準。**它只判 `model` 以 `opencode/` 開頭的條目**（讀 1.0.80 原始碼所得，未實跑）：`ocgo:` 的 `opencode-go/…` 前綴不符，含 `free` 字樣的 `beam-free`、`iceman-contributor-free` 兩條（1.0.85 移除 `crouton-alpha-free` 前為三條）會列入 `unchecked`（不判下架；Go 條目之下架由套件之連網守門測試對照官方 Go 型錄發現），其餘 Go 條目不含 `free` 字樣、不被處理。
 
 ### 已確認不可用之項目
 
@@ -103,16 +103,15 @@ variant：low、high、max
 
 使用判準（provider 分流、`OPENCODE_GO_KEYS`、隱私前提、實測狀態）在 SKILL.md〈OpenCode Go〉，本節只放查型錄與診斷用的欄位與字樣（2026-11-03，opencode 1.19.5）。
 
-**型錄要帶金鑰才查得到**：`dispatchOpencode` 給 `provider: 'opencode-go'` ＋ `key` 時，以 `provider` 為鍵注入 `OPENCODE_AUTH_CONTENT={"opencode-go":{"type":"api","key":…}}`，不必 `config`、不必改轉接器（`model` 前綴須與 `provider` 同名）。查型錄同理需注入同形的 `OPENCODE_AUTH_CONTENT`，之後 `opencode models opencode-go --verbose`（2026-11-03 當日 30 個）；匿名可查的公開型錄是 `GET …/inference/go/v1/models`（2026-11-03 為 28 個、2026-11-07 為 30 個），models.dev 的 `opencode-go` 則列 37 個（2026-11-03，其中 7 個標 deprecated）——三者數字不同，**判「能不能用」仍以實際要用的那把金鑰所注入的 CLI 型錄加實跑為準**。2026-11-07 的公開型錄 30 個＝已收 9＋未收 21；套件記載相對先前新增 `hy4`（未收）與 `crouton-alpha-free`（已收），公開型錄已無 `mimo-v2.5`／`mimo-v2.5-pro`（官方月額表與隱私表仍列，屬文件落後；帶金鑰注入的 CLI 型錄 `opencode models opencode-go --refresh --verbose` 仍列 32 個＝公開 30 個＋此二者，未呼叫驗證）。**本機 opencode 型錄快取舊時不認新模型**（2026-11-07 實測：未 `--refresh` 時不列 `crouton-alpha-free`，依條目呼叫 1.6～3.5 秒即 `Exit code 1`），新條目要先 `opencode models opencode-go --refresh`。
+**型錄要帶金鑰才查得到**：`dispatchOpencode` 給 `provider: 'opencode-go'` ＋ `key` 時，以 `provider` 為鍵注入 `OPENCODE_AUTH_CONTENT={"opencode-go":{"type":"api","key":…}}`，不必 `config`、不必改轉接器（`model` 前綴須與 `provider` 同名）。查型錄同理需注入同形的 `OPENCODE_AUTH_CONTENT`，之後 `opencode models opencode-go --verbose`（2026-11-03 當日 30 個）；匿名可查的公開型錄是 `GET …/inference/go/v1/models`（2026-11-03 為 28 個、2026-11-07 為 30 個），models.dev 的 `opencode-go` 則列 37 個（2026-11-03，其中 7 個標 deprecated）——三者數字不同，**判「能不能用」仍以實際要用的那把金鑰所注入的 CLI 型錄加實跑為準**。2026-11-07 的公開型錄 30 個＝已收 9＋未收 21；套件記載相對先前新增 `hy4`（未收）與 `crouton-alpha-free`（已收），公開型錄已無 `mimo-v2.5`／`mimo-v2.5-pro`（官方月額表與隱私表仍列，屬文件落後；帶金鑰注入的 CLI 型錄 `opencode models opencode-go --refresh --verbose` 仍列 32 個＝公開 30 個＋此二者，未呼叫驗證）。**本機 opencode 型錄快取舊時不認新模型**（2026-11-07 實測：未 `--refresh` 時不列 `crouton-alpha-free`，依條目呼叫 1.6～3.5 秒即 `Exit code 1`），新條目要先 `opencode models opencode-go --refresh`。**2026-11-10**：`crouton-alpha-free` 已自公開 Go 型錄下架（同日 Go 型錄仍 30 個，新增 `longcat-2.5-free`〔未收；非改名後繼，收錄須依套件帳本實測〕），`w-dispatch-ai` 1.0.85 依帳本 R-OCGO-1 自目錄移除。
 
 **未收的 21 個 Go 模型**（2026-11-07 公開型錄；提出端未測、套件不對付費模型多次發請求實測，故不收，要用時以 `resolveCatalogue` 的 `extraProviders` 自帶條目；其中 11 個的 Go 方案月額僅 $15）：`kimi-k3`、`kimi-k3.1-pro`、`glm-5.3`、`glm-5.2`、`gpt-6-luna`、`gpt-5.6-luna`、`claude-haiku-5-5`、`gemini-4-argon`、`grok-4.7`、`deepseek-v4-pro`、`qwen3.8-max`、`qwen3.7-plus`、`minimax-m3`、`longcat-2.0`、`hy3`、`hy4`、`hy4-preview`、`step-5-preview`、`mimo-v2.6-pro`、`kimi-k2.7-code`、`muse-spark-1.2-contributor`。Go 型錄沒有 Claude Sonnet，Claude 只有 `claude-haiku-5-5`。
 
-9 條 `ocgo:opencode-go/…` 的型錄欄位（〔CLI型錄〕＋官方 Go 頁；「月額」為 Go 方案值，Go Plus／Go Teams 另計；單價見條目註解）：
+8 條 `ocgo:opencode-go/…` 的型錄欄位（〔CLI型錄〕＋官方 Go 頁；「月額」為 Go 方案值，Go Plus／Go Teams 另計；單價見條目註解；`crouton-alpha-free` 於 2026-11-10 自官方 Go 型錄下架，`w-dispatch-ai` 1.0.85 已移除，下表不再列）：
 
 | 模型 | 脈絡窗／最大輸出 | 輸入 | 檔位 | Go 方案月額 |
 |---|---|---|---|---|
 | `beam-free` | 1,048,576／131,072 | 僅文字 | low／medium／high／xhigh／max | 官方標 Free（限時）、Unlimited |
-| `crouton-alpha-free` | 1,048,576／270,000 | 文字、圖片、影片、PDF | minimal／low／medium／high／xhigh／max | 官方標 Free（限時、限地區）、Unlimited |
 | `deepseek-v4.1-flash` | 1,000,000／384,000 | 文字與圖片 | low／high／max | $100 |
 | `minimax-m3.1-flash` | 1,000,000／512,000 | 文字與圖片 | low／medium／high／xhigh／max | $20（最低） |
 | `qwen3.8-flash` | 1,000,000／131,072 | 文字與圖片 | low／medium／**xhigh（無 high）** | $30 |
@@ -121,7 +120,7 @@ variant：low、high、max
 | `iceman-contributor-free` | 262,144／131,072 | 僅文字 | 無檔位 | 官方標 Free（限時）、Unlimited |
 | `muse-spark-1.3-contributor` | 1,048,576／131,072 | 文字與圖片 | minimal／low／medium／high／xhigh | $60 |
 
-型錄脈絡窗不等於實際可用：`iceman-contributor-free` 伺服器上限 262,139 且 opencode 預設預留 32,000 給 completion（本機實測約 18.9 萬 token 答對、輸入約 23.6 萬被拒）；`beam-free` 本機只測到約 84.5 萬 token；`crouton-alpha-free` 脈絡長度未測；付費條目的實際上限未測。
+型錄脈絡窗不等於實際可用：`iceman-contributor-free` 伺服器上限 262,139 且 opencode 預設預留 32,000 給 completion（本機實測約 18.9 萬 token 答對、輸入約 23.6 萬被拒）；`beam-free` 本機只測到約 84.5 萬 token；付費條目的實際上限未測。
 
 **錯誤字樣對照**（〔本機實測〕＝套件當日於已訂閱 Go 的金鑰實跑；〔提出端〕＝issue 提出端自述，本機工作區隱私開關已開、未重現）：
 
