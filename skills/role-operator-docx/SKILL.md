@@ -186,7 +186,7 @@ officecli query "$FILE" 'field[fieldType!=page]'          # PAGE 以外之欄位
 
 ## 建立與編輯
 
-動詞:`add`(新元素), `set`(改屬性), `remove`, `move`, `swap`, `batch`, `raw-set`(最後手段之 XML).九成的建置就是段落, run, 表格, 幾張圖, 一個目錄, 一個頁尾.
+動詞:`add`(新元素;`add … --from <來源路徑>` 為複製既有元素), `set`(改屬性), `remove`, `move`, `swap`, `batch`, `raw-set`(最後手段之 XML).九成的建置就是段落, run, 表格, 幾張圖, 一個目錄, 一個頁尾.於他人產製之既有文件內只改一小段(沿用段落格式新增段落, 表格內加圖, 改寫 run 文字)者, 另見〈於既有文件內插入與改寫〉.
 
 ### 段落, run 與樣式
 
@@ -315,7 +315,7 @@ officecli set "$FILE" /settings --prop updateFields=true
 officecli add "$FILE" "/body/p[5]" --type picture --prop src=logo.png --prop width=1.5in --prop alt="Acme logo"
 ```
 
-交付前確認 `officecli query "$FILE" 'image:no-alt'` 為空.
+交付前確認 `officecli query "$FILE" 'image:no-alt'` 為空.於表格儲存格內加圖前, 先查該列是否固定列高(新圖會被裁), 見〈於既有文件內插入與改寫〉.
 
 ### 圖表
 
@@ -437,6 +437,31 @@ HR / 法務 / 供應商模板帶有僅供內部之指引([替換 `{{CompanyName}
 
 模板之交付關卡:移除後, `query 'p:contains("Template Notes")'` 與 `query 'p:contains("{{")'` **兩者皆須為空**.若有任何說明段落殘留, 下游員工就會讀到內部語言.
 
+### 於既有文件內插入與改寫(沿用格式, 固定列高, 頭尾空白)
+
+於他人產製之文件內只改一小段時, 其餘內容須維持原樣.以下各點皆以 officecli 1.0.159 實測.
+
+**沿用既有段落之格式新增段落——用 `add --from` 複製再改, 不要手寫 raw-set 重造.** 複製帶走段落屬性與各 run 之格式, 新段落取得新的 `w14:paraId`(段數 +1, paraId 仍皆唯一), `leftChars` 等屬性原樣保留;指令回傳新段落之路徑(`Copied to /body/p[N]`), 之後以該路徑改文字:
+
+```bash
+officecli add "$FILE" /body --from "/body/p[@paraId=<來源>]" --after "/body/p[@paraId=<錨點>]"   # 回 Copied to /body/p[N]
+officecli set "$FILE" "/body/p[N]/r[1]" --prop text="新文字"      # 多 run 者先 remove 多餘之 run
+```
+
+- **含圖之段落**:複本與原段共用同一影像部件.對複本直接 `set …/r[k] --prop src=<新圖>` 會連原圖之關聯一併刪去, 原段之圖失效(`validate` 報 `The relationship '…' … does not exist`);未共用之單一圖 `set src` 無此問題.換圖之做法:先 `remove` 複本之圖 run, 再 `add --type picture` 加新圖(實測兩段各有其圖, `validate` 通過).
+- **只改其中一節時不用 raw-set**:`add`/`set`/`remove`/`move`/`add --from`/`batch` 不改寫其餘內容, raw-set 則有整份重寫之副作用(見〈raw-set 逃生門〉).
+
+**在表格儲存格內加圖或加段落前, 先 `get` 該列.** 版面表格常以固定列高(`w:hRule="exact"`)恰容原圖;新加之內容超出列高即被裁掉, 而 `validate` 無錯, 縮圖也不易察覺.實測(固定列高 5245 twips, 列內依序兩張 6 cm 高之圖):Word 另存之 PDF 中第 2 張只剩約 55% 高;兩張各 10 cm 高時, 第 2 張於可見區完全不見.
+
+```bash
+officecli get "$FILE" "/body/tbl[1]/tr[1]" --json | grep -E '"height'    # "height": "5245dxa", "height.rule": "exact"
+officecli set "$FILE" "/body/tbl[1]/tr[1]" --prop height=5245             # 值不變, 改為最小列高(輸出無 height.rule 鍵)
+```
+
+`set --prop height=<值>` 把固定列高改為最小列高(`<w:trHeight w:val="5245"/>`, 無 `hRule`;數值取 `get` 回傳者, `5245` 與 `5245dxa` 皆可),列高隨內容增長;實測改後兩張圖皆完整.刪去新加內容後是否回原高,依最小列高之語意推定(未另測).改過列高者於交付說明註明.新建表格要固定列高時用 `set "/body/tbl[N]/tr[M]" --prop height.exact=<twips>`.
+
+**改寫 run 文字後, 頭尾為空白或整個為空白之 run, 空白可能遺失.** `set …/r[k] --prop text=` 重用該 run 既有之 `<w:t>`;該 `<w:t>` 原本無 `xml:space="preserve"` 者(他人產製之文件常見), 改寫後仍無(實測:`set` 寫入 `" "` 或 `"Alpha "` 後, 存檔之 `<w:t>` 為 `<w:t> </w:t>` 與 `<w:t>Alpha </w:t>`), Word 讀入時丟棄頭尾之空白(實測 `Alpha` + ` ` + `and` 三個 run 之 `<w:t>` 皆無 `xml:space`, Word 顯示 `Alphaand`).`view text` 仍顯示該空白, 不能據以確認.officecli 自行新建之 run(`add --type run`, `add --type paragraph`)一律寫 `xml:space="preserve"`, 無此問題.作法:令空白位於 run 內部(與鄰字併為同一 run:`set …/r[1] --prop text="Alpha and"`, 再 `remove` 其後之 run), 或以 `add --type run --prop text=" and "` 新建;改寫後於 Word 內讀回確認.
+
 ### 進階 / 特殊主題(若你在寫報告可略過)
 
 報告, 備忘錄, 信函, 提案與 HR 模板用不到這節.只有當你的文件屬於學術類(方程式, 註腳, 參考書目), 審閱類(註解, 追蹤修訂), 或標記類(浮水印)才需繼續讀.
@@ -460,7 +485,15 @@ officecli add "$FILE" "/body/p[3]" --type footnote --prop text="See Appendix A f
 
 - **L1 — 高階屬性**(`--prop text=…`, `--prop style=Heading1`):預設做法, 涵蓋 80%.
 - **L2 — 點式屬性退路**(`pbdr.top=`, `ind.left=`, `shd.fill=`, `padding.top=`, `font.size=`):L1 缺該旋鈕時使用.例:`--prop pbdr.bottom="single;6;1F4E79;0"`.產出符合綱要之 XML.
-- **L3 — `raw-set` 直接寫 XML**:最後手段, 無綱要保護.用於內部超連結, 複合欄位, 以及具名動詞表達不出的形狀(見 XML 附錄).
+- **L3 — `raw-set` 直接寫 XML**:最後手段, 無綱要保護, 且有下列副作用.用於內部超連結, 複合欄位, 以及具名動詞表達不出的形狀(見 XML 附錄).
+
+**raw-set 之副作用**(1.0.159 實測;只用 `add`/`set`/`remove`/`move`/`add --from`/`batch` 者皆無):
+
+- **對 `/document` 之任一次 raw-set**(連 `--action setattr` 改一個屬性亦同), 存檔後全文之 `w:leftChars` / `w:rightChars` 皆改寫為 `w:startChars` / `w:endChars`(測試檔 5/5 處;經 `batch` 內之 raw-set 亦同).Word 顯示相同, Word 另存時改回 `leftChars` 並補 `w:left`;不支援 `startChars` 之舊檢視器上縮排是否相同, 未實測.對 `/styles` 之 raw-set, 實測 `document.xml` 內之 `leftChars` 未被改寫.
+- **純空白 `<w:t> </w:t>`(無 `xml:space="preserve"`)於 raw-set 解析時變成空 `<w:t />`**, 空白遺失, XPath `w:r[w:t=' ']` 亦比對不到該 run(有 `preserve` 者比對得到).
+- **任何部件之 raw-set**(含 `/styles`)後, 套件內之媒體部件被以較低之壓縮率重壓, 檔案變大而內容不變(最小案例 +10%);只用上列非 raw-set 動詞時, 媒體之壓縮位元組逐位相同.
+
+故只需改少數元素時, 優先用 `add --from`, 點式屬性(L2)或 `set`(見〈於既有文件內插入與改寫〉);比對改動前後之內容時, 以文字與格式比對, 不以 XML 逐字比對.
 
 框線格式為 `樣式;粗細;顏色;間距`:`single;4;FF0000;1`.十六進位顏色**絕不加 `#`**:`FF0000`.配色方案名稱(`accent1..6`, `dark1`/`dark2`, `light1`/`light2`, `hyperlink`)於任何可用十六進位處皆可用——但要跨主題穩定的顏色請用十六進位.
 
@@ -474,8 +507,47 @@ officecli add "$FILE" "/body/p[3]" --type footnote --prop text="See Appendix A f
 2. `officecli view "$FILE" outline`——標題層級(不可 H1 → H3 跳級), 目錄是否存在, 節數.
 3. `officecli view "$FILE" text --max-lines 400`——錯字, 殘留的 `\$`/`\t`/`\n` 字面, 佔位符標記.
 4. `officecli validate "$FILE"`——綱要檢查(交付關卡會對已關閉, 落地之檔案再跑一次).
-5. **視覺檢查——整份文件當成一張聯絡表**(僅限具視覺能力之代理——若你無法解讀影像請跳過此步:步驟 1–4 就是你的上限, 且交付時須註明[未經視覺驗證]).`officecli view "$FILE" screenshot --grid auto -o ./tmp/<案名>/sheet.png`, 先以 `file ./tmp/<案名>/sheet.png` 確認是 PNG(`PNG image data`)再讀取它——內容不是合法圖片時讀進來會讓整個 session 永久壞掉.`--grid auto` 把**每一頁**拼成一張圖(自動決定欄數;`--grid 4` 可強制)——你會*看見*分頁, 空白頁, 標題節奏, 左右失衡的邊界, 以及目錄/封面的落點, 而不只是 DOM.Windows+Word 環境會用真正的 Word 逐頁渲染, 其他環境用 HTML.截圖失敗時退回 `view html`, 並註明跨頁分頁 / 對齊 / 節奏[未經視覺驗證].縮圖只用來**定位**:任何細判(欄位對齊, 行距, 縮排, 深色疊深色, 圖說位置)須以 `screenshot --page N` 對該頁全解析度確認(不加 `--grid`;Windows 上為真正的 Word).[validate 通過]不等於可交付;[看起來像一份真實文件]才是.
+5. **視覺檢查——整份文件當成一張聯絡表**(僅限具視覺能力之代理——若你無法解讀影像請跳過此步:步驟 1–4 就是你的上限, 且交付時須註明[未經視覺驗證]).`officecli view "$FILE" screenshot --grid auto -o ./tmp/<案名>/sheet.png`, 先以 `file ./tmp/<案名>/sheet.png` 確認是 PNG(`PNG image data`)再讀取它——內容不是合法圖片時讀進來會讓整個 session 永久壞掉.`--grid auto` 把**每一頁**拼成一張圖(自動決定欄數;`--grid 4` 可強制)——你會*看見*分頁, 空白頁, 標題節奏, 左右失衡的邊界, 以及目錄/封面的落點, 而不只是 DOM.Windows+Word 環境會用真正的 Word 逐頁渲染, 其他環境用 HTML.截圖失敗時退回 `view html`, 並註明跨頁分頁 / 對齊 / 節奏[未經視覺驗證].縮圖只用來**定位**:任何細判(欄位對齊, 行距, 縮排, 深色疊深色, 圖說位置)須以 `screenshot --page N` 對該頁確認(不加 `--grid`;Windows 上為真正的 Word, 但輸出固定 794 × 1123 約 96 dpi, `--screenshot-width/-height` 不生效, 只供定位與判大差異;裁切, 細線, 小字在此解析度下不易判讀, 改以 Word 另存 PDF 再轉圖, 見〈以 Word 另存 PDF 作細判〉).[validate 通過]不等於可交付;[看起來像一份真實文件]才是.
 6. 若任一項失敗, 修正後**重跑整個循環**——一個修正常會引發另一個問題.
+
+### 以 Word 另存 PDF 作細判(Windows + Word)
+
+`view screenshot` 之原生輸出固定 794 × 1123(`--screenshot-width/-height` 只作用於 `--render html`, 預設 1600 × 1200);`--range <元素路徑>` 走 HTML 渲染, 本機無無頭瀏覽器時回 `No headless browser available … clip_target_not_found`;`view pdf` 在未裝匯出外掛時回 `No exporter plugin found for .docx → .pdf`(後兩者視本機而定).要看清裁切, 固定列高, 細線或小字時, 改由 Word 另存 PDF, 再依 skill[role-operator-pdf] §4.9 以 mupdf 轉圖(scale 1.3～2), 以 `file` 確認是 PNG 後才讀取.
+
+驅動 Word 依 skill[role-coder-for-office-com]:新起實例, 唯讀開啟, 隱藏, `DisplayAlerts = 0`, 只關自己之文件, 實例內有他人之文件或無法判定時不 `Quit`(下列範本已照此寫), 不結束任何非本組新起之 Word 行程;多個 agent 同機時, Word 為全機單一資源, 依該技能 §7 經 Office 測試閘.步驟:
+
+1. 先 `officecli close "$FILE"`(Word 讀檔前須 flush 並釋放常駐).
+2. 以 Windows 內建之 `cscript` 執行下列 JScript(不需 PowerShell 與 pywin32;`new ActiveXObject('Word.Application')` 實測每次另起新實例, 他人實例及其未存文件不受影響;檔名 ASCII):
+
+```js
+// word2pdf.js: cscript //nologo word2pdf.js <in.docx> <out.pdf>   (ASCII only)
+var src = WScript.Arguments(0), out = WScript.Arguments(1)
+var app = null, doc = null, ok = false, msg = ''
+try {
+    app = new ActiveXObject('Word.Application')   // new instance
+    app.Visible = false
+    app.DisplayAlerts = 0
+    doc = app.Documents.Open(src, false, true, false)   // FileName, ConfirmConversions, ReadOnly, AddToRecentFiles
+    doc.ExportAsFixedFormat(out, 17)                    // 17 = wdExportFormatPDF
+    ok = true
+}
+catch (e) { msg = (e && e.message) ? e.message : String(e) }
+finally {
+    try { if (doc) { doc.Close(0) } } catch (e) {}
+    if (app) {
+        var n = -1, pv = -1
+        for (var i = 0; i < 10; i++) {
+            try { n = app.Documents.Count; pv = app.ProtectedViewWindows.Count; break } catch (e) { WScript.Sleep(500) }
+        }
+        if (n === 0 && pv === 0) { try { app.Quit(0) } catch (e) {} }
+        else { WScript.StdErr.WriteLine('note: instance kept, docs=' + n + ' protected=' + pv) }
+    }
+}
+WScript.StdOut.WriteLine(ok ? 'success' : ('error: ' + msg))
+```
+
+3. 成敗只看輸出, 不看離開碼(失敗時離開碼仍為 0):整行為 `success` 才成功, 以 `error:` 起首即失敗;訊息為系統語系(中文系統為 cp950, 須以 big5 解碼);成功後另驗 PDF 存在且大小 > 0.輸入含外部連結等會令 Word 跳出可見對話框之情形見 skill[role-coder-for-office-com] §4.
+4. 匯出後 Word 行程約數秒才退出, 立即以 `tasklist` 查會見到暫時存在之 `WINWORD.EXE`;等數秒後再確認本組新起者已無殘留.
 
 ### 交付關卡(交件前執行——任一項失敗即 REJECT, 不得交付)
 
@@ -499,6 +571,8 @@ FLD=$(officecli query "$FILE" 'field[fieldType=page]' --json | jq '.data.results
 [ "$FLD" -ge 1 ] && echo "Gate 3 OK" || { echo "REJECT Gate 3: no live PAGE field"; exit 1; }
 echo "Delivery Gate PASS"
 ```
+
+**交付檔之 officecli 痕跡.** officecli 存檔時, 檔內無 `docProps/custom.xml` 者會被新增, 寫入自訂屬性 `OfficeCLI.Version` 與 `OfficeCLI.LastModified`(每次存檔更新後者);Word 讀得到(實測 `CustomDocumentProperties` 列出此二項).既有檔之 `docProps/core.xml` 與 `app.xml` 實測於 `set` 後未變.交付他人之檔不宜留此二項者, officecli 無專用移除指令:`close` 後以 zip 工具刪去 `docProps/custom.xml`, 並同步刪去 `_rels/.rels` 與 `[Content_Types].xml` 內指向它之項(實測移除後 Word 正常開啟, 自訂屬性數為 0);其後不可再以 officecli 存檔(再存即重新寫入).檔案明顯變大者, 見〈raw-set 逃生門〉之媒體重壓(內容未變).
 
 ### 欄位 / 快取值抽查
 
@@ -547,13 +621,18 @@ echo "Delivery Gate PASS"
 | 需要新章節另起一頁 | 在標題用 `pageBreakBefore=true`;明確 `pagebreak` 僅為替代方案, **絕不併用** |
 | 一個儲存格內要多個項目符號段落 | `c1="a\nb"` 只產生 `<w:br/>` 換行(同一段落);要獨立項目符號段落請用食譜 (e) |
 | 點式屬性夠用卻去動 `raw-set` | 優先用 L2 點式屬性, 而非 L3 raw-set |
+| 要與某段同格式卻手寫 raw-set 重造段落 | 用 `add --from` 複製後再改;raw-set 會整份重寫(見〈於既有文件內插入與改寫〉, 〈raw-set 逃生門〉) |
+| 複製含圖之段落後, 對複本 `set …/r[k] --prop src=` 換圖, 原段之圖失效 | 先 `remove` 複本之圖 run, 再 `add --type picture` |
+| 於固定列高(`get` 回 `height.rule: exact`)之表格列內加圖或段落, 新內容被裁而 `validate` 無錯 | 加內容前先 `get` 該列, 以 `set --prop height=<原值>` 改為最小列高 |
+| `set --prop text=` 使 run 頭尾為空白或整個為空白, Word 不顯示該空白 | 令空白位於 run 內部(與鄰字併為同一 run), 或以 `add --type run` 新建 |
+| 未先 `open` 即 `view`/`get`/`set`, 之後以其他程式刪除或改名回 `EBUSY`/`EPERM` | 先 `officecli close "$FILE"`(見〈常駐模式與 flush〉) |
 | 下一段繼承了前一段之 Heading 樣式 | 在後續段落明確設 `--prop style=Normal` |
 | 修改正在 Word 內開啟之檔案 | 先在 Word 內關閉該檔 |
 | echo 進 batch 時 `$`/`'` 爆掉 | 用單引號界定符之 heredoc:`cat <<'EOF' \| officecli batch …` |
 
 ## raw-set XML 附錄(L3 模式)
 
-`raw-set` 注入字面 OOXML——無綱要保護.`<w:pPr>` 內之元素順序:`pStyle`, `numPr`, `spacing`, `ind`, `jc`, `rPr`(最後).彎引號用實體(`&#x2018;`/`&#x2019;`/`&#x201C;`/`&#x201D;`).任何前後帶空白之 `<w:t>` 要加 `xml:space="preserve"`.RSID 為 8 位十六進位.追蹤修訂/註解之作者除非使用者另行指定, 一律用 "Claude".
+`raw-set` 注入字面 OOXML——無綱要保護.`<w:pPr>` 內之元素順序:`pStyle`, `numPr`, `spacing`, `ind`, `jc`, `rPr`(最後).彎引號用實體(`&#x2018;`/`&#x2019;`/`&#x201C;`/`&#x201D;`).任何前後帶空白之 `<w:t>` 要加 `xml:space="preserve"`(無 `preserve` 之純空白 `<w:t>` 於 raw-set 解析時即被丟棄;高階 `set --prop text=` 重用既有 `<w:t>` 時不會補上, 見〈於既有文件內插入與改寫〉).RSID 為 8 位十六進位.追蹤修訂/註解之作者除非使用者另行指定, 一律用 "Claude".
 
 **追蹤修訂之插入 / 刪除**——優先用 run 上之高階 `--prop revision.type=ins|del`;raw-set 僅用於具名路徑表達不出的情況(如拒絕/還原他人之修訂, 見下).要替換整個 `<w:r>…</w:r>`, **絕不可**把標籤塞進 run 內部;把原本的 `<w:rPr>` 複製進兩者以保留格式.`<w:del>` 內須用 `<w:delText>`(指令則用 `<w:delInstrText>`):
 
@@ -623,7 +702,7 @@ officecli set "$FILE" ...   # 無檔案 I/O 負擔
 officecli close "$FILE"     # 存檔並釋放
 ```
 
-以 `OFFICECLI_NO_AUTO_RESIDENT=1` 停用自動啟動.**只在非 officecli 邊界才 flush**——officecli 自己的讀取(`get`/`query`/`view`/`dump`)一律看得到你的編輯, 故只有在 python-docx, Word, 渲染器或交付要讀該檔前才需 `save`/`close`.閒置階段會於數秒內自動 flush;`OFFICECLI_RESIDENT_FLUSH=each` 可強制每次變更都 flush.
+以 `OFFICECLI_NO_AUTO_RESIDENT=1` 停用自動啟動(實測只讀之 `get` 不再起常駐).**未先 `open` 而直接 `view`/`get`/`set` 時, 仍會自動起常駐程序並持有該檔**(實測約 70 秒閒置後才結束):其間以其他程式刪除或改名回 `EBUSY`(或 `EPERM`), 編輯過後之覆寫亦被拒;要以其他程式刪除, 覆寫, 複製回同一路徑前, 先 `officecli close "$FILE"`, 並以 `tasklist` 確認 `officecli.exe` 已消失.**只在非 officecli 邊界才 flush**——officecli 自己的讀取(`get`/`query`/`view`/`dump`)一律看得到你的編輯, 故只有在 python-docx, Word, 渲染器或交付要讀該檔前才需 `save`/`close`.閒置階段會於數秒內自動 flush;`OFFICECLI_RESIDENT_FLUSH=each` 可強制每次變更都 flush.
 
 ### 穩定 ID 定址
 
@@ -635,6 +714,8 @@ officecli close "$FILE"     # 存檔並釋放
 ```
 
 run, 表格列與儲存格沒有穩定 ID, 退回位置索引.
+
+**他人產製之文件, `w14:paraId` 不一定唯一.** 實測:兩段同 ID 時, `get`/`set`/`remove` 取文件順序之**第一個**, 且 officecli 於首次寫入時把後出現之重複者改派新 ID.以 paraId 定位前先確認唯一:`officecli view "$FILE" text | grep -o '@paraId=[0-9A-Fa-f]*' | sort | uniq -d` 須無輸出(`view text` 之路徑含 paraId);有重複者, 該段改用位置索引定位.
 
 ### view 模式——完整表
 
@@ -648,7 +729,7 @@ run, 表格列與儲存格沒有穩定 ID, 退回位置索引.
 | `html` | 靜態 HTML 快照——與 `watch` 同一渲染器, 免起服務 | `--browser`, `--page N` |
 | `screenshot` / `pdf` / `forms` | 無頭瀏覽器 PNG / 匯出外掛 PDF / 格式處理外掛之表單欄位 JSON | `-o`, `--screenshot-width/-height`, `--grid N` |
 
-一次性快照(CI 產物, 封存, 差異比對)用 `view html`;需要即時刷新或瀏覽器點選時用 `watch`.
+一次性快照(CI 產物, 封存, 差異比對)用 `view html`;需要即時刷新或瀏覽器點選時用 `watch`.`screenshot` 於 Windows + Word 預設走 Word 原生渲染, 輸出固定 794 × 1123, `--screenshot-width/-height` 只作用於 `--render html`;`pdf` 需匯出外掛, 未裝時失敗.細判之替代作法見〈以 Word 另存 PDF 作細判〉.
 
 ### watch 與互動選取
 
@@ -700,7 +781,7 @@ officecli move "$FILE" <path> [--to <parent>] [--index N] [--after <path>] [--be
 officecli swap "$FILE" <path1> <path2>
 ```
 
-使用 `--after`/`--before` 時可省略 `--to`——容器由錨點推導.
+使用 `--after`/`--before` 時可省略 `--to`——容器由錨點推導.複製段落(`--from "/body/p[@paraId=…]" --after …`)之用法, 以及含圖之段落複本與原段共用影像部件之限制, 見〈於既有文件內插入與改寫〉.
 
 ### 文字錨定插入(`--after find:X` / `--before find:X`)
 
