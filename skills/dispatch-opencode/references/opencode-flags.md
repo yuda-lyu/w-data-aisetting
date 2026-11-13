@@ -145,6 +145,10 @@ config: { permission: { edit: 'deny', bash: 'ask' } }   // 1.0.34 起之唯讀�
 
 `providers.mjs` 的每個 opencode 條目都帶這把唯讀鎖（套件內以 `OC_READONLY` 常數單一來源管理）。**`bash` 刻意用 `ask` 而非 `deny`**：免費層閘門以「請求的工具清單是否含 bash」為指紋之一，`deny` 會把 bash 移出清單而被判定非 opencode 客戶端（403 `FreeTierError`）；`ask` 則工具仍在，而 `opencode run` 為非互動故 `ask` 一律自動拒絕（stderr 出現 `The user rejected permission`），仍是機械鎖。**前提是呼叫端不可加 `--auto`**——那會把 `ask` 放行。
 
+**`permission` 可用之鍵**（2026-11-13 自 opencode 1.19.5 執行檔內之設定綱要查得）：`read`、`edit`、`glob`、`grep`、`list`、`bash`、`task`、`external_directory`、`todowrite`、`question`、`webfetch`、`websearch`、`lsp`、`doom_loop`、`skill`，另接受任意字串鍵；值為 `allow`／`ask`／`deny` 或「樣式 → 動作」之物件，字串值展開為 `{ '*': <值> }`。使用者規則接在代理預設規則之後，比對取最後一筆符合者。`build` 代理預設為 `ask` 者：`external_directory`、`doom_loop`、`read` 之 `*.env` 與 `*.env.*`。
+
+**`ask` 被拒會結束工作階段，`deny` 不會**：`ask` 在 `opencode run` 被自動拒絕後，整個工作階段於該步驟結束後停止（離開碼 0）；`deny` 只是該次工具呼叫失敗。`config.experimental.continue_loop_on_deny: true`（`experimental` 與 `permission` 同層、不在其下；布林；綱要說明 `Continue the agent loop when a tool call is denied`）可讓被拒只把錯誤交回模型、工作階段續跑。行為、判別法、代價與 `external_directory` 之陷阱見 SKILL.md〈`ask` 被自動拒絕＝整個工作階段結束〉。
+
 被鎖擋下時的回覆長相因模型而異：2026-09-08 以舊鎖（`edit`／`write`／`bash` 全 `deny`）實測，讀取照常、建檔失敗且 `out.txt` 未建立，但**離開碼仍為 0、stdout 非空**，轉錄裡甚至出現 `✓ Create out.txt file`（建檔被轉交子代理，子代理回報成功）；套件 2026-10-18 對 beam-free、deepseek-v4.1-flash-free 的寫檔金絲雀則是**回空字串而 `ok: true`**。派需要寫入的任務時要把對應項目放開，一律以產物是否落地判成敗，並掛 `validate: 'nonempty'` 讓空回覆判失敗。
 
 型錄會動態變更。應使用 `opencode models <provider> --refresh` 與 `--verbose` 查核，不可猜測模型 ID 或 variant。

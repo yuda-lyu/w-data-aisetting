@@ -1,6 +1,6 @@
 ---
 name: dispatch-opencode
-description: 當任務需要委派給 OpenCode，或需要使用 OpenCode 支援的模型供應商時，透過 w-dispatch-ai 以非互動子程序方式執行 OpenCode CLI。內含依任務性質（審計／複審／調查／寫測試）決定權限下限的判準，以及用 opencode agent list 實查有效權限的作法。派工逾時：正式派工一律 4 小時，派工腳本須以 detached 行程執行並分段等待——掛在工具呼叫上（前景最長 10 分鐘、背景最長 2 小時）必被中途終止。
+description: 當任務需要委派給 OpenCode，或需要使用 OpenCode 支援的模型供應商時，透過 w-dispatch-ai 以非互動子程序方式執行 OpenCode CLI。內含依任務性質（審計／複審／調查／寫測試）決定權限下限的判準，以及用 opencode agent list 實查有效權限的作法；另載 ask 權限被自動拒絕後整個工作階段即結束（離開碼仍為 0）之判別法，與 continue_loop_on_deny、external_directory 之陷阱。派工逾時：正式派工一律 4 小時，派工腳本須以 detached 行程執行並分段等待——掛在工具呼叫上（前景最長 10 分鐘、背景最長 2 小時）必被中途終止。
 ---
 
 # dispatch-opencode
@@ -379,7 +379,7 @@ external_directory  | allow | <過去互動時核准過的目錄，逐條累積>
 由此得出三件事：
 
 - **專案目錄內的讀寫執行，在 `build` 代理下不需要 `--auto`**。2026-09-08 實測：`opencode run --agent build`（未加 `--auto`）讀到檔並成功建立檔案，離開碼 0。
-- **跨出專案目錄的存取屬 `external_directory`，預設是 `ask`**；無介面模式沒有人可以回答，就會被擋住。所以派工的關鍵不是加不加 `--auto`，而是 `--dir`／`cwd` 是否涵蓋任務要讀寫的**全部**路徑——包含報告與測試產物的落點。
+- **跨出專案目錄的存取屬 `external_directory`，預設是 `ask`**；無介面模式沒有人可以回答，就會被擋住，**而且被擋住之後整個工作階段會結束、離開碼仍是 0**（見〈`ask` 被自動拒絕＝整個工作階段結束〉）。所以派工的關鍵不是加不加 `--auto`，而是 `--dir`／`cwd` 是否涵蓋任務要讀寫的**全部**路徑——包含報告與測試產物的落點。「專案目錄」之邊界是 opencode 的專案根，`cwd` 落在 git 倉庫內時是倉庫根而不是 `cwd` 本身（見該節〈專案邊界〉）。
 - **這些規則含本機累積的核准紀錄，會隨機器不同**。同一段派工在別台機器上可能被擋，因此判斷權限一律以 `opencode agent list` 實查，不要用代理名稱或旗標推測（本機查得 `plan` 代理同樣是 `*: allow`，所以「換 plan 代理就等於唯讀」並不成立）。
 
 需要跨出專案目錄時，優先把目錄範圍調對（改 `cwd`／`--dir`，或把待讀資料複製進來）。只有在使用者已授權無人值守修改、且執行環境可信時，才加 `--auto`；依 help 原文它會自動核准「未被明確拒絕」的權限，也就是連上表的 `ask` 檔位一併放行。
@@ -392,7 +392,7 @@ external_directory  | allow | <過去互動時核准過的目錄，逐條累積>
 config: { permission: { edit: 'deny', bash: 'ask' } }   // 1.0.34 起之唯讀鎖
 ```
 
-**`bash` 是 `ask` 不是 `deny`，這是刻意的**：免費層閘門以「請求的工具清單是否含 bash」當指紋之一，`deny` 會把 bash 自清單移除而被判定非 opencode 客戶端，直接回 403 `FreeTierError`（見「Console（原 Zen）免費層閘門」）；`ask` 則工具仍在清單內。而 `opencode run` 是非互動的，`ask` 一律自動拒絕（stderr 會出現 `The user rejected permission`），套件金絲雀實測寫檔與 shell 建檔皆未落地——**所以 `ask` 在這裡仍是機械鎖，不是「可能被放行」**。
+**`bash` 是 `ask` 不是 `deny`，這是刻意的**：免費層閘門以「請求的工具清單是否含 bash」當指紋之一，`deny` 會把 bash 自清單移除而被判定非 opencode 客戶端，直接回 403 `FreeTierError`（見「Console（原 Zen）免費層閘門」）；`ask` 則工具仍在清單內。而 `opencode run` 是非互動的，`ask` 一律自動拒絕（stderr 會出現 `The user rejected permission`），套件金絲雀實測寫檔與 shell 建檔皆未落地——**所以 `ask` 在這裡仍是機械鎖，不是「可能被放行」**；但被拒之後整個工作階段即結束（離開碼 0），回覆因而常是空字串，見〈`ask` 被自動拒絕＝整個工作階段結束〉。
 
 **但這把鎖有一個前提：呼叫端不可另傳 `--auto`**。`--auto` 會自動核准未被明確拒絕的權限，等於把 `ask` 整個放行，鎖就沒了。
 
@@ -412,6 +412,65 @@ config: { permission: { edit: 'deny', bash: 'ask' } }   // 1.0.34 起之唯讀�
 被鎖擋下時的回覆長相**因模型而異**：上表是模型照實回 `WRITE=FAILED`；套件 2026-10-18 對 `beam-free`、`deepseek-v4.1-flash-free` 的寫檔金絲雀則是**回空字串而 `ok: true`**（write 工具不在清單、bash 自動拒絕）。所以除了驗產物，`validate: 'nonempty'` 也要一直掛著，至少讓空回覆判為失敗、在遞補鏈中換家。
 
 第二列的轉錄裡甚至出現 `✓ Create out.txt file`（它把建檔轉交子代理，子代理回報成功）——**畫面上打勾、檔案不存在、離開碼 0**。判成敗只能看產物是否落地，不能看有沒有回話、更不能看轉錄的勾。
+
+### `ask` 被自動拒絕＝整個工作階段結束，離開碼仍是 0（`continue_loop_on_deny`）
+
+前面兩節（〈有效權限來自代理的規則〉〈收斂權限用 `config.permission`〉）只寫「`ask` 在無介面模式被自動拒絕」，沒寫被拒之後怎樣。**實測（2026-11-13，opencode 1.19.5、轉接器 1.0.90、匿名取用 `opencode/deepseek-v4.1-flash-free`、`--variant low`）：被拒不是「該次工具呼叫失敗、模型收到錯誤可改正續做」，而是該步驟結束後整個工作階段結束**——離開碼 0，模型沒有下一步、也沒有機會回最後一句話，轉接器多半仍回 `ok: true`（是否被 `validate` 擋下見判別法第 4 點）。任務本身需要之權限已給足（`edit`／`write`／`bash` 皆 allow），被拒的是模型一次越界之呼叫（使用端回報之實例：模型把絕對路徑中之專案夾名打錯一字，落到專案外；Gitea #141），所以照〈權限不足是 exit 0 的假成功〉那一節補權限修不好（越界之路徑若確屬任務所需，見判別法第 5 點）；症狀與〈權限不足是 exit 0 的假成功〉同型，成因不同。**典型錯誤形狀**：可寫檔之長任務數分鐘內就「完成」，交付檔缺，事件流最後一步含一筆 `rejected permission` 之工具呼叫、其後沒有下一步。
+
+**機制**（讀 1.19.5 執行檔內之程式字串，非官方文件，升版後可能變動）：
+
+- `opencode run` 未加 `--auto` 時，收到權限詢問即回覆拒絕，stderr 印 `permission requested: <類別> (<樣式>); auto-rejecting`；工具端得到 `PermissionRejectedError`，訊息 `The user rejected permission to use this specific tool call.`。
+- 工作階段處理器每步以 `shouldBreak = config.experimental?.continue_loop_on_deny !== true` 起算；工具錯誤為 `PermissionRejectedError`（或 `QuestionRejectedError`）時設 `blocked = shouldBreak`，步驟結束時 `blocked` 為真即停止、不再進下一步。
+- 規則明訂 `deny` 者拋的是另一種錯 `PermissionDeniedError`（訊息 `The user has specified a rule which prevents you from using this specific tool call…`），**不設 `blocked`**，只是該次呼叫失敗、模型續跑。所以「`ask` 被拒」與「`deny`」差一個關鍵：前者結束工作階段，後者不會。
+- `build` 代理預設為 `ask` 者（以 `opencode agent list` 實查）：`external_directory`（專案外路徑）、`doom_loop`、`read` 之 `*.env` 與 `*.env.*`（`*.env.example` 為 allow）。實測涵蓋 `external_directory` 與 `.env` 之 `read`；`doom_loop` 未實測。
+
+**最小重現**：專案夾與專案外夾為同層兄弟夾，專案夾自行 `git init`（原因見〈專案邊界〉）；各案皆用同一段提示詞（`<…>` 換成各夾之完整絕對路徑）：
+
+```text
+請依序做兩件事，兩件事各自獨立：即使第一件失敗，也必須接著做第二件。
+步驟1：用 write 工具，把文字 OUTSIDE 寫入檔案 <專案外夾>/outside.txt（必須用此完整絕對路徑）。
+步驟2：用 write 工具，把文字 INSIDE 寫入檔案 <專案夾>/inside.txt（必須用此完整絕對路徑）。
+最後只回一行，格式：STEP1=<OK 或 FAILED> STEP2=<OK 或 FAILED>
+```
+
+各 `config` 之結果：
+
+| `config` | 次數 | 專案內之檔 | 專案外之檔 | 工作階段 |
+|---|---:|---|---|---|
+| 不給（預設） | 2 | 1 次寫出、1 次未寫出 | 未寫出 | 被拒之步驟後結束，無最終文字 |
+| `permission: { edit:'allow', write:'allow', bash:'allow' }` | 4 | 3 次寫出、1 次未寫出 | 未寫出 | 同上 |
+| 第二列再加 `permission.external_directory: 'deny'` | 1 | 寫出 | 未寫出 | 續跑，回 `STEP1=FAILED STEP2=OK` |
+| 第二列再加 `permission.external_directory: 'allow'` | 1 | 寫出 | **寫出** | 續跑，回 `STEP1=OK STEP2=OK` |
+| 第二列再加 `experimental: { continue_loop_on_deny: true }` | 3 | 寫出 | 未寫出 | 續跑，回 `STEP1=FAILED STEP2=OK` |
+
+表中次數皆為 `--format json` 之工作階段（預設輸出格式另測 1 次，見判別法第 3 點）。專案內之檔「有時寫出」取決於模型把兩個 write 放在同一步驟並行發出，還是分步發出：實測事件流中，未寫出者在 `step_finish` 之前只有被拒之那一筆 `tool_use`；寫出者在同一對 `step_start`／`step_finish` 之間有兩筆 `tool_use`（被拒者為 `error`、另一筆為 `completed`，**被拒者不一定是最後一筆 `tool_use`**）。同一步驟內其餘呼叫照常完成，只是之後不再有下一步。預設與第二列之事件流皆為 `step_start` → `tool_use`（write，`state.status: 'error'`，`state.error: 'The user rejected permission to use this specific tool call.'`）→〔`tool_use`（write，`completed`）〕→ `step_finish`（`part.reason: 'tool-calls'`），其後無任何事件。
+
+**判別法**（派工回 `ok: true` 而產物缺、或長任務數分鐘內就「完成」時）：
+
+1. 事件流（`--format json`。轉接器 `detectTruncation: true` 且呼叫端未自給 `--format` 時，轉接器自行加上 `--format json`，並把回給呼叫端之 stdout 還原成一般文字；原始事件流要在呼叫時以 `onStdout` 落檔才留得住）：整個事件流之最後一筆是 `step_finish`，其 `part.reason` 為 `tool-calls`；該最後一步（最後一個 `step_start` 之後）內有 `tool_use`，其 `part.state.status` 為 `error` 且 `part.state.error` 含 `rejected permission`（同步驟並行之其他呼叫可能為 `completed`，故被拒者不一定是最後一筆 `tool_use`）；沒有 `reason: 'stop'` 之收尾步驟、沒有最終 `text`。實測 8 個被拒結束之 `--format json` 工作階段（預設 2、`allow` 三值 4、`.env` 之 `read` 1、唯讀鎖之 `bash` 1）皆如此。被拒者若屬 `deny` 規則，錯誤改為 `The user has specified a rule…`，工作階段照常往下走，不屬此類。
+2. 收尾之 `step_finish.reason`：正常結束為 `stop`，被拒結束為 `tool-calls`（事件流寫 `tool-calls`，轉接器將其正規化為 `tool_calls`）。轉接器 `detectTruncation: true` 時此值落在成功結果之 `finish`（實測：被拒結束 `finish: 'tool_calls'`、續跑成功者 `finish: 'stop'`，各 1 次；`tool_calls` 之其他成因未實測）。`finish` 只在成功結果（`ok: true`）上才有意義：未開 `detectTruncation` 時為 `unknown`（實測），被 `validate` 判失敗之結果無此欄（實測）；自給 `--format json` 而 `detectTruncation: true` 者依原始碼亦帶 `finish`，未測。
+3. 預設輸出格式（不帶 `--format json`）：stdout 為空（模型沒機會回話），stderr 末段依序為 `permission requested: <類別> (<樣式>); auto-rejecting`、`✗ <工具> <路徑> failed`、`Error: The user rejected permission to use this specific tool call.`（實測 1 次，未帶 `--print-logs`）。帶 `--format json` 時 stderr 只剩第一行（實測皆帶 `--print-logs --log-level ERROR`；未帶時是否仍印未測），錯誤本文在事件流。
+4. **`validate: 'nonempty'` 只擋得住其中一種**：預設格式或轉接器還原輸出時，被拒結束之 stdout 為空，判 `ok: false`、`errorType: 'validation'`、離開碼 0（實測 2 次：預設格式 1、轉接器還原輸出 1）。其餘一律放行：自給 `--format json` 時 stdout 是原始事件流、恆非空（實測）；被拒前已有文字輸出者也會放行（使用端回報之真實派工所述，本次未重現）。所以可寫檔之長派工收回後，除驗產物外，一律照第 1、2 點檢查事件流或 `finish`。
+5. **判別為被拒結束之後**：被拒由規則決定（同一規則下，模型再發出同樣之呼叫必被拒），不是暫時性錯誤。先看被拒之 `tool_use` 之 `part.state.input`：屬模型打錯路徑，補 `continue_loop_on_deny` 後重派；屬任務確實需要專案外之路徑，改 `cwd`／`--dir` 涵蓋它，或以物件形 `external_directory` 放行該夾（見下）後重派。規則不變而原樣重派，模型只要再發出同樣之呼叫就會再結束（重派本身未測）。
+
+**解法與代價**：可寫檔之派工於 `config` 加 `experimental: { continue_loop_on_deny: true }`（鍵在 `experimental` 之下，不在 `permission` 之下；設定綱要之說明為 `Continue the agent loop when a tool call is denied`，自執行檔內之設定綱要查得）。被拒只把錯誤交回模型，權限規則不變（專案外仍寫不出）；實測 3/3 續跑並回 `STEP1=FAILED STEP2=OK`，`.env` 之 `read` 被拒亦然（預設 1/1 結束、帶此鍵 1/1 續跑）。
+
+- **屬 `experimental`，可能隨 opencode 版本改名或移除**；鍵若失效，推論為被忽略而不報錯（設定解碼設為忽略多餘屬性，讀碼所得，未測），行為回到「被拒即結束」。升版後以上表之最小重現重驗。
+- 模型可能反覆撞同一個被拒之呼叫，直到逾時封頂；本次未見迴圈（唯讀鎖加此鍵之 1 次實測，模型被拒一次後即改口回 FAILED），不保證。
+- **唯讀條目（`{ edit:'deny', bash:'ask' }`）不建議加此鍵**：`edit: 'deny'` 本來就不結束工作階段，結束的是 `bash` 之 `ask`。實測（各 1 次）模型改用 bash 寫檔：不加此鍵時 bash 被拒後結束、回覆為空（事件流無 `text`；預設輸出格式下 `validate: 'nonempty'` 因而判失敗，見判別法第 4 點，遞補鏈（見〈逾時與等待〉）換家，即〈權限不足〉所述空字串之成因之一）；加了則模型續跑並回 `STEP1=FAILED STEP2=FAILED`（非空，`nonempty` 放行、遞補鏈不換家）——加了會讓被鎖擋下之回覆變成「看似成功」。唯讀條目走預設輸出格式，由 `nonempty` 兜底；自給 `--format json` 時 `nonempty` 恆放行，改以判別法第 1、2 點檢查。
+- 與物件形 `external_directory` 並用：實測 1 次（放行一個專案外夾、另一個專案外夾未列入、再加一個專案內之檔，三個 write 同一步驟發出），放行夾寫出、未列入夾被拒但工作階段續跑、專案內寫出，最後回 `S1=OK S2=FAILED S3=OK`。
+- 版本不認此鍵或不想用時：提示詞中全部路徑以絕對路徑給定並請模型逐字照抄，不讓它自行拼寫；收回後照判別法檢查。
+
+**`external_directory` 之預設與陷阱**（規則順序以 `opencode agent list` 在注入各 `config` 後實查；清單含本機累積之技能夾，隨機器不同）：
+
+- 預設為 `*: ask`，其後為若干 `allow`：opencode 工具輸出截斷檔夾（`~/.local/share/opencode/tool-output/*`）、`%TEMP%\opencode\*`、本機發現之各技能夾。
+- 使用者之規則接在預設之後，比對取**最後一筆**符合者（`findLast`），不看樣式之具體程度；字串形 `'deny'`／`'allow'` 展開為 `{ '*': 'deny' }`／`{ '*': 'allow' }`（實查 `'deny'` 與物件形之生效清單相同）。
+- **不要以 `'deny'` 代替 `continue_loop_on_deny`**：①`deny *` 排在前述各 `allow` 之後，技能夾與 `%TEMP%\opencode\*` 之放行因而被蓋過（由規則順序推得，兩處之實際讀取未測）；截斷檔夾之 `allow` 在使用者規則之後再出現一次（`opencode agent list` 注入 `'deny'` 後，生效清單之最末兩筆為 `external_directory deny *` 與 `external_directory allow <截斷檔夾>/*`；第二次出現之來源未查明，是實查清單所見），故**不被蓋過**（實測：bash 輸出 3000 行被截斷存檔後，read 該存檔成功；使用端回報推測之「截斷檔讀不到」未重現）。②`deny` 之錯誤訊息把整份相關規則塞回對話（實測 87 條、13.6 KB，含本機技能夾之絕對路徑），每被拒一次付一次，路徑清單並送往模型供應商。③專案外路徑一律失敗，連任務合法需要之專案外輸出夾也不例外（由規則順序推得，未測）；要放行得另補物件形規則。
+- **不要以 `'allow'` 代替**：專案外之任意寫入全部放行（實測專案外之檔寫出）；模型打錯夾名之絕對路徑時，檔案會靜默落在錯誤位置，是用「成品落錯地方」換「工作階段不結束」。
+- 真要放行特定專案外之輸出夾：物件形 `external_directory: { '<夾>/*': 'allow' }`，正斜線與反斜線樣式實測各 1 次皆寫出；其餘專案外路徑仍落在預設 `ask`（實測 1 次：另一個未列入之專案外夾之 write 被拒）。
+- **專案邊界**：判定「專案外」之基準是 opencode 的專案根，`cwd` 落在 git 倉庫內時是倉庫根，不是 `cwd` 本身。實測 1 次：`cwd` 為某倉庫內之子夾，同倉庫之兄弟子夾以絕對路徑寫入未被詢問而寫出。所以最小重現之專案夾須自行 `git init`；實際派工之「專案外」是倉庫之外（無 git 時為 `cwd` 之外，讀碼推論，未測）。
+
+**轉接器可否代為判別**（只記錄，未改套件）：1.0.90 之 `detectTruncation: true` 已把最後一步之終止原因放進成功結果之 `finish`，被拒結束者為 `tool_calls`，呼叫端可直接以 `finish !== 'stop'` 起疑，不必自己解析事件流；是否另設專用之 `errorType`、或提供 `continue_loop_on_deny` 之選項，屬自有套件線，另依全域設定 §5.2 通報。
 
 ### 派工前的能力探測
 
@@ -677,6 +736,8 @@ opencode run --help
 ```
 
 `w-dispatch-ai` 裝在技能根、由使用者統籌更新（見「套件裝在哪」），**不要在專案裡 `npm install w-dispatch-ai`**。
+
+2026-11-13 對照（Gitea #141）：本機 opencode **1.19.5**，技能根實裝 `w-dispatch-ai` **1.0.90**（讀原始碼庫 1.0.92 之 `dispatchOpencode.mjs`、`parseOpencodeEvents.mjs`、`failureDiag.mjs` 核對 `finish` 之來源）。只重查「權限被自動拒絕」之行為：實呼免費模型 `deepseek-v4.1-flash-free` 共 21 次（各設定之最小重現與補充探測，結果見〈`ask` 被自動拒絕＝整個工作階段結束〉），另以 `opencode agent list` 注入各 `config` 查生效規則、自執行檔內之程式字串核對 `continue_loop_on_deny` 之鍵名與位置；其餘段落未重驗。
 
 2026-11-07 對照：以 `w-dispatch-ai` **1.0.80** 之原始碼與 README 行為變更紀錄第 66～68 條核對（讀 `src/providers.mjs` 檔頭與 `ocgo:` 條目、`src/filterOpencodeFree.mjs`、`src/subQuotaGate.mjs`、`src/goQuotaGate.mjs`、`src/dispatchAiFallback.mjs` 檔頭；條目數以唯讀腳本對 `providers` 實際計數；**未重跑 opencode、未實際呼叫模型**，條目註解所載之金絲雀與逐模型額度的實測皆為套件或提出端於 2026-11-07 的紀錄，本技能未重驗）：
 
