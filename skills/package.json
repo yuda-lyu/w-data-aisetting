@@ -7,13 +7,13 @@
     "mupdf": "1.28.1",
     "opencc-js": "1.4.2",
     "unpdf": "1.9.1",
-    "w-dispatch-ai": "^1.0.90",
-    "w-dwdata-hub": "^1.0.36",
-    "w-dwload-dlp": "^1.0.67",
-    "w-fetch-web": "^1.0.42",
-    "w-orm-lmdb": "^1.0.62",
-    "w-zip": "^1.0.63",
-    "wsemi": "^1.9.58"
+    "w-dispatch-ai": "^1.0.91",
+    "w-dwdata-hub": "^1.0.37",
+    "w-dwload-dlp": "^1.0.68",
+    "w-fetch-web": "^1.0.43",
+    "w-orm-lmdb": "^1.0.63",
+    "w-zip": "^1.0.64",
+    "wsemi": "^1.9.59"
   },
   "allowScripts": {
     "@askjo/camofox-browser": true,
