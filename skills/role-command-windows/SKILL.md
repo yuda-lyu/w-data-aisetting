@@ -1,8 +1,8 @@
 ---
 name: role-command-windows
 description: |
-  Windows 上執行指令、組路徑、管理程序與大量檔案之規範(由全域設定抽出):Windows PowerShell 5.1 之已知雷區、.bat 含中文一律 Big5;路徑與檔案 I/O(cwd-relative 與 fileURLToPath 兩種出檔場景、禁用 URL.pathname、git-bash 之 /c/ 路徑不可交給原生程式或 node、寫入前印絕對路徑驗收);Git Bash 下 taskkill 寫法與取 PID(wmic 已移除);刪除／殺程序／重啟後必回驗(只殺到在監聽者、memory-mapped 檔之舊映射、健康檢查分不出新舊實例);背景 Chrome(playwright／puppeteer)孤兒程序之三層回收;大量檔案以 robocopy 鏡像空目錄刪除、目錄連結先拆再刪(robocopy 會穿過 junction)、robocopy 與 Remove-Item 分兩道指令、/E 與 /MIR 之分、離開碼判讀表;背景行程再起之子行程一律 windowsHide.
-  觸發條件:Windows 上殺程序或取 PID;刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄(含清 ./tmp)、以 robocopy 部署或覆蓋目錄、判讀 Windows 指令之離開碼;以 node 調用 chrome/chromium 背景繪圖或截圖且涉及常駐服務、排程重啟或清殘留;撰寫或修改會以背景方式(detached、nohup、排程、常駐服務)執行且會再起子行程之腳本;寫 .bat;只有 Windows PowerShell 5.1 之環境;組裝路徑而工作目錄含空格、中文或須在 git-bash 與原生程式之間傳遞——必先調用本技能,整篇入 context 逐項比對後才動工.
+  Windows 上執行指令、組路徑、管理程序與大量檔案之規範(由全域設定抽出):Windows PowerShell 5.1 之已知雷區、.bat 含中文一律 Big5;路徑與檔案 I/O(cwd-relative 與 fileURLToPath 兩種出檔場景、禁用 URL.pathname、git-bash 之 /c/ 路徑不可交給原生程式或 node、寫入前印絕對路徑驗收);Git Bash 下 taskkill 寫法與取 PID(wmic 已移除);刪除／殺程序／重啟後必回驗(只殺到在監聽者、memory-mapped 檔之舊映射、健康檢查分不出新舊實例);背景 Chrome(playwright／puppeteer)孤兒程序之三層回收;大量檔案以 robocopy 鏡像空目錄刪除、目錄連結先拆再刪(robocopy 會穿過 junction)、robocopy 與 Remove-Item 分兩道指令、/E 與 /MIR 之分、離開碼判讀表;背景行程再起之子行程一律 windowsHide;量目錄大小用 robocopy 列舉模式 /L 取代 Git Bash 之 du(依列序解析摘要表、失敗欄、MSYS_NO_PATHCONV、/XJ、與 du 數字之差異).
+  觸發條件:Windows 上殺程序或取 PID;量目錄之總大小或檔案數(含數萬檔以上之紀錄、快取、使用者目錄,或 du 逾時);刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄(含清 ./tmp)、以 robocopy 部署或覆蓋目錄、判讀 Windows 指令之離開碼;以 node 調用 chrome/chromium 背景繪圖或截圖且涉及常駐服務、排程重啟或清殘留;撰寫或修改會以背景方式(detached、nohup、排程、常駐服務)執行且會再起子行程之腳本;寫 .bat;只有 Windows PowerShell 5.1 之環境;組裝路徑而工作目錄含空格、中文或須在 git-bash 與原生程式之間傳遞——必先調用本技能,整篇入 context 逐項比對後才動工.
 ---
 
 # role-command-windows — Windows 之指令、路徑、程序與大量檔案操作
@@ -20,6 +20,7 @@ description: |
 | node 調用 chrome 背景繪圖或截圖之常駐服務、清 chrome 殘留 | §5 |
 | 大量刪除或複製、含目錄連結之目錄(含清 `./tmp`)、robocopy 部署、離開碼 | §6 |
 | 背景執行之腳本再起子行程 | §7 |
+| 量目錄之總大小或檔案數(數萬檔以上;Git Bash `du` 逾時) | §8 |
 
 ## 1. 殼層:Windows PowerShell 5.1 與 `.bat`
 
@@ -121,6 +122,83 @@ Claude Code 之安全掃描會把同一指令內 robocopy 之參數(`/MIR`,`/E`)
 - **驗收**:背景行程跑起來後,以 `Get-Process | Where-Object { $_.MainWindowHandle -ne 0 }` 查無新出現之 `WindowsTerminal`／`cmd`／`conhost`／`node` 視窗,且在其起子行程之時點過後再查一次.
 - **典型錯誤形狀**:跟跑測試之背景行程以 `spawnSync` 起測試執行器而未設 `windowsHide`,每輪測試即跳出標題為 `node.exe` 之終端機視窗;由前景 shell 起時有主控台而看不出來,改為 detached 起之後才發作.
 
+## 8. 量目錄大小:robocopy 列舉模式(`/L`),不用 Git Bash 之 `du`
+
+**觸發**:Windows 上量目錄之總位元組數或檔案數,目標可能含數萬檔(各類紀錄與快取目錄、`npm-cache`、`node_modules`、使用者目錄、`C:\ProgramData` 等).
+
+**why**:Git Bash 之 `du` 逐檔處理,實測約每檔 8 ms,兩萬檔級之目錄即逾 115 秒;robocopy `/L`(只列舉、不複製)量同一目錄只要數秒.原因**推測**為 `du` 對每個檔案各做一次 stat、robocopy 直接取列舉結果之大小,**未實測驗證**.
+
+| 對象(2026-11-13,一台 Windows 11 機器) | `timeout 115 du -sh` | robocopy `/L` |
+|---|---|---|
+| 20,195 檔、18,145 目錄之套件快取目錄 | 逾時(115.1 秒,無輸出) | 4.3 秒(重跑 1.5 秒) |
+| 466 檔之套件目錄 | 3.8 秒,2.0M | 0.03 秒,1,033,496 位元組 |
+| 438 檔之套件目錄 | 3.5 秒,978K | 0.03 秒,282,322 位元組 |
+| 21,532 檔之 `node_modules` | 未測 | 1.1 秒,340,218,651 位元組 |
+| `C:\ProgramData`(84,454 檔) | 未測 | 29~65 秒,失敗 236,離開碼 9 |
+
+**指令**(Git Bash 內一行,須前置 `MSYS_NO_PATHCONV=1`):
+
+```bash
+MSYS_NO_PATHCONV=1 robocopy "<目錄>" "<不存在之目的路徑>" /L /S /XJ /R:0 /W:0 /NFL /NDL /NJH /NC /NS /NP /BYTES
+```
+
+- `/L` 只列舉不複製;目的路徑用不存在者(如 `./tmp/__null__`),實測不會被建立(量後以 `ls` 確認),目的路徑之磁碟機不存在亦照常列舉.`/S` 含子目錄.
+- `/NFL /NDL /NJH` 不輸出檔名、目錄名與標頭,只留摘要表(不印檔名,盤查紀錄目錄時不碰內容);`/NC /NS /NP` 不輸出類別、大小與進度;`/R:0 /W:0` 失敗不重試不等待;`/BYTES` 以完整整數輸出位元組(實測無千分位).
+- `/XJ` 跳過 junction.實測(夾具:目錄內放指向他處之 junction):不加時連結目標之內容被重複計入(30 對 10 位元組),加了跳過,目錄列之「略過」為 1.**目錄符號連結(`mklink /D`)未測**(本機無權限建立),不保證被 `/XJ` 跳過.
+- `MSYS_NO_PATHCONV=1`:實測 Git Bash 不加時 `/L`、`/S` 等旗標被當路徑改寫,robocopy 印出橫幅並以離開碼 16 結束、無摘要表(機制見 §2.3).由 node `spawn` 以參數陣列呼叫則無此問題,並依 §7 設 `windowsHide: true`.路徑用 `C:/x` 或 `C:\x` 皆可.
+
+**解析摘要表:依列序與欄序,不依標籤**.中文 Windows 實測摘要表為(標籤隨語系而異,其他語系未逐一實測):
+
+```
+                  總計       已複製        略過        不符        失敗        額外
+      目錄 :         2         1         1         0         0         0
+      檔案 :         1         1         0         0         0         0
+     位元組 :        10        10         0         0         0         0
+      時間 :   0:00:00   0:00:00                       0:00:00   0:00:00
+   已結束 : 2026年11月13日 11:40:26
+```
+
+- 列序為目錄,檔案,位元組(之後為時間與結束時刻);欄序為總計,複製,跳過,不符,失敗,額外.**總位元組＝位元組列第 1 欄,檔案數＝檔案列第 1 欄,無權限而未列舉之目錄數＝目錄列第 5 欄(失敗)**.
+- 數字可為負:實測 `C:\ProgramData` 之位元組列「略過」欄為 -5(原因未查),解析須容許 `-`,否則該列被丟棄而只剩兩列.
+- 輸出為 ANSI 碼頁(中文 Windows 為 cp950),只取數字時以 `latin1` 解碼即可,不依賴碼頁.
+- 範例(已於夾具、套件快取目錄與 `C:\ProgramData` 實跑):
+
+```js
+import { spawn } from 'child_process'
+
+let dirSize = (src, dst = './tmp/__null__') => new Promise((resolve, reject) => {
+    let args = [src, dst, '/L', '/S', '/XJ', '/R:0', '/W:0', '/NFL', '/NDL', '/NJH', '/NC', '/NS', '/NP', '/BYTES']
+    let p = spawn('robocopy', args, { windowsHide: true })
+    let bufs = []
+    p.stdout.on('data', (b) => bufs.push(b))
+    p.on('error', reject)
+    p.on('close', (code) => {
+        //取「冒號後接六個整數」之三列(目錄,檔案,位元組);標籤不看
+        let rows = Buffer.concat(bufs).toString('latin1').split(/\r?\n/)
+            .map((s) => /:((?:[ \t]+-?\d+){6})[ \t]*$/.exec(s))
+            .filter(Boolean)
+            .map((m) => m[1].trim().split(/[ \t]+/).map(Number))
+        if (rows.length !== 3) {
+            reject(new Error(`摘要表解析失敗(離開碼 ${code})`))
+            return
+        }
+        let [d, f, b] = rows
+        resolve({ bytes: b[0], files: f[0], failedDirs: d[4], failedFiles: f[4], exitCode: code })
+    })
+})
+```
+
+**失敗欄與離開碼**:
+- 失敗 >0 表示該數目之目錄無權限列舉,其內容未計入,**總位元組偏低**,回報時須一併列出並註明[至少].實測 `C:\ProgramData` 失敗 236、離開碼 9;以 node 遞迴 `readdirSync` 列舉同一目錄,`EPERM` 之目錄數同為 236.離開碼 ≥8 時摘要表仍照常輸出,與 §6(4) 之判讀一致.
+- `/L` 模式下 stdout **不含逐筆錯誤行**(實測 0 行含 `0x000000nn`,目錄列之類別亦無失敗標記),只能得知數量;要定位哪些目錄失敗時改以 node 遞迴 `readdirSync` 並攔例外.
+- 來源不存在時離開碼 16、無摘要表,解析須對[找不到三列]報錯,不可回 0.
+
+**與 `du` 數字之差異**:robocopy 之位元組為檔案內容之實際大小;`du` 本機實測皆較大(例:同一 466 檔目錄 2.0M 對 1,033,496 位元組),**推測**為磁碟配置大小,未另行驗證.兩者不可混比,量測結果註明用哪一種.
+
+**何時仍可用 `du`**:跨平台之腳本(Linux/macOS 一律 `du`);Windows 上約千檔以內之小目錄(實測 466 檔 3.8 秒),仍加 `timeout`.萬檔以上一律 robocopy;預估逾 2 分鐘者(如整顆磁碟)依全域設定 §8.5 背景執行.量一批子目錄時逐一量即可(單一目錄實測 1~65 秒);並行 robocopy 未實測,勿同時起多支掃整顆磁碟.
+
+**典型錯誤形狀**:①以 `du` 量套件快取或使用者目錄,等到逾時(實測兩萬檔級即逾 115 秒)才改法;②只取位元組列而不看失敗欄,把無權限而偏低之數字當總量;③依中文標籤比對摘要表,換語系即失效;④解析正則不容許負號,位元組列被丟棄而只剩兩列;⑤從 Git Bash 呼叫未加 `MSYS_NO_PATHCONV=1`,得到橫幅與離開碼 16 而無摘要表.
+
 ## 完成前勾選
 
 - [ ] 殺程序、刪除、重啟之後已回驗(§4),未以健康檢查代替「新行程即服務者」之確認
@@ -128,3 +206,4 @@ Claude Code 之安全掃描會把同一指令內 robocopy 之參數(`/MIR`,`/E`)
 - [ ] robocopy 與 Remove-Item 分兩道指令;離開碼依 §6(4) 判讀
 - [ ] 背景腳本之每一處起子行程皆設 `windowsHide: true`,並已以視窗清單驗收(§7)
 - [ ] 交給原生程式或 node 之路徑皆為帶磁碟機代號之形式,寫入前已印絕對路徑(§2)
+- [ ] 量大目錄用 robocopy `/L`(§8):摘要表依列序解析、失敗欄 >0 已註明數字偏低、目的路徑未被建立;未以 `du` 之數字與 robocopy 混比
