@@ -9,6 +9,8 @@
 - [Codex 官方設定參考](https://learn.chatgpt.com/docs/config-file/config-reference)
 - [Codex 官方模型頁面](https://learn.chatgpt.com/docs/models)
 
+2026-11-13 於本機 **0.167.0** 只重驗 Windows 讀非 ASCII（中文）檔案（實測與結果見 SKILL.md「Windows 讀非 ASCII 檔案」之〈重驗〉）：`rg` 直接輸出完好、PowerShell 管線失真，使用端回報之「`rg` 失真」未能重現。**旗標表、型錄、沙箱擋寫未於 0.167.0 重驗**，沿用下列各次查核結果。
+
 2026-10-27 於本機 **0.163.0** 追加查核並改寫模型章節：型錄新增 `gpt-6.1-terra`，使用者指定為必要預設值（取代 `gpt-6.1-sol`）；以 `-m gpt-6.1-terra -c model_reasoning_effort="max"` 實跑通過。**旗標表未於 0.163.0 逐項重驗**，沿用下列各次查核結果。
 
 2026-09-30 於本機 **0.159.2** 追加查核並改寫模型章節：`codex debug models` 之完整型錄（GPT-6.1 世代上線且升為 priority 1，見下表）、以 `-m gpt-6.1-sol -c model_reasoning_effort="max"` 實跑通過。**旗標表未於 0.159.2 逐項重驗**，沿用下列各次查核結果。

@@ -5,7 +5,7 @@ description: 當任務需要委派給 Antigravity，或需要使用其提供的 
 
 # dispatch-antigravity
 
-使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.80；固定旗標與自用鍵自 1.0.17 起未變動（1.0.73 另加自用鍵 `spawnGate`：每次 spawn 前有機器級守門，agy 預設不限，見〈逾時分層〉選項表；1.0.80 另加自用鍵 `promptVia`：提示詞不超過 30,000 字元仍走 `--print`、逐位元不變，超過才改走 stdin，見〈提示詞傳輸〉；1.0.79 起遞補層對 agy 條目於送出前先看額度，見〈逾時分層〉選項表之 `quotaGate`），**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-10-18 以 1.4.2 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
+使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.80，其中預設模型與〈skipPermissions: false 只擋工作區外之寫入〉另依 2026-11-13 之 1.0.92 內建條目與 agy 1.5.7 實測更新，見文末對照；固定旗標與自用鍵自 1.0.17 起未變動（1.0.73 另加自用鍵 `spawnGate`：每次 spawn 前有機器級守門，agy 預設不限，見〈逾時分層〉選項表；1.0.80 另加自用鍵 `promptVia`：提示詞不超過 30,000 字元仍走 `--print`、逐位元不變，超過才改走 stdin，見〈提示詞傳輸〉；1.0.79 起遞補層對 agy 條目於送出前先看額度，見〈逾時分層〉選項表之 `quotaGate`），**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-11-13 以 1.5.7 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
 
 需要變更模型 slug、effort、print 模式旗標、逾時或工作區可視範圍時，讀取 [references/agy-flags.md](references/agy-flags.md)。
 
@@ -34,42 +34,48 @@ const wda = req(path.join(skillsRoot, 'node_modules', 'w-dispatch-ai'));
 
 除非使用者明確指定其他模型或推理強度，否則必須使用：
 
-- 模型：`gemini-3.8-flash-high`
+- 模型：`gemini-4-hydrogen-high`（Gemini 4 Hydrogen；2026-11-13 起，此前為 `gemini-3.8-flash-high`）
 - 推理強度：模型 slug 已內嵌的 `high`
 
-`high` 是 **Gemini 3.8 Flash** 能給到的最深等級。預設時不要再傳入 `effort: 'high'`；模型 slug 已包含等級，重複設定沒有必要，而且維持單一設定來源可避免 slug／effort 衝突。
+`high` 是本技能採用之檔位，與 `w-dispatch-ai` 1.0.92 內建條目 `agy:gemini-4-hydrogen-high` 一致。**Hydrogen 另有 `xhigh` 檔**（`agy models` 列 `gemini-4-hydrogen-xhigh`，`/effort` 之 available 含 `xhigh`，見下表），本技能**不採用、也未實測**（本輪實呼只用 `high` 檔）——與套件目錄及派工遞補鏈一致；要用 `xhigh` 須使用者明確指定，並先照〈派工前的能力探測〉以同選項驗一次。預設時不要再傳入 `effort: 'high'`；模型 slug 已包含等級，重複設定沒有必要，而且維持單一設定來源可避免 slug／effort 衝突。
 
 **查某支模型能用哪些 effort，用 `/effort` 實查，不要看 `--help`**：
 
 ```bash
-MSYS_NO_PATHCONV=1 agy -p /effort --model gemini-3.8-flash --output-format json
+MSYS_NO_PATHCONV=1 agy -p /effort --model gemini-4-hydrogen-high --output-format json
 # 回應之 command.data.available 即清單；adjustable 為 false 表示該模型不可調
+# 帶檔位 slug 時 current 回該檔位（此例 high）；用不帶檔位之基礎 slug（gemini-4-hydrogen）則 current 為預設 medium
 ```
 
-`MSYS_NO_PATHCONV=1` 只在 Git Bash 需要：MSYS 會把開頭為 `/` 的參數當成 POSIX 路徑，改寫成 `C:/Program Files/Git/effort` 再交給 agy。2026-10-18 於 agy 1.4.2 實查：
+`MSYS_NO_PATHCONV=1` 只在 Git Bash 需要：MSYS 會把開頭為 `/` 的參數當成 POSIX 路徑，改寫成 `C:/Program Files/Git/effort` 再交給 agy。`/effort` 不呼叫模型（回應 `duration_seconds: 0`、token 全 0），不耗額度。2026-11-13 於 agy 1.5.7 實查：
 
 | 基礎 slug | available |
 |---|---|
-| `gemini-3.8-flash` | low, medium, high |
+| `gemini-4-hydrogen` | low, medium, high, **xhigh** |
+| `gemini-3.8-flash`（仍在型錄之舊預設） | low, medium, high |
 | `gemini-4-argon` | low, medium, high |
 | `claude-opus-5-5`、`claude-sonnet-5-5` | low, medium, high |
-| `gpt-oss-120b` | 不可調（`adjustable: false`） |
+| `gpt-oss-120b`、`gemini-pro-orchestrator-g1-pro` | 不可調（`adjustable: false`） |
 
-同一版的 `--help` 卻把 `--effort` 列為 `low|medium|high|xhigh|max`（1.2.6 為 `low|medium|high`，1.2.13 為 `low|medium|high|max`）——那只是 CLI 層的字面值域。實際傳 `--model gemini-3.8-flash --effort max` 回 `gemini-3.8-flash has no "max" effort (available: low, medium, high)`；帶檔位 slug 再配不一致的 effort（如 `--model gemini-3.8-flash-high --effort max`）回 `conflicts with --effort=max`。**當前型錄沒有任何一支接受 `xhigh` 或 `max`**，所以 `gemini-3.8-flash-high` 仍是本技能能拿到的最深檔；日後某支模型的 available 出現 `xhigh`／`max`，才有升級空間。
+同一版的 `--help` 把 `--effort` 列為 `low|medium|high|xhigh|max`（1.2.6 為 `low|medium|high`，1.2.13 為 `low|medium|high|max`，1.4.2 與 1.5.7 為 `low|medium|high|xhigh|max`）——那只是 CLI 層的字面值域，不是每支模型都吃。2026-10-18 於 1.4.2 實測：`--model gemini-3.8-flash --effort max` 回 `gemini-3.8-flash has no "max" effort (available: low, medium, high)`；帶檔位 slug 再配不一致的 effort（如 `--model gemini-3.8-flash-high --effort max`）回 `conflicts with --effort=max`（此二例未於 1.5.7 重測）。**1.5.7 之型錄只有 Hydrogen 的 available 含 `xhigh`，沒有任何一支含 `max`**；Hydrogen 之 `xhigh` 本技能不採用（見上）。
 
-不帶檔位的基礎 slug（如 `gemini-3.8-flash`、`gemini-4-argon`）agy 解析得出來（預設檔位 medium，可搭配 `effort`），只是不列在 `agy models` 的輸出裡。
+不帶檔位的基礎 slug（如 `gemini-4-hydrogen`、`gemini-3.8-flash`、`gemini-4-argon`）agy 解析得出來（預設檔位 medium，可搭配 `effort`；Hydrogen 於 2026-11-13 以 `/effort` 實查確認），只是不列在 `agy models` 的輸出裡。
 
-**Gemini 4 Argon 是另一支可選的 Gemini，不是預設**：`gemini-4-argon-{high,medium,low}` 見於 agy 1.4.0（套件記錄）與 1.4.2（2026-10-18 本機）之型錄，`w-dispatch-ai` 1.0.50 起收為 `agy:gemini-4-argon-high` 條目。它的額度是 agy `/usage` 裡獨立的「Gemini 4 Argon」群組，只有 7 天窗口、沒有 5 小時窗口（套件 2026-10-16 以前後對照實測，與「Gemini Models」群組分開）。**未給 `model` 時 agy 預設就是 Gemini 4 Argon (Medium)**（套件 2026-10-16 以 agy 1.4.0 實測；預設由 agy 決定、可能隨版本變動），會悄悄耗用這個 7 天額度——所以派工一律明給 `model`。要改用 Argon，須使用者明確指定。
+**Gemini 4 Argon 是另一支可選的 Gemini，不是預設**：`gemini-4-argon-{high,medium,low}` 見於 agy 1.4.0（套件記錄）、1.4.2（2026-10-18 本機）與 1.5.7（2026-11-13 本機）之型錄，`w-dispatch-ai` 1.0.50 起收為 `agy:gemini-4-argon-high` 條目。它的額度是 agy `/usage` 裡獨立的「Gemini 4 Argon」群組，只有 7 天窗口、沒有 5 小時窗口（套件 2026-10-16 以前後對照實測，與「Gemini Models」群組分開）。**未給 `model` 時 agy 預設就是 Gemini 4 Argon (Medium)**（套件 2026-10-16 以 agy 1.4.0 實測；預設由 agy 決定、可能隨版本變動），會悄悄耗用這個 7 天額度——所以派工一律明給 `model`。要改用 Argon，須使用者明確指定。
 
-**為何是 3.8**：Gemini 3.8 Flash 於 agy **1.1.25** 進入型錄（changelog 記為「Added Gemini 3.8 Flash to the model catalog when connecting with a `GEMINI_API_KEY`」），2026-09-03 本機 `agy models` 已實際列出三檔 slug，並以 `agy -p ... --model gemini-3.8-flash-high` 實跑通過（8.8 秒、exit 0）。`w-dispatch-ai` 1.0.34 之 providers 表同日自 3.7 升為 3.8，附實測：**回應 12.5s（3.7 為 62.2s）、讀檔 14.6s（3.7 為 57.6s）**。
+**Hydrogen 之額度池**：`/usage` 於 agy 1.5.7 仍只有「Gemini Models」「Claude and GPT models」「Gemini 4 Argon」三個群組，沒有 Hydrogen 專屬群組；`gemini-*`（不含 `gemini-4-argon*`）歸「Gemini Models」，與 3.8 Flash 同組（有 5 小時與 7 天窗口），與「Gemini 4 Argon」分開計（`w-dispatch-ai` 1.0.92 條目註解之 2026-11-13 前後對照：只呼叫 Hydrogen 時 Argon 讀數不動；Gemini Models 之 5 小時窗口讀數上升、7 天窗口讀數跳動大於增量而無法精算，同帳號他行程之用量可能混入——僅作歸屬參考，本技能未重做此對照）。
 
-型錄由伺服器供給，會獨立於 CLI 版本變動。固定模型前一律先跑 `agy models` 對照，不可憑推測寫入新 slug——2026-09-02 查核時 3.8 尚不存在，隔日即上架，就是這個道理。
+**為何是 Hydrogen（2026-11-13 由 3.8 Flash 換上）**：使用者於 2026-11-13 指定把派工遞補鏈之 agy 末段由 `gemini-3.8-flash-high` 改為 `gemini-4-hydrogen-high`；使用端稱 Hydrogen 於同日推出、Google 以之取代 Flash 品牌（轉述，無官方出處，本技能未查證）。`w-dispatch-ai` 1.0.92 已收錄內建條目 `agy:gemini-4-hydrogen-high`，置 3.8 之後、Argon 之前，3.8 條目未刪。本機 2026-11-13（agy 1.5.7）之查核：`agy models` 列 `gemini-4-hydrogen-{high,xhigh,medium,low}` 四檔；以技能根之 `w-dispatch-ai`（實裝 1.0.90，`dispatchAntigravity()` 之固定旗標自 1.0.17 起未變）對 `gemini-4-hydrogen-high` 實呼「讀中文檔第 1 行＋寫檔」（`skipPermissions: true`、`addDirs` 含檔案與輸出目錄、`validate: 'nonempty'`）：13.5 秒成交、中文原樣讀回、檔案落地。**agy 耗時起伏大，單次數字不可據以比較 Hydrogen 與 3.8 之快慢**。
+
+**3.8 Flash 是仍在型錄之舊預設**（2026-09-03 至 2026-11-13 為本技能預設；2026-11-13 之 `agy models` 仍列三檔、`agy:gemini-3.8-flash-high` 條目仍在，下游以 id 引用，尚未下架）。以下為其沿革，屬歷史紀錄，保留當時之數字：Gemini 3.8 Flash 於 agy **1.1.25** 進入型錄（changelog 記為「Added Gemini 3.8 Flash to the model catalog when connecting with a `GEMINI_API_KEY`」），2026-09-03 本機 `agy models` 已實際列出三檔 slug，並以 `agy -p ... --model gemini-3.8-flash-high` 實跑通過（8.8 秒、exit 0）。`w-dispatch-ai` 1.0.34 之 providers 表同日自 3.7 升為 3.8，附實測：**回應 12.5s（3.7 為 62.2s）、讀檔 14.6s（3.7 為 57.6s）**。
+
+型錄由伺服器供給，會獨立於 CLI 版本變動。固定模型前一律先跑 `agy models` 對照，不可憑推測寫入新 slug——2026-09-02 查核時 3.8 尚不存在，隔日即上架；2026-11-13 Hydrogen 同樣是當日才出現於型錄，就是這個道理。
 
 ```javascript
 import wda from 'w-dispatch-ai';
 
 const result = await wda.dispatchAntigravity('分析此專案並完成指定修改', {
-    model: 'gemini-3.8-flash-high',
+    model: 'gemini-4-hydrogen-high',
     cwd: '/absolute/path/to/project',
     timeoutMs: 14_400_000,   // 正式派工一律 4 小時；須照〈逾時與等待〉以 detached 執行，不可在工具呼叫內直接 await
     validate: 'nonempty',
@@ -89,27 +95,32 @@ console.log(result.stdout);
 
 - 1.1.24：headless 呼叫在 stdout／stderr 被導管接走時，離開階段會卡住（未對保留的串流設 `FD_CLOEXEC`，子程序抓著呼叫端的 pipe 不放）。`dispatchAntigravity()` 正是以 pipe 收 stdout／stderr。
 - 1.1.23：`models`、`agents` 這類子命令在繼承到未關閉的 stdin pipe 時會卡住而不執行。
-- 1.1.25：Gemini 3.8 Flash 才進入型錄；舊版沒有本技能的預設模型。
+- 1.1.25：Gemini 3.8 Flash 才進入型錄（2026-11-13 前之預設模型之所以訂此版；現預設 Hydrogen 於 1.5.7 之型錄已有，**其最低 agy 版本未查證**——型錄由伺服器供給，不一定綁 CLI 版本）。
 
-因此本技能之型錄查核與派工都要求 agy 1.1.25 以上；版本較舊時先 `agy update`，不要把逾時當成模型或提示詞的問題來調。
+因此本技能之型錄查核與派工都要求 agy 1.1.25 以上（下限之主因是前兩項之卡死）；版本較舊時先 `agy update`，不要把逾時當成模型或提示詞的問題來調。
 
 ## 模型與 effort 規則
 
-`agy models` 會輸出 `<slug> <顯示名稱>`。必須傳入第一欄 slug。2026-10-18 於 agy 1.4.2 之型錄（共 13 項，完整清單見 references）：
+`agy models` 會輸出 `<slug> <顯示名稱>`。必須傳入第一欄 slug。2026-11-13 於 agy 1.5.7 之型錄（共 18 項，完整清單見 references）：
 
 ```text
 gemini-4-argon-medium    Gemini 4 Argon (Medium)
 gemini-4-argon-high      Gemini 4 Argon (High)
 gemini-4-argon-low       Gemini 4 Argon (Low)
+gemini-4-hydrogen-high   Gemini 4 Hydrogen (High)
+gemini-4-hydrogen-xhigh  Gemini 4 Hydrogen (XHigh)
+gemini-4-hydrogen-medium Gemini 4 Hydrogen (Medium)
+gemini-4-hydrogen-low    Gemini 4 Hydrogen (Low)
+gemini-pro-orchestrator-g1-pro  Orchestrator (Argon)
 gemini-3.8-flash-high    Gemini 3.8 Flash (High)
 gemini-3.8-flash-medium  Gemini 3.8 Flash (Medium)
 gemini-3.8-flash-low     Gemini 3.8 Flash (Low)
 claude-opus-5-5-*、claude-sonnet-5-5-*（各 low／medium／high）、gpt-oss-120b-medium
 ```
 
-3.7 Flash、3.6 Flash、3.1 Pro 與 Claude 4.6 系已全數下架（套件記錄 `gemini-3.6-flash-low`、`gemini-3.1-pro` 於 agy 1.4.0 回 `not recognized as a known model`）。
+`gemini-pro-orchestrator-g1-pro`（顯示名 Orchestrator (Argon)）為 1.5.7 新見之項目，`/effort` 回不可調；本技能未實呼、不用於派工。3.7 Flash、3.6 Flash、3.1 Pro 與 Claude 4.6 系已全數下架（套件記錄 `gemini-3.6-flash-low`、`gemini-3.1-pro` 於 agy 1.4.0 回 `not recognized as a known model`）。
 
-Antigravity 也接受 `--effort`（各模型實際可用值以「必要預設值」一節之 `/effort` 實查為準）。若使用轉接器的 `effort` 選項，應搭配相容的基礎模型 slug。帶有等級的 slug 若再搭配不一致的 effort，agy 會拒絕執行。本技能預設固定使用 `gemini-3.8-flash-high`，並省略 `effort`。
+Antigravity 也接受 `--effort`（各模型實際可用值以「必要預設值」一節之 `/effort` 實查為準）。若使用轉接器的 `effort` 選項，應搭配相容的基礎模型 slug。帶有等級的 slug 若再搭配不一致的 effort，agy 會拒絕執行。本技能預設固定使用 `gemini-4-hydrogen-high`，並省略 `effort`。
 
 ## 提示詞傳輸
 
@@ -169,7 +180,7 @@ fs.writeFileSync(out('node.pid'), String(process.pid));   //步驟 3 判斷存�
 let result;
 try {
     result = await wda.dispatchAntigravity(fs.readFileSync(out('prompt.md'), 'utf8'), {
-        model: 'gemini-3.8-flash-high',
+        model: 'gemini-4-hydrogen-high',
         cwd: '<被派對象工作目錄之絕對路徑>',   //其他要讀的目錄以 addDirs 給（見〈權限〉）
         timeoutMs: 14_400_000,   //printTimeout 由此自動推導為 14430 秒（比外層晚 30 秒、只作後備），不要另給
         validate: 'nonempty',
@@ -271,12 +282,12 @@ Bash({ run_in_background: true, timeout: 7200000,
 | 寫測試、驗證猜想、重現問題 | 讀檔 ＋ 寫測試檔 ＋ 執行測試 | 同上；agy 建檔與跑指令走的都是需要 `command` 權限的工具 |
 | 修改、實作 | 讀 ＋ 寫 ＋ 執行 | 轉接器預設的 `skipPermissions: true` |
 
-轉接器的 `skipPermissions` 預設為 `true`（加入 `--dangerously-skip-permissions`），只有在輸入與工作區可信時才適用。要收斂時 agy 有三個維度：**①工作區目錄**（`addDirs`，最實際——把目標複製或 `git worktree` 出一份到獨立目錄，只把該目錄加進工作區）、**②執行模式**（`extraArgs` 傳 `--mode plan` 為唯讀規劃檔位、`--mode accept-edits` 為可寫執行）、**③終端限制**（`--sandbox`）。後兩者本技能尚未實測，用前先照「派工前的能力探測」驗一次。
+轉接器的 `skipPermissions` 預設為 `true`（加入 `--dangerously-skip-permissions`），只有在輸入與工作區可信時才適用。要收斂時 agy 有三個維度：**①工作區目錄**（`addDirs`，最實際——把目標複製或 `git worktree` 出一份到獨立目錄，只把該目錄加進工作區）、**②執行模式**（`extraArgs` 傳 `--mode plan` 為唯讀規劃檔位、`--mode accept-edits` 為可寫執行）、**③終端限制**（`--sandbox`）。後兩者本技能尚未實測，用前先照「派工前的能力探測」驗一次。**注意 `skipPermissions: false` 不在這三個維度之內當作唯讀用**：它只擋工作區外之寫入，工作區內仍可寫（見下方〈`skipPermissions: false` 只擋工作區外之寫入〉）。
 
 - **審計必須自己讀檔**。把檔案內容貼進提示詞不算獨立審計：被派對象只看得到你挑給它的片段，找不出你漏掉的地方，而那正是複審的唯一價值。
 - **驗證猜想必須能寫檔並執行**。不能寫測試就只剩推論；「我認為可能是 X」沒有可重現的執行結果，不是結論。
 - **`addDirs: []` 等於它什麼都讀不到**，探索與審計類任務必然交白卷。
-- **沿用 `w-dispatch-ai/src/providers.mjs` 的條目要先看鎖**：表內四條 agy 條目（`agy:gemini-3.8-flash-high`、`agy:gemini-4-argon-high`、`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`）一律帶 `skipPermissions: false` 與 `addDirs: ['.']`，那是給純文字生成與遞補用的唯讀檔位。條目註解記載的 2026-08-15 canary 實測與本節結論一致：無此鎖時要求建檔會真的落地，`false` 之下寫入被擋、唯讀工具照常，而且**被擋時 agy 回 exit 0、stdout 為空**（2026-10-18 於 1.4.2 重測仍是如此，見下表）。要寫入就得把它覆寫為 `true`。另外這四條在全取鏈中**相鄰**，agy 整體卡頓時會連續逾時 4 次（約 4×`timeoutMs`）才輪到下一家，套件建議全取時搭配 `budgetMs` 與 `cooldownMs`（README 行為變更紀錄第 31 條）。
+- **沿用 `w-dispatch-ai/src/providers.mjs` 的條目要先看鎖**：表內五條 agy 條目（`agy:gemini-3.8-flash-high`、`agy:gemini-4-hydrogen-high`〔1.0.92 起〕、`agy:gemini-4-argon-high`、`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`）一律帶 `skipPermissions: false` 與 `addDirs: ['.']`，那是給純文字生成與遞補用的檔位，**但它只擋工作區外之寫入，不是唯讀**（工作區內仍可寫，見下方〈`skipPermissions: false` 只擋工作區外之寫入〉）。條目註解記載的 2026-08-15 canary 實測：無此鎖時要求建檔會真的落地，`false` 之下（寫到工作區外者）寫入被擋、唯讀工具照常，而且**被擋時 agy 回 exit 0、stdout 為空**（2026-10-18 於 1.4.2、2026-11-13 於 1.5.7 重測仍是如此，見下表）。要寫入就得把它覆寫為 `true`。另外這五條在全取鏈中**相鄰**（1.0.92 前為四條），agy 整體卡頓時會連續逾時 5 次（約 5×`timeoutMs`）才輪到下一家，套件建議全取時搭配 `budgetMs` 與 `cooldownMs`（README 行為變更紀錄第 31 條；條數依 1.0.92 條目註解）。
 
 ### 第四層權限：提示詞前綴（走工作流時預設禁止寫檔）
 
@@ -290,7 +301,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 
 ### 權限不足是 exit 0 的假成功，不是錯誤
 
-2026-10-18 以 `w-dispatch-ai` 1.0.53 於 agy 1.4.2 實測：同一道「讀 `probe.txt` 第一行 ＋ 建立輸出檔」的任務，模型 `gemini-3.8-flash-high`，工作區以 `addDirs` 開放，掛 `validate: 'nonempty'`：
+2026-10-18 以 `w-dispatch-ai` 1.0.53 於 agy 1.4.2 實測：同一道「讀 `probe.txt` 第一行 ＋ 建立輸出檔」的任務，模型 `gemini-3.8-flash-high`，工作區以 `addDirs` 開放，掛 `validate: 'nonempty'`（**輸出檔位於工作區內或外，當時紀錄未載明**——`false` 列之「被擋」是否僅限工作區外，見下節 2026-11-13 之重測）：
 
 | `skipPermissions` | 離開碼 | stdout | stderr | 轉接器結果 | 檔案真的建立？ |
 |---|---:|---|---|---|---|
@@ -301,6 +312,21 @@ Bash({ run_in_background: true, timeout: 7200000,
 - **非空輸出也不是成功判準**。2026-09-08 於 agy 1.1.27 測同一型任務時，同一段 jetski 訊息印在 **stdout**（當時權限名為 `command`），`nonempty` 直接放行；1.4.0（套件實測）與 1.4.2（上表）改印到 stderr，`nonempty` 才擋得下。CLI 一改版就可能再變，**最終一律以產物是否落地驗收**。
 - 無介面模式沒有人可以回答權限詢問，未預先核准者一律**自動拒絕**，不是等待、不是報錯。只讀不寫的任務不受影響（1.1.27 實測只讀第一行可正常回 `READ=…`）。
 - 訊息本身指出另一個檔位：在 agy 設定檔的 `permissions.allow` 加規則（如 `write_file(<target>)`）。用它之前先確認該設定檔路徑與規則語法（以最小探測驗證），否則就用 `skipPermissions: true` 搭配收斂過的 `addDirs`。
+
+### `skipPermissions: false` 只擋工作區外之寫入，不是唯讀
+
+2026-11-13 於 agy 1.5.7，模型 `gemini-4-hydrogen-high`，以技能根之 `w-dispatch-ai`（實裝 1.0.90）呼叫 `dispatchAntigravity()`，`cwd` 與 `addDirs` 為同一目錄（工作區），掛 `validate: 'nonempty'`；三種組合各實呼 1 次，提示詞皆只要求讀檔與建檔：
+
+| 組合 | 要求寫到 | 離開碼／轉接器結果 | stdout | 檔案真的建立？ |
+|---|---|---|---|---|
+| `skipPermissions: true`，`addDirs` 含探針檔與輸出目錄 | 工作區內 | 0／`ok: true`，13.5 秒 | `READ=探針第一行:派工測試ABC123 WRITE=DONE` | **是** |
+| `skipPermissions: false` | **工作區內** | 0／`ok: true`，8.2 秒 | 同上（`WRITE=DONE`） | **是（落地）** |
+| `skipPermissions: false` | **工作區外**（與工作區同層、不在 `addDirs` 之目錄） | 0／`ok: false`、`errorType: 'validation'`（`nonempty` 擋下），6.3 秒 | 空 | **否**；stderr 為 `jetski: no output produced — a tool required the "write_file" permission that headless mode cannot prompt for, so it was auto-denied. …` |
+
+- **`skipPermissions: false` 只擋「工作區之外」的寫入；工作區內仍可寫**——它不是「防寫」或「唯讀」。「工作區」在本測試中 `addDirs` 與 `cwd` 為同一目錄，二者各自的效力未分別驗證。
+- 與 `w-dispatch-ai` 1.0.92 之 README〈agy「防寫」之邊界〉段與條目註解之本機金絲雀相符（Hydrogen、3.8 Flash、Argon 各 1 次，三者一致）；本技能只實呼 Hydrogen，3.8 與 Argon 引用套件之紀錄。上節 2026-10-18 之舊表（3.8 Flash、1.4.2）當時輸出檔之位置未載，無法判斷是 agy 行為改變，或當年測的是工作區外。
+- **後果**：內建 agy 條目之「防寫鎖」（`skipPermissions: false` ＋ `addDirs: ['.']`）對「提示詞引導寫工作區內檔案」不設防；`cwd` 指向真實專案時，檔案可能真的被改。提示詞層之 `NO_SIDE_EFFECT` 前綴是請求不是強制，也補不了這一點。
+- **要真唯讀時：尚無已實測之機械作法。** `--mode plan`、`--sandbox`、`--settings`（1.5.7 `--help` 新見，可傳 session 專用之 settings.json 鍵）本技能皆未實測，不得當作已證之唯讀鎖；要用先以「要求寫到 `cwd` 內之檔」金絲雀驗它是否真的不落地。目前可行之降風險作法只有：把 `cwd`／`addDirs` 指向**可丟棄之副本**（目標複製或 `git worktree`），原件不在 `addDirs` 內（工作區外之寫入被擋，如上表第三列），收回後審副本之 diff。
 
 ### 派工前的能力探測
 
@@ -313,12 +339,12 @@ const probe = await wda.dispatchAntigravity(
     + '最後只回一行：READ=<第1行> WRITE=<DONE 或 FAILED>',
     //探測維持短逾時、前景執行（壓在前景預設 120000 之內）；正式派工改走〈逾時與等待〉
     //100_000 時外層 100 秒先到（printTimeout 推導為 130 秒）；agy 啟動就要數秒到二十幾秒，探測任務要夠小
-    { model: 'gemini-3.8-flash-low', addDirs, cwd, timeoutMs: 100_000, validate: 'nonempty' },
+    { model: 'gemini-4-hydrogen-low', addDirs, cwd, timeoutMs: 100_000, validate: 'nonempty' },
 );
 // 只看 stdout 不算數：要確認 probe-out.txt 真的落地
 ```
 
-探測可用低階模型，它驗的是權限不是推理；正式派工再換回預設模型。探測失敗時先修權限與 `addDirs`，不要改提示詞重試。
+探測可用低檔位，它驗的是權限不是推理；正式派工再換回預設模型。探測失敗時先修權限與 `addDirs`，不要改提示詞重試。（`gemini-4-hydrogen-low` 於 2026-11-13 之 `agy models` 列出、`/effort` 可查；**本輪未對 `-low` 檔實呼**，實呼只用 `-high` 檔——要用 `-low` 探測者首次使用時自行確認它回得出結果。）**要依賴 `skipPermissions: false` 擋寫入者，探測須同時含「寫到工作區內」與「寫到工作區外」兩種**，才看得出它擋的只是工作區外（見上節）。
 
 ## 結構化輸出
 
@@ -326,7 +352,7 @@ print 模式的輸出格式以 `extraArgs` 指定：
 
 ```javascript
 await wda.dispatchAntigravity(prompt, {
-    model: 'gemini-3.8-flash-high',
+    model: 'gemini-4-hydrogen-high',
     extraArgs: ['--output-format', 'json'],
     timeoutMs: 14_400_000,
     validate: 'json',
@@ -391,7 +417,7 @@ MSYS_NO_PATHCONV=1 agy -p /effort --model <基礎slug> --output-format json   # 
 agy changelog     # 確認新版是否影響 headless 派工
 ```
 
-截至 2026-10-18 審查時，本機 agy 1.4.2 之即時 `agy models` 仍列出 `gemini-3.8-flash-high`（另有 Gemini 4 Argon 三檔），並已實跑驗證。無介面模式遇到不存在的指定模型時以 exit 1 結束（`errorType: 'exec'`），不會靜默退回其他模型。
+截至 2026-11-13 審查時，本機 agy 1.5.7 之即時 `agy models` 列出 `gemini-4-hydrogen-high`（本技能預設；另有 Hydrogen 其餘三檔、Gemini 4 Argon 三檔、仍在型錄之 `gemini-3.8-flash-high` 等），並已實跑驗證。無介面模式遇到不存在的指定模型時以 exit 1 結束（`errorType: 'exec'`），不會靜默退回其他模型。
 
 ## 派什麼、怎麼驗收：審計／複審／規劃審核類派工先審表，再審方案
 
@@ -419,6 +445,18 @@ agy update       # 版本低於 1.1.25 時升級
 ```
 
 無人值守／無介面執行前，須先以互動方式完成 Google 認證。
+
+2026-11-13 查核：本機 agy **1.5.7**；技能根實裝 `w-dispatch-ai` **1.0.90**（npm 最新 1.0.92，技能根尚未升到該版；呼叫以 1.0.90 之 `dispatchAntigravity()` 進行，其固定旗標自 1.0.17 起未變）；條目依 1.0.92 原始碼 `src/providers.mjs` 與 README〈agy「防寫」之邊界〉段核對：
+
+| 項目 | 結果 |
+|---|---|
+| 預設模型 | `gemini-3.8-flash-high` → **`gemini-4-hydrogen-high`**（使用者 2026-11-13 指定；與 1.0.92 內建條目 `agy:gemini-4-hydrogen-high` 一致）。實呼 `skipPermissions: true` 讀中文檔第 1 行＋寫檔：13.5 秒、中文原樣讀回、檔案落地 |
+| `agy models` | 18 項：Gemini 4 Argon 三檔、**Gemini 4 Hydrogen 四檔（high／xhigh／medium／low）**、`gemini-pro-orchestrator-g1-pro`（新見，未用）、3.8 Flash 三檔（仍在）、Claude Opus／Sonnet 5.5 各三檔、GPT-OSS 120B |
+| `/effort` | Hydrogen：low, medium, high, **xhigh**（1.4.2 時尚無任何一支含 `xhigh`）；3.8、Argon、Claude 5.5 系：low, medium, high；`gpt-oss-120b`、`gemini-pro-orchestrator-g1-pro`：不可調。`xhigh` 檔本技能不採用、未實呼 |
+| `agy --help` | `--effort` 值域與 1.4.2 同（`low\|medium\|high\|xhigh\|max`）；**新見** `--remote-agent`、`--settings`（session 專用之 settings.json 鍵）與子命令 `acp`，皆未實測、與本技能之派工無關 |
+| `skipPermissions: false` | 實測只擋工作區外之寫入，工作區內寫入落地（見〈權限〉之同名小節），與套件 1.0.92 README 記載一致；舊文「唯讀檔位」「防寫鎖」之說法已改 |
+| `providers.mjs`（1.0.92） | agy 條目 5 條（`agy:gemini-3.8-flash-high`、**`agy:gemini-4-hydrogen-high`**〔新〕、`agy:gemini-4-argon-high`、`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`），皆帶 `skipPermissions: false` 與 `addDirs: ['.']`；全表 38 條（2026-11-13 以 Grep 計 `src/providers.mjs` 之 `id:` 行） |
+| 未重驗 | 本輪只就預設模型、型錄、`/effort`、`--help`、防寫邊界重驗；〈逾時分層〉等其餘各節仍依 1.0.80 之查核。**已知與 1.0.92 不符待另案更正**：1.0.92 起 `timeoutMs` 之無效值（超過 2147483647、`Infinity`、非十進位字串等）一律取各入口預設（300000），`--print-timeout` 之推導不再以計時器上限封頂（`src/dispatchAntigravity.mjs` 271～277 行與 README 第 73 條）；〈逾時分層〉第③層「以計時器上限封頂」一句為 1.0.80 時之說法 |
 
 2026-11-07 對照：以 `w-dispatch-ai` **1.0.80** 之原始碼與 README 行為變更紀錄第 67、68 條核對（讀 `src/dispatchAntigravity.mjs`〔檔頭與程式本體〕、`src/subQuotaGate.mjs`、`src/quotaLedger.mjs`、`src/dispatchAiFallback.mjs` 檔頭；**未實際呼叫模型、未重跑 agy**，stdin 路徑之 agy 1.5.2 實測與 `/usage` 讀者耗時為套件同日之紀錄，本技能未重驗）：
 

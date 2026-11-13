@@ -107,9 +107,22 @@ await wda.dispatchCodex(prompt, {
 | `[System.IO.File]::ReadAllText(…)` | **被拒**（受限語言模式） |
 | `[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-Content … -Encoding utf8` | **被拒**（受限語言模式） |
 
+**重驗（2026-11-13，Codex 0.167.0；使用端回報「0.167.0 以 `rg` 讀含中文註解之行，審查者引用與原文不符」——未能重現）**：本機 `codex --version` 為 `codex-cli 0.167.0`，以技能根之 `w-dispatch-ai`（實裝 1.0.90）`dispatchCodex()`、`gpt-6.1-terra`／`model_reasoning_effort="low"`、`sandbox: 'read-only'`、`--json`，實呼 2 次；以 `--json` 事件流中 `item.completed`（`item.type` 為 `command_execution`）之 `aggregated_output`（Codex 實際收到之內容，不經模型轉述）逐行與原檔比對。事件之 `command` 欄為 `"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "…"`，與上文「Codex 以 PS 5.1 執行每個命令」一致。樣本為含中文註解、全形標點與 `〔〕「」＝→` 之公開套件原始碼：17 行節錄（另加 1 行純 ASCII），及同一檔之完整副本（1073 行、112,396 位元組）：
+
+| 讀法 | 檔 | 結果 |
+|---|---|---|
+| `rg -n '^' -- <絕對路徑>` | 17 行節錄 | **完好**（17 行逐行與原檔一致，U+FFFD 0） |
+| `rg -n -m 3 '^' -- <絕對路徑>` | 17 行節錄 | **完好**（3 行一致，U+FFFD 0） |
+| `cmd /c type "<檔>"` | 17 行節錄 | **完好**（整段與原檔逐字相等，U+FFFD 0） |
+| `rg -n '^' -- <絕對路徑> \| Select-Object -First 3` | 17 行節錄 | **失真**（U+FFFD 81，3 行皆與原檔不符）——對照組，證明本測法分辨得出失真 |
+| `rg -n '^' -- providers-copy.mjs`（相對路徑、cwd 為該檔所在夾） | 完整副本 1073 行 | **完好**（1073 行逐行一致，U+FFFD 0） |
+| `rg -n -C 2 'Hydrogen' -- providers-copy.mjs` | 完整副本 | **完好**（30 行一致，U+FFFD 0） |
+
+兩次實呼中模型最後引用之原文（第 2 行；含「提出端」之第一行〔119 行〕）亦與原檔逐字一致。**結論**：`rg` 直接輸出於 0.167.0 本機（單次、模型為 terra low、各讀法各 1 次）**未見失真**，「rg 直接輸出為可行讀法」維持成立，PowerShell 管線之失真照舊。回報之失真**未能重現**，其當時所用之讀法與命令輸出**未留存**，無法確認：「審查者回覆之引用與原文不符」本身分不出是 Codex 收到之內容失真，還是模型轉述／引用出錯，也可能是當次混用了 `Get-Content`、管線或 `git diff` 等其他讀法——遇到時先看該次 `aggregated_output` 是否含 U+FFFD 或與原檔不符（見下方驗收），再判斷是讀檔失真或模型引用出錯，不要因此就捨棄 `rg`。**未涵蓋**：`gpt-6.1-terra` 以 `max` 推理之派工、更大之檔案、`git diff` 輸出、`Get-Content` 於 0.167.0 之行為（上表 0.156.1 之失真結果未重測）；單次實呼不代表不可能偶發。
+
 **正解**：讀檔一律用 `rg -n '^' -- <檔>`；要限範圍用 rg 自己的 `-m <N>`／`-A`／`-B`／`-C`，不要接 `| Select-Object`；要原樣位元組用 `cmd /c type "<檔>"`。`rg` 由 Codex 環境提供（本機 PowerShell 之 PATH 未必有 rg，Codex 沙箱內可用）。**派工提示詞要寫明這個讀法**——模型會自行挑讀法而混用 `Get-Content`，不寫就會部分失真。
 
-**驗收（canary）**：提示詞裡指定一個你已知的中文字串，要求 Codex 原文引用，收回後逐字比對。比對不過是編碼問題，不是模型理解問題，不要靠改寫提示詞繞過去。要確認 Codex 實際讀到什麼，看 session 紀錄之 `aggregated_output`（同一事件另有 `item_started`，其輸出為空，須取 `item_completed`）。
+**驗收（canary）**：提示詞裡指定一個你已知的中文字串，要求 Codex 原文引用，收回後逐字比對。比對不過是編碼問題，不是模型理解問題，不要靠改寫提示詞繞過去。要確認 Codex 實際讀到什麼，看 session 紀錄之 `aggregated_output`（同一事件另有 `item_started`，其輸出為空，須取 `item_completed`）；**0.167.0 實測：派工時於 `extraArgs` 加 `--json`，stdout 之 JSONL 事件流即含同樣之 `item.completed`（`command_execution`）與其 `aggregated_output`，不必翻 session 紀錄**（用 `onStdout` 落檔；此時 stdout 是 JSONL，不可搭配 `validate: 'json'`，見〈輸出〉）。比對時逐行去掉 `rg -n` 之行號前綴後與原檔相比，並數 U+FFFD。
 
 **更正舊記載**：原載「`Get-Content -Encoding utf8` 與 `ReadAllText` 兩種寫法皆通過（2026-09-08 於 0.153.4 實測）」於 2026-09-27、0.156.1 之沙箱不成立：前者輸出端仍被編成 950 而失真，後者被受限語言模式拒絕；原載「本機實測 LanguageMode 為 FullLanguage」亦不成立（沙箱內為 ConstrainedLanguage）。當時為何通過未查證（推測當時之輸出代碼頁或語言模式與現況不同）。**非沙箱重現時的陷阱**：非沙箱之 FullLanguage 下 `[Console]::OutputEncoding=UTF8` 可用，但它改的是**整個主控台**的輸出代碼頁（`SetConsoleOutputCP`），同一主控台下之後啟動的行程全都改用 UTF-8 輸出——本機以同一 node 行程連續 spawn 驗證時（2026-09-27），第一回合 10 種讀法中 8 種失真（只有兩種先設 `[Console]::OutputEncoding` 者完好），第二回合 10 種全數「完好」，差別只在第一回合中途執行過這行。重現實驗每種讀法都要在乾淨主控台或以輸出位元組比對，不要讓前一個命令污染後一個。
 
@@ -481,6 +494,14 @@ codex --version
 codex exec --help
 ls ~/.codex/.sandbox/setup_marker.json   # Windows：存在才代表 elevated 沙箱設定已完成
 ```
+
+2026-11-13 查核：本機 Codex CLI **0.167.0**，技能根實裝 `w-dispatch-ai` **1.0.90**（npm 最新 1.0.92）；本輪只重驗「Windows 讀非 ASCII 檔案」一節：
+
+| 項目 | 結果 |
+|---|---|
+| 讀中文檔（`read-only` 沙箱，`gpt-6.1-terra`／low，`--json` 事件比對，實呼 2 次） | `rg -n '^' -- <檔>`、`rg -n -m 3`、`rg -n -C 2 '<字>'`、`cmd /c type` 皆完好（含 1073 行完整檔，逐行與原檔一致、U+FFFD 0）；PowerShell 管線對照組失真（U+FFFD 81）。使用端回報之「`rg` 讀中文註解失真」**未能重現**，條件未留存；詳見該節〈重驗〉 |
+| 驗收方式 | 派工加 `--json`，事件流之 `item.completed`（`command_execution`）`aggregated_output` 即 Codex 實際收到之內容（0.167.0 實測），不必翻 session 紀錄 |
+| 未重驗 | 旗標表、型錄、沙箱擋寫、`dispatchCodex()` 與 1.0.91～1.0.92 之差異（未比對原始碼）；上表 0.156.1 之 `Get-Content` 等失真結果未於 0.167.0 重測 |
 
 2026-11-07 對照：以 `w-dispatch-ai` **1.0.80** 之原始碼與 README 行為變更紀錄第 67 條核對（讀 `src/subQuotaGate.mjs`、`src/quotaLedger.mjs`、`src/dispatchAiFallback.mjs` 檔頭與 `dispatchCodex.mjs` 之自用鍵；**未實際呼叫模型**，讀者耗時為套件同日之本機實測紀錄，本技能未重驗）：
 
