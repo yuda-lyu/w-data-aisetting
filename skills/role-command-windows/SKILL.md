@@ -1,25 +1,25 @@
 ---
 name: role-command-windows
 description: |
-  Windows 上執行指令、組路徑、管理程序與大量檔案之規範(由全域設定抽出):Windows PowerShell 5.1 之已知雷區、.bat 含中文一律 Big5;路徑與檔案 I/O(cwd-relative 與 fileURLToPath 兩種出檔場景、禁用 URL.pathname、git-bash 之 /c/ 路徑不可交給原生程式或 node、寫入前印絕對路徑驗收);Git Bash 下 taskkill 寫法與取 PID(wmic 已移除);刪除／殺程序／重啟後必回驗(只殺到在監聽者、memory-mapped 檔之舊映射、健康檢查分不出新舊實例);背景 Chrome(playwright／puppeteer)孤兒程序之三層回收;大量檔案以 robocopy 鏡像空目錄刪除、目錄連結先拆再刪(robocopy 會穿過 junction)、robocopy 與 Remove-Item 分兩道指令、/E 與 /MIR 之分、離開碼判讀表;背景行程再起之子行程一律 windowsHide;量目錄大小用 robocopy 列舉模式 /L 取代 Git Bash 之 du(依列序解析摘要表、失敗欄、MSYS_NO_PATHCONV、/XJ、與 du 數字之差異).
-  觸發條件:Windows 上殺程序或取 PID;量目錄之總大小或檔案數(含數萬檔以上之紀錄、快取、使用者目錄,或 du 逾時);刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄(含清 ./tmp)、以 robocopy 部署或覆蓋目錄、判讀 Windows 指令之離開碼;以 node 調用 chrome/chromium 背景繪圖或截圖且涉及常駐服務、排程重啟或清殘留;撰寫或修改會以背景方式(detached、nohup、排程、常駐服務)執行且會再起子行程之腳本;寫 .bat;只有 Windows PowerShell 5.1 之環境;組裝路徑而工作目錄含空格、中文或須在 git-bash 與原生程式之間傳遞——必先調用本技能,整篇入 context 逐項比對後才動工.
+  Windows 上執行指令、組路徑、管理程序與大量檔案之規範(由全域設定抽出):Windows PowerShell 5.1 之已知雷區、.bat 含中文一律 Big5;路徑與檔案 I/O(cwd-relative 與 fileURLToPath 兩種出檔場景、禁用 URL.pathname、git-bash 之 /c/ 路徑不可交給原生程式或 node、Git Bash 之 tar 不吃磁碟機代號、寫入前印絕對路徑驗收);Git Bash 下 taskkill 寫法與取 PID(wmic 已移除);刪除／殺程序／重啟後必回驗(只殺到在監聽者、memory-mapped 檔之舊映射、健康檢查分不出新舊實例);背景 Chrome(playwright／puppeteer)孤兒程序之三層回收;大量檔案以 robocopy 鏡像空目錄刪除、目錄連結先拆再刪(robocopy 會穿過 junction)、robocopy 與 Remove-Item 分兩道指令、/E 與 /MIR 之分、離開碼判讀表;以 node 起子行程(背景行程再起之子行程一律 windowsHide、spawn UNKNOWN 等啟動失敗之判讀、session 啟動後才設之環境變數子行程讀不到);量目錄大小用 robocopy 列舉模式 /L 取代 Git Bash 之 du.
+  觸發條件:Windows 上殺程序或取 PID;量目錄之總大小或檔案數(含數萬檔以上之紀錄、快取、使用者目錄,或 du 逾時);刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄(含清 ./tmp)、以 robocopy 部署或覆蓋目錄、判讀離開碼;以 node 調用 chrome 背景繪圖或截圖且涉及常駐服務、排程重啟或清殘留;撰寫或修改會以背景方式(detached、nohup、排程、常駐服務)執行且會再起子行程之腳本;node 之 spawn/exec 起外部程式失敗(spawn UNKNOWN、errno -4094);使用者說剛改過環境變數、或外部程式像沒讀到設定;Git Bash 之 tar 報 Cannot connect to C:;寫 .bat;只有 Windows PowerShell 5.1 之環境;組裝路徑而工作目錄含空格、中文或須在 git-bash 與原生程式之間傳遞——必先調用本技能,整篇入 context 逐項比對後才動工.
 ---
 
 # role-command-windows — Windows 之指令、路徑、程序與大量檔案操作
 
-本技能由全域設定抽出(2026-11-10,原全域 §2.2 之 PowerShell 5.1 與 bat、§3 之連結拆除、§7、§8.3、§8.4、§8.6、§8.7、§8.8).全域設定只留觸發與必記原則,細節與殷鑑在此.
+本技能由全域設定抽出(2026-11-10,原全域 §2.2 之 PowerShell 5.1 與 bat、§3 之連結拆除、§7、§8.3、§8.4、§8.6、§8.7、§8.8).全域設定只留觸發與必記原則,細節與殷鑑在此.2026-11-15(使用端提案,Gitea #149)增補:§2.3 加 `tar` 之磁碟機代號,§7 由「背景行程再起之子行程隱藏視窗」整併為「以 node 起子行程」(加啟動失敗之判讀、環境變數之繼承;實測紀錄在 `references/node-child-process.md`).
 
 ## 依任務找章節
 
 | 任務 | 章節 |
 |---|---|
 | 只有 Windows PowerShell 5.1 之環境;寫 `.bat` | §1 |
-| 組裝路徑、寫檔、在 git-bash 與原生程式／node 之間傳路徑 | §2 |
+| 組裝路徑、寫檔、在 git-bash 與原生程式／node 之間傳路徑;Git Bash 之 `tar` 報 `Cannot connect to C:` | §2(§2.3) |
 | 殺程序、取 PID | §3 |
 | 刪除、殺程序、重啟服務之後 | §4 |
 | node 調用 chrome 背景繪圖或截圖之常駐服務、清 chrome 殘留 | §5 |
 | 大量刪除或複製、含目錄連結之目錄(含清 `./tmp`)、robocopy 部署、離開碼 | §6 |
-| 背景執行之腳本再起子行程 | §7 |
+| 以 node 起子行程:背景執行之腳本再起子行程(隱藏視窗);`spawn UNKNOWN` 等起不來之判讀;使用者剛改過環境變數、外部程式像沒讀到設定 | §7(§7.1、§7.2、§7.3) |
 | 量目錄之總大小或檔案數(數萬檔以上;Git Bash `du` 逾時) | §8 |
 
 ## 1. 殼層:Windows PowerShell 5.1 與 `.bat`
@@ -43,6 +43,8 @@ description: |
 [`/d/` = D 槽]映射只存在 git-bash shell 內部.把這種字串交給 Windows 原生 exe 或 node 的 path/fs,開頭 `/` 被當[當前磁碟根]:`/d/tmp/x` → `D:\d\tmp\x`(多一層 d),`/c/Users/x` → `D:\c\Users\x`(磁碟機都錯).邊界判別:路徑字串最後是誰解析——Bash 工具內 `mkdir /d/tmp/...` 對;寫進 `.mjs` 再交給 spawn / `launchPersistentContext` / node fs 就錯.改用帶磁碟機代號路徑(`D:/tmp/x`)或從 `fileURLToPath` 衍生.
 
 反方向亦然:git-bash 呼叫 Windows 原生程式(含 `node`、`reg`、`tasklist`)時,會把**任何以 `/` 起首之參數**當 POSIX 路徑改寫,不只真正的路徑——`mocha --grep "/pattern/"` 變成 `--grep "C:/Program Files/Git/pattern/"` 而選不到任何案(0 passing 且離開碼 0,看似通過);`reg add … /v X /d Y`、`tasklist /FI …` 之 `/` 旗標同樣被改寫.對策:該次指令前加 `MSYS_NO_PATHCONV=1`,或改寫參數使其不以 `/` 起首(如以關鍵字 `--grep 關鍵字` 代替正規式).**判讀**:測試指令跑出 0 案時,先看執行紀錄中實際收到之參數.
+
+另有一種同樣出在 Git Bash 之路徑坑:**帶磁碟機代號之路徑交給 Git Bash 內之 GNU `tar`**.這與上兩段(路徑被誤讀、被改寫)不是同一機制——實測加 `MSYS_NO_PATHCONV=1` 仍報同錯——而是 tar 自己依 `主機:路徑` 之規則把 `C:` 當遠端主機:`-f` 之檔名帶磁碟機代號(`C:/x.tgz`、`C:\x.tgz` 皆然;解壓 `-x`、建立 `-c`、有無 `-z` 皆然)即報 `tar (child): Cannot connect to C: resolve failed`(不帶 `-z` 時前綴為 `tar:`;離開碼非 0;帶 `-z` 時其後之 `gzip: stdin: unexpected end of file` 只是連帶).對策三擇一(實測皆正常):①加 `--force-local`:`tar --force-local -xzf "C:/…/x.tgz" -C "C:/…"`;②`-f` 改 POSIX 形式 `/c/…/x.tgz`(tar 是 MSYS 程式,不經原生程式,不需旗標);③`-f` 改相對路徑 `./tmp/x.tgz`.`-C` 之引數帶磁碟機代號不受影響.**典型錯誤形狀**:Git Bash 內以 `tar -xzf "C:/…/x.tgz" -C "C:/…"` 解壓 `.tgz`(如 `npm pack` 之產物),得上述錯誤——訊息指向連線而非檔案.
 
 ### 2.4 寫入前驗收
 
@@ -111,7 +113,11 @@ Claude Code 之安全掃描會把同一指令內 robocopy 之參數(`/MIR`,`/E`)
 
 判定成敗看實際輸出與產物,不只看離開碼.
 
-## 7. Windows 背景行程再起之子行程一律隱藏視窗
+## 7. 以 node 起子行程:隱藏視窗、啟動失敗之判讀、環境變數之繼承
+
+三件事:背景行程再起之子行程會跳視窗(§7.1);子行程起不來而只得到 `spawn UNKNOWN`(§7.2);使用者於 session 啟動後才改之環境變數子行程讀不到(§7.3,機制對本 session 之一切行程皆然,實測含 Git Bash 與 `cmd`,列於此是因 node 起子行程時可於 `env` 補值).§7.2、§7.3 之細節與實測紀錄見 `references/node-child-process.md`.
+
+### 7.1 背景行程再起之子行程一律隱藏視窗
 
 **觸發**:撰寫或修改會以背景方式執行(detached、`nohup`、排程、常駐服務)之腳本,且該腳本會再起子行程(`child_process` 全家:`spawn`、`spawnSync`、`exec`、`execSync`、`execFile`、`execFileSync`、`fork`)時.
 
@@ -121,6 +127,28 @@ Claude Code 之安全掃描會把同一指令內 robocopy 之參數(`/MIR`,`/E`)
 - 只把最外層行程設 `windowsHide` 不夠:隱藏的是它自己的視窗,不會傳給它再起之子行程.有主控台之子行程(如經 `powershell`、`cmd` 起者)之孫行程沿用其(隱藏之)主控台,不另開視窗;沒有主控台者才會跳.
 - **驗收**:背景行程跑起來後,以 `Get-Process | Where-Object { $_.MainWindowHandle -ne 0 }` 查無新出現之 `WindowsTerminal`／`cmd`／`conhost`／`node` 視窗,且在其起子行程之時點過後再查一次.
 - **典型錯誤形狀**:跟跑測試之背景行程以 `spawnSync` 起測試執行器而未設 `windowsHide`,每輪測試即跳出標題為 `node.exe` 之終端機視窗;由前景 shell 起時有主控台而看不出來,改為 detached 起之後才發作.
+
+### 7.2 起不來:`spawn UNKNOWN` 等啟動失敗之判讀
+
+**觸發**:node 起外部程式(`spawn`、`execFile` 等)失敗,尤其 `Error: spawn UNKNOWN`(`code: 'UNKNOWN'`、`errno: -4094`).
+
+- **表現**(Node v24.22.1 實測):`UNKNOWN` 由 `spawn`、`execFile` **同步拋出**,`child.on('error')` 接不到,須 `try/catch`;`spawnSync`、`execFileSync` 之 `error.code` 同為 `UNKNOWN`;`exec`、`execSync` 經 `cmd` 起,不出現 `UNKNOWN`,得離開碼 1 與 cmd 之 stderr 訊息.`UNKNOWN` 不帶原因,易被誤判為權限、路徑或防毒而往錯方向排查.它表示起動時 Windows 回了 libuv 無對應名稱之錯誤碼(推論);實測缺並存組件時該碼為 14001.
+- **判讀順序**(1、2 最便宜,先做;以下為中文版 Windows 實測,第 2、3 步之輸出為 cp950,在 Bash 工具內直接看會亂碼,故指令尾端接 `node -p` 解碼):
+  1. **先看 `code`**:`ENOENT` 查路徑;`EACCES` 先查 manifest 是否要求提權(實測:manifest 為 `requireAdministrator` 而本 session 未提權時,以 `'error'` 事件回 `EACCES`、Win32 碼 740,**不是** `UNKNOWN`;其他成因之 `EACCES` 未測);`UNKNOWN` 往下.
+  2. **以 `cmd` 起同一支 exe 取系統訊息**:`cmd //c "C:\路徑\x.exe" 2>&1 | node -p "new TextDecoder('big5').decode(require('fs').readFileSync(0))"`(Git Bash,exe 路徑用反斜線;訊息在 stderr,故加 `2>&1`).並存組態錯誤時為「因為應用程式的並列設定不正確…請…使用命令列工具 sxstrace.exe」.
+  3. **查 SideBySide 事件**:`MSYS_NO_PATHCONV=1 wevtutil qe Application /q:"*[System[Provider[@Name='SideBySide']]]" /c:3 /rd:true /f:text | node -p "new TextDecoder('big5').decode(require('fs').readFileSync(0))"`.缺並存組件時有事件 ID 33,內文直接列出缺少之組件名、架構、版本(例:`找不到依存組合 Microsoft.VC80.MFC,processorArchitecture="amd64",…,version="8.0.50727.4053"`).
+  4. **核對 exe 與系統**(第 3 步無事件、或要交叉核對時):`file <exe>` 看 PE 架構(`x86-64` 或 `Intel i386`);內嵌 manifest 之相依組件以 `references/node-child-process.md` §3 之腳本列出;`ls -d /c/Windows/WinSxS/amd64_microsoft.vc80.mfc*`(換成缺少之組件名;32 位元 exe 用 `x86_` 前綴)無輸出,即本機沒有該並存組件.
+  5. **缺執行階段**(例:舊版 MFC 程式缺 VC80 之 MFC):**回報使用者安裝對應之可轉散發套件**;屬系統層安裝,agent 不自行下載安裝.
+- **典型錯誤形狀**(使用端提案所述):見 `spawn UNKNOWN` 即逐項排除相容性設定、提權、檔案來源標記,最後才讀 exe 之內嵌 manifest 而發現缺並存組件;同一支 exe 在使用者安裝該執行階段後,同一指令即正常.
+
+### 7.3 子行程之環境變數:session 啟動後才設者不繼承
+
+**觸發**:使用者表示剛新增或修改過系統或使用者環境變數;或外部程式之行為像沒讀到設定(找不到安裝目錄、字型、授權檔)而使用者說已設好.
+
+- **機制**(實測):子行程之環境於建立時自父行程複製,不會重讀登錄檔.於 session 啟動後才以 `setx` 或寫入 `HKCU\Environment` 之變數,本 session 之 Git Bash、node(`process.env.NAME` 為 `undefined`)、`cmd` 子行程、node 所起之子行程都讀不到,而 `reg query` 有值.系統層(`HKLM`)同一機制,但未獨立重現(寫入須系統管理員權限).
+- **判讀**:比對 `process.env` 與登錄檔——`node -p "process.env.NAME"`;`MSYS_NO_PATHCONV=1 reg query "HKCU\Environment" /v NAME`;`MSYS_NO_PATHCONV=1 reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v NAME`(Git Bash 不加前綴時 `/v` 被改寫,實測回「語法不正確」,見 §2.3).登錄檔有而 `process.env` 無,即本 session 未繼承,不是使用者沒設;不能據此判為安裝不完整(變數補上後仍失敗,才往別處查).
+- **處置**(二擇一,回報中寫明採何者):①於起子行程之 `env` 補同值(`{ ...process.env, NAME: 值 }`,值自登錄檔讀;實測 node 與 `cmd` 子行程皆讀得到;讀登錄檔之寫法見 `references/node-child-process.md` §4),並在程式內註明理由(該變數於 session 啟動後才設);②請使用者重開 agent 之宿主程式,新 session 才會繼承(依繼承機制之推論,未實測).
+- **典型錯誤形狀**(使用端提案所述):使用者表示已在系統設好、agent 實跑仍失敗,雙方各以為對方有誤,往「安裝不完整」方向查.
 
 ## 8. 量目錄大小:robocopy 列舉模式(`/L`),不用 Git Bash 之 `du`
 
@@ -145,7 +173,7 @@ MSYS_NO_PATHCONV=1 robocopy "<目錄>" "<不存在之目的路徑>" /L /S /XJ /R
 - `/L` 只列舉不複製;目的路徑用不存在者(如 `./tmp/__null__`),實測不會被建立(量後以 `ls` 確認),目的路徑之磁碟機不存在亦照常列舉.`/S` 含子目錄.
 - `/NFL /NDL /NJH` 不輸出檔名、目錄名與標頭,只留摘要表(不印檔名,盤查紀錄目錄時不碰內容);`/NC /NS /NP` 不輸出類別、大小與進度;`/R:0 /W:0` 失敗不重試不等待;`/BYTES` 以完整整數輸出位元組(實測無千分位).
 - `/XJ` 跳過 junction.實測(夾具:目錄內放指向他處之 junction):不加時連結目標之內容被重複計入(30 對 10 位元組),加了跳過,目錄列之「略過」為 1.**目錄符號連結(`mklink /D`)未測**(本機無權限建立),不保證被 `/XJ` 跳過.
-- `MSYS_NO_PATHCONV=1`:實測 Git Bash 不加時 `/L`、`/S` 等旗標被當路徑改寫,robocopy 印出橫幅並以離開碼 16 結束、無摘要表(機制見 §2.3).由 node `spawn` 以參數陣列呼叫則無此問題,並依 §7 設 `windowsHide: true`.路徑用 `C:/x` 或 `C:\x` 皆可.
+- `MSYS_NO_PATHCONV=1`:實測 Git Bash 不加時 `/L`、`/S` 等旗標被當路徑改寫,robocopy 印出橫幅並以離開碼 16 結束、無摘要表(機制見 §2.3).由 node `spawn` 以參數陣列呼叫則無此問題,並依 §7.1 設 `windowsHide: true`.路徑用 `C:/x` 或 `C:\x` 皆可.
 
 **解析摘要表:依列序與欄序,不依標籤**.中文 Windows 實測摘要表為(標籤隨語系而異,其他語系未逐一實測):
 
@@ -204,6 +232,9 @@ let dirSize = (src, dst = './tmp/__null__') => new Promise((resolve, reject) => 
 - [ ] 殺程序、刪除、重啟之後已回驗(§4),未以健康檢查代替「新行程即服務者」之確認
 - [ ] 刪除含目錄連結之目錄前已以不跟進連結之方式列出並拆除,回驗連結目標完好(§6(1))
 - [ ] robocopy 與 Remove-Item 分兩道指令;離開碼依 §6(4) 判讀
-- [ ] 背景腳本之每一處起子行程皆設 `windowsHide: true`,並已以視窗清單驗收(§7)
+- [ ] 背景腳本之每一處起子行程皆設 `windowsHide: true`,並已以視窗清單驗收(§7.1)
+- [ ] node 起子行程失敗時,已依 §7.2 先看 `code`(`ENOENT`、`EACCES` 依該節步驟 1 處理);`UNKNOWN` 者再以 `cmd` 起同一支 exe、查 SideBySide 事件取得原因;缺執行階段者回報使用者安裝,未自行下載安裝
+- [ ] 使用者剛改過環境變數、或外部程式像沒讀到設定時,已比對 `process.env` 與登錄檔(§7.3),並於 `env` 補值且註明理由、或請使用者重開宿主程式,回報中寫明採何者
 - [ ] 交給原生程式或 node 之路徑皆為帶磁碟機代號之形式,寫入前已印絕對路徑(§2)
+- [ ] Git Bash 之 `tar`:`-f` 之檔名帶磁碟機代號者已加 `--force-local`,或改 POSIX(`/c/…`)／相對路徑(§2.3)
 - [ ] 量大目錄用 robocopy `/L`(§8):摘要表依列序解析、失敗欄 >0 已註明數字偏低、目的路徑未被建立;未以 `du` 之數字與 robocopy 混比
