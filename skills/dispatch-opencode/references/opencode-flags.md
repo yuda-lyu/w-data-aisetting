@@ -128,7 +128,7 @@ variant：low、high、max
 |---|---|---|
 | `Upstream request failed: An active OpenCode Go subscription is required to use Go models.` | 〔本機實測〕金鑰所屬工作區沒有 Go 訂閱（用量端點對同一把回 403 `EntitlementError`）；opencode 內部重試後 **77.2s** 才 exit 1，`errorType: 'exec'` | 換已訂閱的金鑰；未訂閱的金鑰不要放進 `OPENCODE_GO_KEYS`，可先以 `opencodeGoUsage` 的 `noGoSubscription` 篩 |
 | `ProviderModelNotFoundError: Model not found: opencode-go/<id>.` | 〔本機實測〕id 不在 Go 型錄（寫錯或已下架），約 **1.7s** 即 exit 1 | 以注入金鑰後的 `opencode models opencode-go` 核 id |
-| `Free usage limit reached…subscribe to OpenCode Go to keep going` | 〔本機實測〕該 `opencode/*` 免費模型的當日額度用盡（**逐模型計**，非整個免費層共用一池，2026-11-07 提出端實測），不是 Go 額度；`run` 不結束，以逾時（`TIMEOUT`）回報；同一分鐘內 `opencode-go/` 的模型照常 | 換其他免費條目（可能仍可用），全部免費條目皆見此字樣才整批換家，或改走 `ocgo:` |
+| `Free usage limit reached…subscribe to OpenCode Go to keep going` | 〔本機實測〕該 `opencode/*` 免費模型的當日額度用盡（**逐模型計**，非整個免費層共用一池，2026-11-07 提出端實測），不是 Go 額度；CLI 本身不結束——`w-dispatch-ai` 1.0.95 起 `dispatchOpencode` 自動加 `--print-logs --log-level ERROR`，主要請求之此列一出現即終止並回 `errorType: 'quota'`（1.0.94 以前以逾時 `TIMEOUT` 回報）；同一分鐘內 `opencode-go/` 的模型照常 | 換其他免費條目（可能仍可用），全部免費條目皆見此字樣才整批換家，或改走 `ocgo:` |
 | `Upstream request failed: Model access is disabled` | 〔提出端〕兩種成因：①按量工作區沒開該模型；②付費或 Go 專屬 id 誤用 `opencode/` 前綴（應為 `opencode-go/`） | 先看前綴，再看工作區模型開關 |
 | `This Go model requires Global regions. Select Global in your workspace's Privacy settings to use it.` | 〔提出端〕DeepSeek 須工作區 Settings›Privacy 的 Regions 選 Global | 由 owner／admin 改設定 |
 | `This Go model trains on request data. Allow paid endpoints that train on request data in your workspace's Privacy settings to use it.` | 〔提出端〕Muse／Iceman Contributor 須開「Allow paid endpoints that train on request data」；開了即表示該工作區接受以提示詞訓練 | 由 owner／admin 決定；敏感內容勿走 |

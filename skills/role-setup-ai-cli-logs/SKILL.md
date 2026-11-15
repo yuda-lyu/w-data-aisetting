@@ -115,7 +115,7 @@ agy --version ; agy --help
 
 ## 6. 判讀：清理與效能
 
-- **紀錄大不等於慢**。卡住先看各家自身日誌，不要把額度或限流當成紀錄膨脹：OpenCode 看 `log/opencode.log` 的 `level=ERROR`，派發時加 `--print-logs --log-level ERROR`（既有派工經驗：遇免費層 429 時 `run` 可能不結束，本次未實跑）；Claude 用 `--debug`／`--debug-file`（官方另有 `claude doctor`）；Codex 用 `codex doctor`（`--help` 列為診斷指令）；agy 看 `log/` 內的日誌檔。日誌也可能夾帶對話片段，只看錯誤與狀態行（鐵則四）。
+- **紀錄大不等於慢**。卡住先看各家自身日誌，不要把額度或限流當成紀錄膨脹：OpenCode 看 `log/opencode.log` 的 `level=ERROR`（注意：帶 `--print-logs` 時 opencode 不寫此日誌檔，錯誤列改印在 stderr；經 `w-dispatch-ai` 1.0.95 起之 `dispatchOpencode` 派發者即自動帶此旗標，並於免費池用盡／免費層 429 時數秒內終止）；Claude 用 `--debug`／`--debug-file`（官方另有 `claude doctor`）；Codex 用 `codex doctor`（`--help` 列為診斷指令）；agy 看 `log/` 內的日誌檔。日誌也可能夾帶對話片段，只看錯誤與狀態行（鐵則四）。
 - **清理的確定好處是釋放硬碟**。對啟動速度、session 索引與續接清單的實益**未經量測，視為推測**，要寫進報告須先實測前後對照。
 - **單一 session 檔過大**（會使 VS Code 開不了該 session）的處理是開新 session，不是刪檔；本庫的 `transcript-size-warn` hook 即為此提醒。
 
