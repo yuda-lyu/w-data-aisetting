@@ -23,7 +23,7 @@
 
 **觸發**:創建子代理(agent)時.
 
-- **依難度派發**:請視難度安排,基本難度之任務就是派sonnet5.5 xhigh,難度高的任務才派opus5.5 xhigh,節省token用量.
+- **依難度派發**:請視難度安排,基本難度之任務就是派sonnet5.5 xhigh,難度高的任務才派opus5.5 xhigh,節省token用量.**任務書必寫**(每次派工都貼,不只指向共同規範檔):①跑他套件複本或他專案之測試,一律以該複本之根為工作目錄(skill[role-coder-for-test] §5.1);②留在回合內完成:預估逾 2 分鐘之指令一開始即背景執行並等其完成,交回報告寫好前不得結束回合(skill[role-setup-scheduler-for-session] §1.3);③暫存檔守則與禁區(§3).
 
 ### 2.2 語言/工具選用
 
@@ -43,7 +43,7 @@
 
 **觸發**:所有改 code 任務.
 
-- 精準修改與簡潔優先.
+- 精準修改與簡潔優先;**改未入版控之檔**(`git status` 為 `??` 或被忽略者)**前,先把改前檔複製到 `./tmp/<案名>/pre/`**(保持相對路徑),供事後差異與審查(skill[role-coder-for-validate] Step 2).
 - **死碼處置**:注意到不相關死碼提出即可,不自行刪除;既有死碼除非被要求否則不刪;自己修改造成的孤兒 import/變數/函式則要移除.**判定死碼前先查規則帳本與 state**(§14):帳本列為規則者(含未做/部分)是未完成之預期功能,不是死碼,不得以「無引用」刪除(警訊判準與典型錯誤形狀見 skill[role-coder-for-validate] Step 2).
 
 ## 5. 自有套件開發與使用之要點
@@ -124,7 +124,7 @@
 
 ### 8.3 Windows 之程序、大量檔案、子行程與殼層
 
-**觸發**:Windows 上殺程序或取 PID;以 node 調用 chrome/chromium 背景繪圖或截圖(playwright、puppeteer、w-html2png 系)且涉及常駐服務、排程重啟或清 chrome 殘留;刪除、複製數萬以上檔案或量其目錄大小、刪除可能含目錄連結之目錄、以 robocopy 部署或覆蓋目錄、判讀 Windows 指令之離開碼;撰寫或修改會以背景方式(detached、`nohup`、排程、常駐服務)執行且會再起子行程之腳本;node 之 `spawn`／`exec` 起外部程式失敗(如 `spawn UNKNOWN`);使用者剛改過環境變數、或外部程式像沒讀到設定;Git Bash 之 `tar` 帶磁碟機代號;寫 `.bat`;只有 Windows PowerShell 5.1 之環境.命中即先調用 skill[role-command-windows].
+**觸發**:Windows 上殺程序或取 PID;以 node 調用 chrome/chromium 背景繪圖或截圖(playwright、puppeteer、w-html2png 系)且涉及常駐服務、排程重啟或清 chrome 殘留;刪除、複製數萬以上檔案或量其目錄大小、刪除可能含目錄連結之目錄、以 robocopy 部署或覆蓋目錄、判讀 Windows 指令之離開碼;撰寫或修改會以背景方式(detached、`nohup`、排程、常駐服務)執行且會再起子行程之腳本;node 之 `spawn`／`exec` 起外部程式失敗(如 `spawn UNKNOWN`);使用者剛改過環境變數、或外部程式像沒讀到設定;長時間背景 node 計算比預期慢而各邏輯處理器負載不均;實作鎖檔而遇 `EPERM`／`EBUSY`;Git Bash 之 `tar` 帶磁碟機代號;寫 `.bat`;只有 Windows PowerShell 5.1 之環境.命中即先調用 skill[role-command-windows].
 
 - 先記住四句:①背景行程再起之子行程,**每一處** `child_process` 呼叫(`spawn`/`spawnSync`/`exec`/`execSync`/`execFile`/`execFileSync`/`fork`)皆設 `windowsHide: true`;②Git Bash 內殺程序寫 `cmd //c "taskkill /F /PID <pid> /T"`,取 PID 勿依賴 wmic(Windows 11 已移除);何時可主動 taskkill:專案 `CLAUDE.md` 明確授權或使用者明確要求,否則先回報;③不用檔案總管或 `Remove-Item -Recurse` 刪大量檔案,含目錄連結之目錄先拆連結再刪;④離開碼非 0 不代表失敗(robocopy 0~7 皆正常、≥8 才是錯誤).
 - 以程式經 COM 驅動 Word／Excel／PowerPoint(轉檔器等)或寫其測試時,另先調用 skill[role-coder-for-office-com](`DispatchEx` 不用 `Dispatch`、只關自己之文件、隱藏實例仍會跳對話框、成敗不看離開碼).
@@ -135,7 +135,7 @@ kill 與 rm 皆**不保證成功**,執行後必回頭驗證:殺程序後以 `net
 
 ### 8.5 長任務:背景指令與 `Monitor` 皆有時限,逾 115 分鐘之工作一律 detached＋分段等待
 
-**觸發**:預估超過 2 分鐘之作業(測試全跑,批次重產,派工外部 CLI AI,下載/爬取,建置);或要「現在停下,之後被叫醒再繼續」——定時任務,延後執行,等背景指令/外部程序/排程輪次完成,等檔案或日誌變化,或用到 `Monitor`/`sleep`/`CronCreate`/`ScheduleWakeup` 任一者,不論使用者要求或 agent 自發.命中即先調用 skill[role-setup-scheduler-for-session].
+**觸發**:預估超過 2 分鐘之作業(測試全跑,批次重產,派工外部 CLI AI,下載/爬取,建置);或要「現在停下,之後被叫醒再繼續」——定時任務,延後執行,等背景指令/外部程序/排程輪次完成,等檔案或日誌變化,或用到 `Monitor`/`sleep`/`CronCreate`/`ScheduleWakeup` 任一者,不論使用者要求或 agent 自發.命中即先調用 skill[role-setup-scheduler-for-session];子代理結束回合即不再被叫醒,不得以背景任務收尾(該技能 §1.3).
 
 ## 9. 版本控制(Git)
 

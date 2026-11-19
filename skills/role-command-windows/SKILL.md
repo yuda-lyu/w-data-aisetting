@@ -1,8 +1,8 @@
 ---
 name: role-command-windows
 description: |
-  Windows 上執行指令、組路徑、管理程序與大量檔案之規範(由全域設定抽出):Windows PowerShell 5.1 之已知雷區、.bat 含中文一律 Big5;路徑與檔案 I/O(cwd-relative 與 fileURLToPath 兩種出檔場景、禁用 URL.pathname、git-bash 之 /c/ 路徑不可交給原生程式或 node、Git Bash 之 tar 不吃磁碟機代號、寫入前印絕對路徑驗收);Git Bash 下 taskkill 寫法與取 PID(wmic 已移除);刪除／殺程序／重啟後必回驗(只殺到在監聽者、memory-mapped 檔之舊映射、健康檢查分不出新舊實例);背景 Chrome(playwright／puppeteer)孤兒程序之三層回收;大量檔案以 robocopy 鏡像空目錄刪除、目錄連結先拆再刪(robocopy 會穿過 junction)、robocopy 與 Remove-Item 分兩道指令、/E 與 /MIR 之分、離開碼判讀表;以 node 起子行程(背景行程再起之子行程一律 windowsHide、spawn UNKNOWN 等啟動失敗之判讀、session 啟動後才設之環境變數子行程讀不到);量目錄大小用 robocopy 列舉模式 /L 取代 Git Bash 之 du.
-  觸發條件:Windows 上殺程序或取 PID;量目錄之總大小或檔案數(含數萬檔以上之紀錄、快取、使用者目錄,或 du 逾時);刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄(含清 ./tmp)、以 robocopy 部署或覆蓋目錄、判讀離開碼;以 node 調用 chrome 背景繪圖或截圖且涉及常駐服務、排程重啟或清殘留;撰寫或修改會以背景方式(detached、nohup、排程、常駐服務)執行且會再起子行程之腳本;node 之 spawn/exec 起外部程式失敗(spawn UNKNOWN、errno -4094);使用者說剛改過環境變數、或外部程式像沒讀到設定;Git Bash 之 tar 報 Cannot connect to C:;寫 .bat;只有 Windows PowerShell 5.1 之環境;組裝路徑而工作目錄含空格、中文或須在 git-bash 與原生程式之間傳遞——必先調用本技能,整篇入 context 逐項比對後才動工.
+  Windows 上執行指令、組路徑、管理程序與大量檔案之規範:PowerShell 5.1 之已知雷區、.bat 含中文一律 Big5;路徑與檔案 I/O(兩種出檔場景、禁用 URL.pathname、git-bash 之 /c/ 路徑不可交給原生程式或 node、tar 不吃磁碟機代號、寫入前驗收);Git Bash 下 taskkill 寫法與取 PID(wmic 已移除);刪除／殺程序／重啟後必回驗(只殺到在監聽者、memory-mapped 舊映射、健康檢查分不出新舊實例;刪除進行中之 EPERM／EBUSY,鎖檔與 EEXIST 同視為占用而重試);背景 Chrome 孤兒程序之三層回收;大量檔案以 robocopy 鏡像空目錄刪除、目錄連結先拆再刪(robocopy 會穿過 junction)、robocopy 與 Remove-Item 分兩道指令、/E 與 /MIR 之分、離開碼判讀表;以 node 起子行程(背景行程再起之子行程一律 windowsHide、spawn UNKNOWN 等啟動失敗之判讀、session 啟動後才設之環境變數子行程讀不到、無視窗背景計算被排到節能核心);量目錄大小用 robocopy 列舉模式 /L 取代 Git Bash 之 du.
+  觸發條件:Windows 上殺程序或取 PID;量目錄之總大小或檔案數(含數萬檔以上之目錄,或 du 逾時);刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄(含清 ./tmp)、以 robocopy 部署或覆蓋目錄、判讀離開碼;以 node 調用 chrome 背景繪圖或截圖且涉及常駐服務、排程重啟或清殘留;撰寫或修改會以背景方式(detached、nohup、排程、常駐服務)執行且會再起子行程之腳本;node 之 spawn/exec 起外部程式失敗(spawn UNKNOWN、errno -4094);使用者說剛改過環境變數、或外部程式像沒讀到設定;長時間背景 node 計算比預期慢而各邏輯處理器負載不均;實作鎖檔而遇 EPERM／EBUSY;Git Bash 之 tar 報 Cannot connect to C:;寫 .bat;只有 Windows PowerShell 5.1 之環境;組裝路徑而工作目錄含空格、中文或須在 git-bash 與原生程式之間傳遞——必先調用本技能,整篇入 context 逐項比對後才動工.
 ---
 
 # role-command-windows — Windows 之指令、路徑、程序與大量檔案操作
@@ -16,10 +16,10 @@ description: |
 | 只有 Windows PowerShell 5.1 之環境;寫 `.bat` | §1 |
 | 組裝路徑、寫檔、在 git-bash 與原生程式／node 之間傳路徑;Git Bash 之 `tar` 報 `Cannot connect to C:` | §2(§2.3) |
 | 殺程序、取 PID | §3 |
-| 刪除、殺程序、重啟服務之後 | §4 |
+| 刪除、殺程序、重啟服務之後;實作鎖檔而遇 `EPERM`／`EBUSY`(刪除進行中對同名路徑之操作) | §4 |
 | node 調用 chrome 背景繪圖或截圖之常駐服務、清 chrome 殘留 | §5 |
 | 大量刪除或複製、含目錄連結之目錄(含清 `./tmp`)、robocopy 部署、離開碼 | §6 |
-| 以 node 起子行程:背景執行之腳本再起子行程(隱藏視窗);`spawn UNKNOWN` 等起不來之判讀;使用者剛改過環境變數、外部程式像沒讀到設定 | §7(§7.1、§7.2、§7.3) |
+| 以 node 起子行程:背景執行之腳本再起子行程(隱藏視窗);`spawn UNKNOWN` 等起不來之判讀;使用者剛改過環境變數、外部程式像沒讀到設定;長時間背景計算比預期慢而各邏輯處理器負載不均 | §7(§7.1、§7.2、§7.3、§7.4) |
 | 量目錄之總大小或檔案數(數萬檔以上;Git Bash `du` 逾時) | §8 |
 
 ## 1. 殼層:Windows PowerShell 5.1 與 `.bat`
@@ -62,6 +62,7 @@ kill 與 rm 皆**不保證成功**,執行後必回頭驗證,不可假設已成�
 
 - **殺程序**:taskkill 後再 `netstat`/`tasklist` 確認該 PID **已消失,埠已釋放**.用埠號抓 PID 只殺得到「當下在監聽」者——卡住/未監聽之舊實例會漏殺.
 - **刪檔/資料夾**:`rm -rf` 後以 `[ -d 夾 ]`/`ls` 確認**真的沒了**(rm 可能因鎖定/權限靜默失敗;Windows 下數萬檔以上之刪法見 §6).Windows 下對 memory-mapped 檔(如 LMDB `.mdb`)之 rm 會移除目錄名,但**行程仍持有舊檔映射**,存活之舊程序會無聲**續用舊資料**(假象「刪了,重建了」).
+- **檔案刪除進行中,對同名路徑之操作**:Windows 上一個行程正在刪除某檔時,另一行程對同名路徑做 `unlink`、`link`、`stat` 等,可能回 `EPERM`(亦有 `EBUSY`)而非 `ENOENT`／`EEXIST`.實作鎖檔(建立與接手殘留鎖)者須把 `EPERM`、`EBUSY` 與 `EEXIST` **同視為占用而重試**(重試有上限與期限),不得直接拋出原生訊息(訊息含絕對路徑).實測(本機,2026-11-19,Node v24.22.1,兩個行程同步開跑、各自 `unlink` 同一殘留鎖檔後隨即 `link` 同名檔):400 回合(800 次 `unlink`)得 `unlink` 之 `EPERM` 63 次;另一輪 600 回合(1200 次)得 55 次,對其重試 `unlink`,全數於 1 次(53 次)或 5 次以上(2 次)重試內得 `ok` 或 `ENOENT`,無一放棄(上限 2000 次);`link` 之 `EPERM` 與全部之 `EBUSY` 皆 0 次(提案端另觀察到 `link` 之 `EPERM`,25 回合 1 次,本機未重現;`stat` 本機未測).鎖之測試須含此類並行接手之案,見 skill[role-coder-for-test] §9.2.
 - **重啟服務**:健康檢查(如 `curl → 200`/ping)**無法分辨新舊實例**——存活之舊實例照樣回應,據此判定「重啟成功」是假陽性.通用判準是**確認新行程確實是當前提供服務者**:`netstat -ano`/`lsof -i` 查監聽該埠之 PID,須等於**你本次啟動的行程 PID**(或至少舊 PID 已消失,且出現一個新監聽 PID);並檢查新行程之輸出/log **無綁定失敗**(埠被占用類錯誤,各語言字樣不一,如 `EADDRINUSE`/`address already in use`/`bind: 已使用`).否則新實例常因埠被舊實例占用而**啟動即失敗退出**,舊實例續服務舊狀態(現象:「重啟了但狀態沒變/吃到舊快取」).服務專屬的「已啟動」log 字樣屬各專案細節,記於該專案設定而非此處.
 
 ## 5. Windows 背景 Chrome(playwright/puppeteer)程序回收
@@ -113,9 +114,9 @@ Claude Code 之安全掃描會把同一指令內 robocopy 之參數(`/MIR`,`/E`)
 
 判定成敗看實際輸出與產物,不只看離開碼.
 
-## 7. 以 node 起子行程:隱藏視窗、啟動失敗之判讀、環境變數之繼承
+## 7. 以 node 起子行程:隱藏視窗、啟動失敗之判讀、環境變數之繼承、節能排程
 
-三件事:背景行程再起之子行程會跳視窗(§7.1);子行程起不來而只得到 `spawn UNKNOWN`(§7.2);使用者於 session 啟動後才改之環境變數子行程讀不到(§7.3,機制對本 session 之一切行程皆然,實測含 Git Bash 與 `cmd`,列於此是因 node 起子行程時可於 `env` 補值).§7.2、§7.3 之細節與實測紀錄見 `references/node-child-process.md`.
+四件事:背景行程再起之子行程會跳視窗(§7.1);子行程起不來而只得到 `spawn UNKNOWN`(§7.2);使用者於 session 啟動後才改之環境變數子行程讀不到(§7.3,機制對本 session 之一切行程皆然,實測含 Git Bash 與 `cmd`,列於此是因 node 起子行程時可於 `env` 補值);無視窗之背景計算在混合架構 CPU 上被排到節能核心而變慢(§7.4).§7.2、§7.3 之細節與實測紀錄見 `references/node-child-process.md`,§7.4 見 `references/power-throttling.md`.
 
 ### 7.1 背景行程再起之子行程一律隱藏視窗
 
@@ -149,6 +150,16 @@ Claude Code 之安全掃描會把同一指令內 robocopy 之參數(`/MIR`,`/E`)
 - **判讀**:比對 `process.env` 與登錄檔——`node -p "process.env.NAME"`;`MSYS_NO_PATHCONV=1 reg query "HKCU\Environment" /v NAME`;`MSYS_NO_PATHCONV=1 reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v NAME`(Git Bash 不加前綴時 `/v` 被改寫,實測回「語法不正確」,見 §2.3).登錄檔有而 `process.env` 無,即本 session 未繼承,不是使用者沒設;不能據此判為安裝不完整(變數補上後仍失敗,才往別處查).
 - **處置**(二擇一,回報中寫明採何者):①於起子行程之 `env` 補同值(`{ ...process.env, NAME: 值 }`,值自登錄檔讀;實測 node 與 `cmd` 子行程皆讀得到;讀登錄檔之寫法見 `references/node-child-process.md` §4),並在程式內註明理由(該變數於 session 啟動後才設);②請使用者重開 agent 之宿主程式,新 session 才會繼承(依繼承機制之推論,未實測).
 - **典型錯誤形狀**(使用端提案所述):使用者表示已在系統設好、agent 實跑仍失敗,雙方各以為對方有誤,往「安裝不完整」方向查.
+
+### 7.4 長時間背景計算比預期慢:無視窗之行程被排到節能核心
+
+**觸發**:Windows 11、混合架構 CPU(效能核心與節能核心並存)上,以脫離式(detached)起之無視窗 node 行程做長時間計算(多工作者),速率低於預期或低於試跑之外推,而全機 CPU 讀數卻不高.判讀指令、API 實測與結構見 `references/power-throttling.md`.
+
+- **現象**(使用端提案之觀察,同一台機器先後兩次、相隔約 7 週,皆實測;本機**未實測**——本機為虛擬機,8 個邏輯處理器之 `EfficiencyClass` 全為 0,無節能核心之區分):無視窗之背景行程被系統判為背景工作(節能排程,power throttling),其執行緒全數排到節能核心——各邏輯處理器之負載為節能核心滿載、效能核心幾乎閒置;工作者數多於節能核心數時擠在一起,速率降為少量工作者試跑時之約三分之一;全機 CPU 讀數只約 30%,看似有餘裕.
+- **判讀**:長時間之背景計算比預期慢時,先看**各邏輯處理器之負載**而非整機讀數:`typeperf "\Processor(*)\% Processor Time" -sc 3`(Git Bash 內前置 `MSYS_NO_PATHCONV=1`),或 Windows PowerShell 5.1 之 `(Get-Counter '\Processor(*)\% Processor Time').CounterSamples`(兩者於本機實測可列出各邏輯處理器).一組邏輯處理器(混合架構上為節能核心)滿載、另一組(效能核心)閒置,即為此現象;整機讀數低不代表有餘裕,因此再加工作者只會更擠.
+- **解除之原理**:對該行程呼叫 `SetProcessInformation` 之 `ProcessPowerThrottling`(資訊類別 4),`ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED(0x1)`、`StateMask = 0`,由行程自管並關閉其節能排程.**只影響該行程之排程**,不改系統設定、不改計算結果,行程結束即失效.工作者為行程內之執行緒者設定該行程即可;工作者為子行程者須涵蓋整個行程樹(子行程之建立時間須晚於父行程,以防 PID 重用).實測(本機,2026-11-19):對自起之子行程設定 `Control=1、State=0` 回成功、回讀值相符,對排程之實際效果(由節能核心移到效能核心、速率回升)**未驗**.
+- **估時**:以試跑外推長跑時間者,試跑之工作者數與行程形態(脫離式、無視窗、同樣之行程樹)須與長跑相同;不同形態之外推可低估數倍(提案端一例:依少量工作者之短時間試跑外推,與實際長跑之耗時落差近 3 倍).
+- **是否採用由專案決定**:解除會提高對前景操作之負載;採用者於專案文件記明「起跑後須掛此設定」.本技能不附範例程式,依上列原理與 `references/power-throttling.md` 自寫.
 
 ## 8. 量目錄大小:robocopy 列舉模式(`/L`),不用 Git Bash 之 `du`
 
@@ -234,6 +245,8 @@ let dirSize = (src, dst = './tmp/__null__') => new Promise((resolve, reject) => 
 - [ ] robocopy 與 Remove-Item 分兩道指令;離開碼依 §6(4) 判讀
 - [ ] 背景腳本之每一處起子行程皆設 `windowsHide: true`,並已以視窗清單驗收(§7.1)
 - [ ] node 起子行程失敗時,已依 §7.2 先看 `code`(`ENOENT`、`EACCES` 依該節步驟 1 處理);`UNKNOWN` 者再以 `cmd` 起同一支 exe、查 SideBySide 事件取得原因;缺執行階段者回報使用者安裝,未自行下載安裝
+- [ ] 實作或審查鎖檔(建立與接手殘留鎖)者:`EPERM`、`EBUSY` 與 `EEXIST` 同視為占用而重試(有上限與期限),未直接拋出原生訊息(§4)
+- [ ] 長時間背景計算比預期慢者:已看各邏輯處理器之負載而非整機讀數(§7.4);估時之試跑與長跑同工作者數、同行程形態;是否解除節能排程由專案決定,採用者已記於專案文件
 - [ ] 使用者剛改過環境變數、或外部程式像沒讀到設定時,已比對 `process.env` 與登錄檔(§7.3),並於 `env` 補值且註明理由、或請使用者重開宿主程式,回報中寫明採何者
 - [ ] 交給原生程式或 node 之路徑皆為帶磁碟機代號之形式,寫入前已印絕對路徑(§2)
 - [ ] Git Bash 之 `tar`:`-f` 之檔名帶磁碟機代號者已加 `--force-local`,或改 POSIX(`/c/…`)／相對路徑(§2.3)
