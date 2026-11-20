@@ -11,7 +11,7 @@
     "w-dwdata-hub": "^1.0.50",
     "w-dwload-dlp": "^1.0.80",
     "w-fetch-web": "^1.0.56",
-    "w-orm-lmdb": "^1.0.75",
+    "w-orm-lmdb": "^1.0.78",
     "w-zip": "^1.0.75",
     "wsemi": "^1.9.70"
   },
