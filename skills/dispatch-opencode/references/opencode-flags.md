@@ -91,13 +91,13 @@ variant：low、high、max
 | 條目 id | `model` | `provider` | 金鑰環境變數 | baseURL | npm 轉接器 |
 |---|---|---|---|---|---|
 | `oc:agnes-ai/agnes-3.0-flash` | `agnes-ai/agnes-3.0-flash` | `agnes-ai` | `AGNES_KEYS` | `https://apihub.agnes-ai.com/v1` | `@ai-sdk/openai-compatible` |
-| `oc:poolside/poolside/laguna-s-2.1` | `poolside/poolside/laguna-s-2.1` | `poolside` | `POOLSIDE_KEYS` | `https://inference.poolside.ai/v1` | `@ai-sdk/openai-compatible` |
+| ~~`oc:poolside/poolside/laguna-s-2.1`~~ | — | — | — | — | **已移除(w-dispatch-ai 1.0.108)**:2026-11-21 實測 Poolside 官方端點 `/models` 仍列,請求一律 HTTP 400「Model version … is deactivated」 |
 
-走 OpenCode 自家供應商的另外七條（1.0.60 起：`big-pickle`、`mimo-v2.6-flash-free`、`beam-free`、`deepseek-v4.1-flash-free`、`flint-40b-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`；原另有 `glm-5.3-flash-free`，2026-11-18 opencode 下架、w-dispatch-ai 1.0.102 移除）**不需要 provider 定義也不帶金鑰**，`config` 內只有權限鎖，且一律 `useStoredAuth: false` 走匿名免費存取。**改匿名的理由是帶金鑰反而受該金鑰所屬工作區之模型開關影響**（實測回 `Model access is disabled` 且耗 76s），結果會隨執行機器而異。全表之 `kind: 'opencode'` 條目共 18 條（`oc:` 9 條——1.0.60 起為 10 條，1.0.102 移除已下架之 `glm-5.3-flash-free`；1.0.72 起另有 `ocgo:` 8 條、1.0.78 增為 9 條，**與上述七條相反，須金鑰、不匿名**，見下節），逐條說明見 SKILL.md 之「條目表」與「OpenCode Go」。
+走 OpenCode 自家供應商的另外七條（1.0.60 起：`big-pickle`、`mimo-v2.6-flash-free`、`beam-free`、`deepseek-v4.1-flash-free`、`flint-40b-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`；原另有 `glm-5.3-flash-free`，2026-11-18 opencode 下架、w-dispatch-ai 1.0.102 移除）**不需要 provider 定義也不帶金鑰**，`config` 內只有權限鎖，且一律 `useStoredAuth: false` 走匿名免費存取。**改匿名的理由是帶金鑰反而受該金鑰所屬工作區之模型開關影響**（實測回 `Model access is disabled` 且耗 76s），結果會隨執行機器而異。全表之 `kind: 'opencode'` 條目共 16 條（1.0.108 起；`oc:` 8 條——1.0.60 起為 10 條，1.0.102 移除已下架之 `glm-5.3-flash-free`、1.0.108 移除 Poolside 條目;另有 `ocgo:` 8 條〔1.0.72 起 8 條、1.0.78 增為 9 條、1.0.85 回到 8 條〕，**與上述七條相反，須金鑰、不匿名**，見下節），逐條說明見 SKILL.md 之「條目表」與「OpenCode Go」。
 
-上表之 `nvidia/poolside/laguna-xs-2.1`（403）是 **NVIDIA 轉售的另一個 laguna 項目**，與此處 Poolside 官方 REST／CLI 路徑無關，別混為一談。同一個模型經不同路徑屬不同供應商，額度池與故障域各自獨立。
+上表之 `nvidia/poolside/laguna-xs-2.1`（403）是 **NVIDIA 轉售的另一個 laguna 項目**（歷史探測），與 Poolside 官方路徑無關；官方路徑之兩條目已於 1.0.108 移除。同一個模型經不同路徑屬不同供應商，額度池與故障域各自獨立。
 
-該表另有同名模型的 REST 條目（`agnes:agnes-3.0-flash`、`poolside:laguna-s-2.1`，kind 為 `api-openai-compat`），走 `dispatchApiOpenaiCompat` 而非本轉接器：免 CLI、快，但**無工具能力**，只適合純文字生成。
+該表另有同名模型的 REST 條目（`agnes:agnes-3.0-flash`，kind 為 `api-openai-compat`；原 `poolside:laguna-s-2.1` 已於 1.0.108 移除），走 `dispatchApiOpenaiCompat` 而非本轉接器：免 CLI、快，但**無工具能力**，只適合純文字生成。
 
 ### OpenCode Go（`opencode-go` 供應商）：CLI 型錄與錯誤字樣
 

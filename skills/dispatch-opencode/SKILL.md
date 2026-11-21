@@ -7,7 +7,7 @@ description: 當任務需要委派給 OpenCode，或需要使用 OpenCode 支援
 
 使用 `w-dispatch-ai` 的 `dispatchOpencode()` 執行自動化 OpenCode 任務。轉接器會呼叫 `opencode run`、選擇代理與模型、透過 stdin 傳入提示詞、視需要注入僅限當次程序的供應商設定與憑證，並以結果物件回報失敗。
 
-**本技能對照的是 1.0.80**（opencode 條目表〔含 `ocgo:` Go 條目〕、`filterOpencodeFree`、`opencodeGoUsage` 與 Console 端點路徑／診斷對照 1.0.72；1.0.73 新增 spawn 前機器級守門 `spawnGate` 與 Go 用量略過 `quotaGate`，見〈逾時與等待〉選項表；1.0.77 新增放行最小間隔與 `database is locked` 重試，見〈逾時與等待〉；1.0.78 新增 `ocgo:opencode-go/crouton-alpha-free`〔條目 37 → 38、`ocgo:` 8 → 9；該模型 2026-11-10 自官方 Go 型錄下架，1.0.85 已移除，條目回到 37、`ocgo:` 8〕並把免費額度的說法更正為逐模型計，見「條目表」「OpenCode Go」與 429 診斷列；1.0.79 起 `quotaGate` 擴及訂閱類條目〔claude 無金鑰者、codex、antigravity〕，見〈逾時與等待〉選項表；1.0.80 只涉及 agy 的提示詞傳法，與本技能無關；1.0.102 移除 2026-11-18 自 opencode 下架之 `oc:opencode/glm-5.3-flash-free`（條目 38 → 37、`oc:` 10 → 9）；其餘段落之實測多為 1.0.54 時所做。`dispatchOpencode()` 之固定參數自 1.0.17 起未變動；1.0.34 新增 `useStoredAuth` 選項，見「免費模型走匿名」；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。但**條目會隨版本增刪改名，改動頻率遠高於轉接器本身**：1.0.40 到 1.0.54 之間，opencode 免費條目新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free` 與三條 `nemotron-*`，`space-bunny-free` 恢復真名改為 `minimax-m3.1-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`（**1.3 曾是本技能的必要預設模型**）；1.0.60 再移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`、新增 `flint-40b-free`，另有 `ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` 四條在 1.0.42 之後加入、幾週內又因自 CLI 型錄消失而移除。更早還有 1.0.25 把 `oc:agnes-ai/agnes-2.5-flash` 改名為 `oc:agnes-ai/agnes-3.0-flash`、1.0.34 把 opencode 自家條目全改為匿名取用；1.0.72 新增 8 條 `ocgo:` Go 條目（月費訂閱，**須金鑰、不匿名**）與 `opencodeGoUsage`，OpenCode Zen 並已改稱 Console（見「OpenCode Go」「Console 免費層閘門」）。**寫死 id 前先對安裝版核一次**，不要照抄本技能或別處的字面值；`pick` 打錯或用到已移除的 id 會靜默少一條（接法見「展開條目」）。實際安裝版一律讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
+**本技能對照的是 1.0.80**（opencode 條目表〔含 `ocgo:` Go 條目〕、`filterOpencodeFree`、`opencodeGoUsage` 與 Console 端點路徑／診斷對照 1.0.72；1.0.73 新增 spawn 前機器級守門 `spawnGate` 與 Go 用量略過 `quotaGate`，見〈逾時與等待〉選項表；1.0.77 新增放行最小間隔與 `database is locked` 重試，見〈逾時與等待〉；1.0.78 新增 `ocgo:opencode-go/crouton-alpha-free`〔條目 37 → 38、`ocgo:` 8 → 9；該模型 2026-11-10 自官方 Go 型錄下架，1.0.85 已移除，條目回到 37、`ocgo:` 8〕並把免費額度的說法更正為逐模型計，見「條目表」「OpenCode Go」與 429 診斷列；1.0.79 起 `quotaGate` 擴及訂閱類條目〔claude 無金鑰者、codex、antigravity〕，見〈逾時與等待〉選項表；1.0.80 只涉及 agy 的提示詞傳法，與本技能無關；1.0.102 移除 2026-11-18 自 opencode 下架之 `oc:opencode/glm-5.3-flash-free`（條目 38 → 37、`oc:` 10 → 9）；1.0.108 移除 Poolside 之 `oc:poolside/poolside/laguna-s-2.1` 與 REST `poolside:laguna-s-2.1`（2026-11-21 實測 `/models` 仍列而請求一律 HTTP 400「Model version … is deactivated」，至遲 11-01 起；條目 37 → 35、`oc:` 9 → 8；`POOLSIDE_KEYS` 已無內建條目使用）；其餘段落之實測多為 1.0.54 時所做。`dispatchOpencode()` 之固定參數自 1.0.17 起未變動；1.0.34 新增 `useStoredAuth` 選項，見「免費模型走匿名」；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。但**條目會隨版本增刪改名，改動頻率遠高於轉接器本身**：1.0.40 到 1.0.54 之間，opencode 免費條目新增 `longcat-2.5-preview-free`、`beam-free`、`deepseek-v4.1-flash-free`、`glm-5.3-flash-free` 與三條 `nemotron-*`，`space-bunny-free` 恢復真名改為 `minimax-m3.1-flash-free`，移除 `muse-spark-1.2`／`1.3-contributor-free`（**1.3 曾是本技能的必要預設模型**）；1.0.60 再移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`、新增 `flint-40b-free`，另有 `ling-3.1-flash-free`、`fledge-alpha-free`、`cat-jam-free`、`step-5-preview-free` 四條在 1.0.42 之後加入、幾週內又因自 CLI 型錄消失而移除。更早還有 1.0.25 把 `oc:agnes-ai/agnes-2.5-flash` 改名為 `oc:agnes-ai/agnes-3.0-flash`、1.0.34 把 opencode 自家條目全改為匿名取用；1.0.72 新增 8 條 `ocgo:` Go 條目（月費訂閱，**須金鑰、不匿名**）與 `opencodeGoUsage`，OpenCode Zen 並已改稱 Console（見「OpenCode Go」「Console 免費層閘門」）。**寫死 id 前先對安裝版核一次**，不要照抄本技能或別處的字面值；`pick` 打錯或用到已移除的 id 會靜默少一條（接法見「展開條目」）。實際安裝版一律讀 `<技能根>/node_modules/w-dispatch-ai/package.json` 的 `version`。
 
 需要變更模型、供應商、variant、認證或輸出旗標時，讀取 [references/opencode-flags.md](references/opencode-flags.md)。
 
@@ -128,12 +128,12 @@ await wda.dispatchOpencode(prompt, {
 
 ## 條目表：`providers.mjs` 的 18 個 opencode 條目（`oc:` 10 條＋`ocgo:` 8 條）
 
-`w-dispatch-ai` 自帶一份實測可用的條目表 `w-dispatch-ai/src/providers.mjs`，直接引用即可，不必自己重試一遍。**它是本技能所有模型資訊的上游**，與本技能不一致時以它為準。截至 1.0.85 全表 37 條，其中 `kind: 'opencode'` 者 18 條：`oc:` 10 條在下表（依表內順序，即全取時的遞補優先序；各條之 `model` 即 id 去掉 `oc:` 前綴），`ocgo:` 8 條接在 `oc:opencode/*` 之後，見下方「OpenCode Go」一節。免費條目會逐日漂移，組鏈或評比前先以 `wda.filterOpencodeFree(providers)` 對一次（1.0.60 起，見 references/opencode-flags.md）：
+`w-dispatch-ai` 自帶一份實測可用的條目表 `w-dispatch-ai/src/providers.mjs`，直接引用即可，不必自己重試一遍。**它是本技能所有模型資訊的上游**，與本技能不一致時以它為準。截至 1.0.108 全表 35 條，其中 `kind: 'opencode'` 者 16 條：`oc:` 8 條在下表（依表內順序，即全取時的遞補優先序；各條之 `model` 即 id 去掉 `oc:` 前綴；刪除線者為已移除之條目，留作 `missing` 之對照），`ocgo:` 8 條接在 `oc:opencode/*` 之後，見下方「OpenCode Go」一節。免費條目會逐日漂移，組鏈或評比前先以 `wda.filterOpencodeFree(providers)` 對一次（1.0.60 起，見 references/opencode-flags.md）：
 
 | 條目 id | 取用方式 | 自帶 variant | 備註（條目註解之實測紀錄） |
 |---|---|---|---|
 | `oc:agnes-ai/agnes-3.0-flash` | 金鑰 `AGNES_KEYS` | 無檔位 | 第三方，baseURL `https://apihub.agnes-ai.com/v1`。1.0.25 由 `agnes-2.5-flash` 改名（官方 2026-09-11 發布 3.0；五題探測 3.0 答對推理題而 2.5 答錯、總耗時 41s 對 281s），REST 版 `agnes:agnes-3.0-flash` 同步改名 |
-| `oc:poolside/poolside/laguna-s-2.1` | 金鑰 `POOLSIDE_KEYS` | 無檔位 | 第三方，baseURL `https://inference.poolside.ai/v1` |
+| ~~`oc:poolside/poolside/laguna-s-2.1`~~ | — | — | **已移除（w-dispatch-ai 1.0.108）**：2026-11-21 以兩把金鑰實測，Poolside 官方端點 `/models` 仍列 `laguna-s-2.1`、`laguna-xs-2.1`，但請求一律 HTTP 400「Model version … is deactivated. It needs to be activated before running predictions」，使用端 11-01 已見同一現象；REST 版 `poolside:laguna-s-2.1` 同時移除。指定此 id 會落入 `missing` |
 | `oc:opencode/big-pickle` | **匿名**（`useStoredAuth: false`） | 無檔位 | id 不帶 `-free` 後綴但官方〈Pricing〉列為 Free，屬限時免費之 stealth 模型。2026-09-22 匿名 CLI 實測 7.1s。**官方〈Privacy〉載明免費期間所收資料可能用於改進模型**，敏感內容勿走此條。1.0.53 起為全取鏈中第一條 opencode 免費條目 |
 | `oc:opencode/mimo-v2.6-flash-free` | **匿名** | 無檔位 | 2026-09-22 匿名 CLI 實測 7.0s |
 | `oc:opencode/beam-free` | **匿名** | `high` | 2026-10-18 收錄，context 1M、僅文字輸入。匿名 CLI 實測（variant high）簡答 4.9s、推理題 4.4s 答對、讀相對路徑 6.3s 正確、要求寫檔被唯讀鎖擋下（**回空字串而 `ok: true`**）。2026-10-18 至 10-19 曾是本技能的預設模型 |
@@ -143,13 +143,15 @@ await wda.dispatchOpencode(prompt, {
 | `oc:opencode/nemotron-3.5-lightning-free` | **匿名** | 無檔位 | 2026-10-19 收錄（1.0.54）；context 262,144、僅文字輸入。實測簡答 29.1s、推理題 6.7s、讀檔 10.4s、寫檔金絲雀 91.8s。NVIDIA 免費端點、僅供試用，**勿送個人或機密資料**；額度少且偏慢，故 nemotron 排在 opencode 免費條目之末 |
 | `oc:opencode/nemotron-3.5-super-vl-free` | **匿名** | `high` | 同上一批收錄；context 1M、可輸入圖片，檔位 `none`→`xhigh`（沒有 `max`）。實測（variant high）簡答 8.3s、推理題 10.1s、讀檔 9.1s、寫檔金絲雀 14.1s |
 
-**八個 `oc:opencode/*` 自家條目一律匿名取用**（`useStoredAuth: false`、不帶 `envVar`），這是 2026-09-18 起的政策性改動，理由見下節。第三方兩條仍走金鑰；`ocgo:` Go 條目同樣走金鑰且**不匿名**（`envVar: 'OPENCODE_GO_KEYS'`）。
+**八個 `oc:opencode/*` 自家條目一律匿名取用**（`useStoredAuth: false`、不帶 `envVar`），這是 2026-09-18 起的政策性改動，理由見下節。第三方條目（現只剩 agnes 一條；poolside 已於 1.0.108 移除）仍走金鑰；`ocgo:` Go 條目同樣走金鑰且**不匿名**（`envVar: 'OPENCODE_GO_KEYS'`）。
 
 **條目自帶的 variant 是 `high`，不是本技能必要預設值的 `max`**：套件 2026-09-30 起把各家條目的思考強度統一設為 `high`，opencode 側即 `extraArgs: ['--variant','high']`。但**只有實際有檔位的模型才帶**——`big-pickle`、`mimo`、`nemotron-3.5-lightning` 沒有檔位，第三方自訂 provider 亦無，那些條目就不帶（Go 條目中 `mimo-v2.6-flash`、`iceman-contributor-free` 同理）。**opencode 條目中唯一不為 `high` 的是 `ocgo:opencode-go/qwen3.8-flash`，取 `xhigh`**（CLI 型錄該模型只有 low／medium／xhigh，沒有 `high`）。照抄條目只有 high；要本技能的 `max` 得自己覆寫，且**覆寫 `extraArgs` 時要把原本的 variant 一併帶回**。
 
-**條目換得很快，照抄舊 id 會落入 `missing`**：1.0.34 移除 `deepseek-v4-flash-free` 與 `union-alpha`、換上 `big-pickle` 與 `mimo-v2.6-flash-free`；1.0.40 加 `space-bunny-free`；1.0.42 至 1.0.54 之增刪見本技能開頭。已移除之 id 做 `pick` 時，`hints` 只是字串最接近者，**不保證是同模型的替代**：`space-bunny-free` 的 `oc:` 與 `zen:` 兩個 id 都已移除，同一模型現為 `oc:opencode/minimax-m3.1-flash-free`，要自己改 id；muse-spark-1.3、fledge、ling、cat-jam、step-5 則無替代模型。全表由 20 條（1.0.26）縮到 15 條（1.0.34，zen REST 系大量退場，見免費層閘門），其後 17 條（1.0.40）、22 條（1.0.50）、21 條（1.0.53）、24 條（1.0.54）、29 條（1.0.60；opencode 條目由 12 減為 10：移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`〔已自型錄消失、呼叫回 `UnknownError`〕，新增 `flint-40b-free`）、37 條（1.0.72；新增 8 條 `ocgo:`，既有 29 條逐欄不變，opencode 條目由 10 增為 18）、38 條（1.0.78；新增 `ocgo:opencode-go/crouton-alpha-free` 1 條，`oc:`／`zen:` 與既有 8 條 `ocgo:` 之內容與順序不變，opencode 條目由 18 增為 19；1.0.79、1.0.80 條目未動）、37 條（1.0.85；移除 2026-11-10 自官方 Go 型錄下架之 `ocgo:opencode-go/crouton-alpha-free`，其餘條目之內容與順序不變，opencode 條目由 19 減為 18）。`minimax-m3.1-flash-free` 下架後無替代模型。
+**條目換得很快，照抄舊 id 會落入 `missing`**：1.0.34 移除 `deepseek-v4-flash-free` 與 `union-alpha`、換上 `big-pickle` 與 `mimo-v2.6-flash-free`；1.0.40 加 `space-bunny-free`；1.0.42 至 1.0.54 之增刪見本技能開頭。已移除之 id 做 `pick` 時，`hints` 只是字串最接近者，**不保證是同模型的替代**：`space-bunny-free` 的 `oc:` 與 `zen:` 兩個 id 都已移除，同一模型現為 `oc:opencode/minimax-m3.1-flash-free`，要自己改 id；muse-spark-1.3、fledge、ling、cat-jam、step-5 則無替代模型。全表由 20 條（1.0.26）縮到 15 條（1.0.34，zen REST 系大量退場，見免費層閘門），其後 17 條（1.0.40）、22 條（1.0.50）、21 條（1.0.53）、24 條（1.0.54）、29 條（1.0.60；opencode 條目由 12 減為 10：移除 `minimax-m3.1-flash-free`、`longcat-2.5-preview-free`、`nemotron-3-ultra-free`〔已自型錄消失、呼叫回 `UnknownError`〕，新增 `flint-40b-free`）、37 條（1.0.72；新增 8 條 `ocgo:`，既有 29 條逐欄不變，opencode 條目由 10 增為 18）、38 條（1.0.78；新增 `ocgo:opencode-go/crouton-alpha-free` 1 條，`oc:`／`zen:` 與既有 8 條 `ocgo:` 之內容與順序不變，opencode 條目由 18 增為 19；1.0.79、1.0.80 條目未動）、37 條（1.0.85；移除 2026-11-10 自官方 Go 型錄下架之 `ocgo:opencode-go/crouton-alpha-free`，其餘條目之內容與順序不變，opencode 條目由 19 減為 18）、35 條（1.0.108；移除 Poolside 之 `oc:` 與 REST 各一條，其餘條目之內容與順序不變）。`minimax-m3.1-flash-free`、Poolside laguna 下架後無替代模型。
 
-**Poolside 的 `model` 是三段**：供應商名 `poolside` ＋ 模型 id `poolside/laguna-s-2.1`（模型 id 本身就含斜線），不是寫錯。
+**供應商之模型清單仍列，不等於可用**：Poolside 之 `/models` 在模型停用後仍列出兩個 laguna，實際請求卻一律 HTTP 400（w-dispatch-ai 1.0.108，帳本 R-PROVIDERS-1）。判斷某條目能不能用，一律以實際送一次請求為準，不看清單。
+
+**第三方自訂 provider 之 `model` 可以是三段**：供應商名＋本身含斜線之模型 id（原例為已移除之 Poolside `poolside/poolside/laguna-s-2.1`），不是寫錯。
 
 **全取條目表時會混進非文字生成的條目**：kind `api-typesafe-systemone`（決策模型，輸入是待評估狀態、輸出是型別化答案，呼叫時必須另給 `questions`）至 1.0.80 仍為 2 條（`typesafe:jev-latest`、`zen:jev-1.13-free`；後者之 `baseURL` 於 1.0.46 之後改為 `https://opencode.ai/inference/v1`，**1.0.71 起為 `https://opencode.ai/inference/systemone/v1`**——2026-11-03 對齊官方〈Models〉頁端點欄 `…/inference/systemone/v1/systemone`；舊路徑同日仍通，但官方文件已不列，條目不留舊路徑，自行以舊網址組同類條目者請改新 `baseURL`）。它的輸出形狀與文字生成完全不同，**不可與文字生成條目混在同一條遞補鏈**；全取時它會因缺 `questions` 以 `params` 錯誤在 0ms 失敗後換下一家，不影響其他家，但要它就得用 `pick` 單獨取出。
 
@@ -231,7 +233,7 @@ import providers from 'w-dispatch-ai/src/providers.mjs';
 import resolveProviders from 'w-dispatch-ai/src/resolveProviders.mjs';
 import readEnvFile from 'w-dispatch-ai/src/readEnvFile.mjs';
 
-// 金鑰放 .env（OPENCODE_KEYS / OPENCODE_GO_KEYS〔只放已訂閱 Go 的金鑰〕/ AGNES_KEYS / POOLSIDE_KEYS，逗號分隔多把）
+// 金鑰放 .env（OPENCODE_KEYS / OPENCODE_GO_KEYS〔只放已訂閱 Go 的金鑰〕/ AGNES_KEYS，逗號分隔多把；POOLSIDE_KEYS 自 1.0.108 起已無內建條目使用）
 // 用 readEnvFile 而非 process.loadEnvFile：後者會把金鑰塞進 process.env，多專案並行時互相覆蓋
 let env = readEnvFile('./.env');
 
@@ -288,7 +290,7 @@ let extra = [{ id: 'oc:opencode/<新模型>', model: 'opencode/<新模型>', kin
 let merged = [...providers.filter((p) => !extra.some((e) => e.id === p.id)), ...extra];
 ```
 
-- **`id` 務必明給且唯一**：省略時會回退為陣列索引字串，日後插入條目會讓後續條目繼承他人的遞補游標進度。命名要區分到「模型」而非只到「廠商」，同一模型經不同路徑取得時要帶上路徑前綴（`oc:` 走 CLI、`zen:`／`agnes:`／`poolside:` 走 REST）。
+- **`id` 務必明給且唯一**：省略時會回退為陣列索引字串，日後插入條目會讓後續條目繼承他人的遞補游標進度。命名要區分到「模型」而非只到「廠商」，同一模型經不同路徑取得時要帶上路徑前綴（`oc:` 走 CLI、`zen:`／`agnes:` 走 REST）。
 - **自有欄位一律放 `meta`**：條目除 `id`、`keys`、`meta` 外的鍵**一律原樣轉傳**給轉接器，自己加的分類、標籤、註記若不放 `meta`，會被當成 `execCli` 的選項送出去。`meta` 是保證永不轉傳的保留鍵。
 
 不經條目表、直接呼叫時長這樣（供應商定義取自同一份表）：
@@ -313,9 +315,9 @@ await wda.dispatchOpencode(prompt, {
 });
 ```
 
-Poolside 同形，換成 `provider: 'poolside'`、baseURL `https://inference.poolside.ai/v1`、`models: { 'poolside/laguna-s-2.1': { name: 'Laguna S 2.1' } }`。
+其他 OpenAI 相容之第三方供應商同形，換成各自之 `provider` 名、baseURL 與 `models`（原 Poolside 之例已隨其條目於 1.0.108 移除）。
 
-**同一個模型經不同路徑＝不同的供應商**，條目 id 的前綴就是在區分這件事：`oc:` 走 opencode CLI，**有工具能力、能讀寫檔案**，但較慢；`agnes:`／`poolside:`／`zen:` 走 REST 直呼（`dispatchApiOpenaiCompat`／`dispatchApiOpenaiResponses`），免 CLI 免登入且快，但**沒有工具能力**——本套件遇模型回 `tool_calls` 一律以 `TOOL_CALLS_UNSUPPORTED`（`errorType: 'tool-unsupported'`）回報失敗，不假裝成功。兩者的額度池與故障域也各自獨立。**要派審計、寫測試這類需要讀寫檔案的任務，只能走 `oc:` 版。**
+**同一個模型經不同路徑＝不同的供應商**，條目 id 的前綴就是在區分這件事：`oc:` 走 opencode CLI，**有工具能力、能讀寫檔案**，但較慢；`agnes:`／`zen:` 走 REST 直呼（`dispatchApiOpenaiCompat`／`dispatchApiOpenaiResponses`），免 CLI 免登入且快，但**沒有工具能力**——本套件遇模型回 `tool_calls` 一律以 `TOOL_CALLS_UNSUPPORTED`（`errorType: 'tool-unsupported'`）回報失敗，不假裝成功。兩者的額度池與故障域也各自獨立。**要派審計、寫測試這類需要讀寫檔案的任務，只能走 `oc:` 版。**
 
 ## 輸出與附件
 
@@ -596,7 +598,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 |---|---|---|
 | `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**；給得比 `timeoutMs` 小，4 小時等於白設；1.0.86 起 `0` 與負數為「已無時間」（不送出、回 `budget`），小數取整；被預算封頂而逾時之嘗試回 `budget`（事件 `budget-cut`），不記冷卻、不計連敗 |
 | `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
-| `cooldownMs` | `0`（關閉） | 內建觸發只有 HTTP 429 與逾時，**429 僅 REST 類（`zen:`／`agnes:`／`poolside:`）偵測得到**；`oc:` 這類 CLI 條目的限流埋在 stderr 文字裡，內建規則抓不到。觸發後該條目**只被移到鏈尾不被移除**（前面全敗時仍會被試到，任一次成功立即解除），啟用期間「providers 順序即優先序」會被暫時重排。套件記載之實測：一次 107 秒請求中 72 秒耗在重複踩同一家，開冷卻後降至 15 秒。**只對有明給 `id` 的條目生效**；1.0.86 起可加長：`cooldownGrowth`（預設 1＝固定視窗）、`cooldownMaxMs`（預設 24 小時），視窗外再觸發即乘以 growth、成交歸零；另有持久連敗 `coolAfterFails`（整組皆敗連續 N 次即降序，給 `store` 才跨行程累計） |
+| `cooldownMs` | `0`（關閉） | 內建觸發只有 HTTP 429 與逾時，**429 僅 REST 類（`zen:`／`agnes:`）偵測得到**；`oc:` 這類 CLI 條目的限流埋在 stderr 文字裡，內建規則抓不到。觸發後該條目**只被移到鏈尾不被移除**（前面全敗時仍會被試到，任一次成功立即解除），啟用期間「providers 順序即優先序」會被暫時重排。套件記載之實測：一次 107 秒請求中 72 秒耗在重複踩同一家，開冷卻後降至 15 秒。**只對有明給 `id` 的條目生效**；1.0.86 起可加長：`cooldownGrowth`（預設 1＝固定視窗）、`cooldownMaxMs`（預設 24 小時），視窗外再觸發即乘以 growth、成交歸零；另有持久連敗 `coolAfterFails`（整組皆敗連續 N 次即降序，給 `store` 才跨行程累計） |
 | `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /FreeUsageLimitError/i.test(r.stderr \|\| '')`。注意 opencode CLI 遇免費池用盡（`Free usage limit reached`）或 `-free` 模型之 429（`Rate limit exceeded`）時本身**不會結束**（1.18.32、1.19.5 實測）；`w-dispatch-ai` 1.0.95 起 `dispatchOpencode` 自動加 `--print-logs --log-level ERROR` 並於主要請求之錯誤列出現時數秒內樹狀終止，額度用盡回 `errorType: 'quota'`／`failureKind: 'no-credit'`、429 回 `failureKind: 'rate-limit'`，遞補層內建冷卻即涵蓋，不必再以 `coolDetect` 讀字樣（1.0.94 以前以 `TIMEOUT` 回報；`--print-logs` 時 opencode 不寫日誌檔，`errorDetail.upstream` 改取自 stderr）。**`FreeUsageLimitError`（`Free usage limit reached…subscribe to OpenCode Go`）代表該免費模型當日額度用盡**（額度逐模型計，同一模型的 CLI 與 REST 共用該模型之額度；其他免費條目可能仍可用），冷卻只是把該條移到鏈尾，**不會恢復額度**；`opencode-go/` 前綴（`ocgo:` 條目）不受影響。**Go 額度到頂時的字樣與 `run` 行為未知**（沒人撞過），別為它預寫簽章 |
 | `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
 | `spawnGate` | 未給＝預設啟用（1.0.73 起） | CLI 類（`oc:`／`ocgo:` 條目亦是）**每次 spawn 前**的機器級守門：機器上 `opencode.exe` 數 ≥ `max(1, 核心數−1)`、RAM 已用 >85%、全機 CPU >90% 任一成立即等，每 10 秒再查，累計等逾 10 分鐘即放行；計數或取樣本身失敗亦放行（fail-open，守門不會成為新的失敗來源）。**預設只對 opencode 啟用**——依據是套件在 8 核心 Windows 機之實測：`opencode.exe` 單次短呼叫約占 1.1 核心，而 claude／codex 等候回應時幾乎不占 CPU，故另三家預設不限（見其技能；`agy` 未測）。只守 `exe` 為真的 `opencode`（假 CLI、包裝腳本不守，明給 `true` 或物件才守）。`false` 關閉；物件逐鍵覆寫 `maxCli`／`ramUsedMax`／`cpuMax`（各可 `false` 關該項）、`pollMs`、`gateWaitMaxMs`，非預期之值改用預設而不報錯；放在遞補層頂層為各條目共用，條目自帶者**整個取代**、不逐鍵合併。等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算。結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true`。成本（套件實測）：首次檢查或閒置逾 10 秒後約 +1.1 秒，之後約 +0.07 秒 |
