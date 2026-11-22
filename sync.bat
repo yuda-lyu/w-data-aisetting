@@ -25,8 +25,23 @@ if exist "%SRC%" rmdir /s /q "%SRC%"
 if not exist "%WORK%" mkdir "%WORK%"
 
 echo [2/7] git clone %REPO% (branch %BRANCH%)
+rem Connections to github.com sometimes stall for several seconds and fail
+rem ("Failed to connect to github.com port 443 after 21xxx ms"), so the clone is tried up to
+rem 5 times, waiting 15, 30, 45 and 60 seconds in between. The wait uses ping because timeout
+rem fails when input is redirected.
+set "TRY=1"
+:clone
 git clone --depth 1 -b %BRANCH% -c core.autocrlf=false "%REPO%" "%SRC%"
-if errorlevel 1 goto :fail
+if not errorlevel 1 goto :cloned
+if %TRY% geq 5 goto :fail
+set /a WAIT=TRY*15
+set /a PINGS=WAIT+1
+echo git clone failed, attempt %TRY% of 5 - retrying in %WAIT% seconds...
+if exist "%SRC%" rmdir /s /q "%SRC%"
+ping -n %PINGS% 127.0.0.1 >nul
+set /a TRY+=1
+goto :clone
+:cloned
 
 echo [3/7] copy skills to "%DST%"
 robocopy "%SRC%\skills" "%DST%" /E /R:2 /W:1 /NFL /NDL /NP /NJH
