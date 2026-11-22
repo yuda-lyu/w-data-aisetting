@@ -165,7 +165,7 @@ agy 的非成功結局多半是 **exit 0**，只看離開碼分不出來：
 
 ## 工作區與認證
 
-agy 透過明確指定的工作區目錄決定檔案可視範圍。未提供 `addDirs` 時，`dispatchAntigravity()` 會自動加入實際 `cwd`。
+agy 透過明確指定的工作區目錄決定檔案可視範圍。未提供 `addDirs` 時，`dispatchAntigravity()` 會自動加入實際 `cwd`；`addDirs: []` 為不揭露任何目錄；1.0.109 起 `addDirs` 給了而無效（非陣列、不可讀、逾 10000 項、非空而元素全無效）回 `params`，不再退回 `[cwd]`（見 SKILL.md〈轉接器契約〉）。
 
 無人值守執行前，須先在互動式 `agy` 工作階段完成 Google 認證。`--dangerously-skip-permissions` 不會執行 OAuth。
 

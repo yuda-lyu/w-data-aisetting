@@ -5,7 +5,7 @@ description: 當任務需要委派給 Codex，或需要把 Codex 納入多代理
 
 # dispatch-codex
 
-使用 `w-dispatch-ai` 的 `dispatchCodex()` 執行自動化 Codex 任務（本技能對照 1.0.80；`dispatchCodex()` 之固定參數與自用鍵自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，codex 預設不限，見〈逾時分層〉選項表；1.0.79 起遞補層對 `codex` 條目於呼叫前先看額度、用量 ≥95% 即略過（`quotaGate`，遞補層選項、非 `dispatchCodex()` 的自用鍵），見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。轉接器會呼叫 `codex exec`、透過 stdin 傳入提示詞、設定沙箱政策、略過 Git 儲存庫限制、管理逾時與程序樹清理，並以結果物件回報失敗。
+使用 `w-dispatch-ai` 的 `dispatchCodex()` 執行自動化 Codex 任務（本技能對照 1.0.109；`dispatchCodex()` 之固定參數自 1.0.17 起未變動，**但 1.0.109 起新增自用鍵 `cleanCodexRefs`（派工後預設清除該次新留下之 `refs/codex/*`）、帶 `--json` 時結果另帶 `raw`／`commands`，且 `sandbox`／`exe`／`cwd`／`env`／`maxRetries` 給了無效值之處置改為拒絕或視為未給，見〈轉接器契約〉與〈安裝檢查〉2026-11-23 對照**；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，codex 預設不限，見〈逾時分層〉選項表；1.0.79 起遞補層對 `codex` 條目於呼叫前先看額度、用量 ≥95% 即略過（`quotaGate`，遞補層選項、非 `dispatchCodex()` 的自用鍵），見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。轉接器會呼叫 `codex exec`、透過 stdin 傳入提示詞、設定沙箱政策、略過 Git 儲存庫限制、管理逾時與程序樹清理，並以結果物件回報失敗。
 
 需要變更模型／設定旗標、沙箱行為或非互動輸出時，讀取 [references/codex-flags.md](references/codex-flags.md)。
 
@@ -93,46 +93,21 @@ await wda.dispatchCodex(prompt, {
 
 **沙箱之 PowerShell 為受限語言模式**：2026-09-27 於沙箱內實測 `$ExecutionContext.SessionState.LanguageMode` 回 `ConstrainedLanguage`——.NET 方法呼叫與屬性設定一律被拒（「無法叫用方法。語言模式只支援核心類型上的方法叫用」「無法設定屬性。語言模式只支援核心類型上的屬性設定」），所以 `[System.IO.File]::ReadAllText(…)` 與 `[Console]::OutputEncoding=…` 在沙箱內都不能用。
 
-**實測表（2026-09-27，Codex 0.156.1，`gpt-6-luna`／low，`--sandbox read-only`，Windows zh-TW 主控台代碼頁 950；以 session 紀錄 `~/.codex/sessions/…/rollout-*.jsonl` 之 `item_completed` 事件的 `aggregated_output` 判定 Codex 實際收到之內容，不經模型轉述；每個命令皆為獨立行程）**：
-
-| 讀法 | 結果 |
-|---|---|
-| `rg -n '^' -- <檔>` | **完好** |
-| `rg -n -m 3 '^' -- <檔>` | **完好**（限行數用 rg 自己的參數） |
-| `cmd /c type "<檔>"` | **完好** |
-| `rg -n '^' -- <檔> \| Select-Object -First 3` | 失真（U+FFFD 14） |
-| `Get-Content -LiteralPath <檔> -TotalCount 3 -Encoding utf8` | 失真（U+FFFD 32） |
-| `chcp 65001 > $null; Get-Content … -Encoding utf8` | 失真（U+FFFD 32） |
-| `Get-Content -LiteralPath <檔> -TotalCount 3`（未指定編碼） | 失真（ANSI 誤解碼之亂碼） |
-| `[System.IO.File]::ReadAllText(…)` | **被拒**（受限語言模式） |
-| `[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-Content … -Encoding utf8` | **被拒**（受限語言模式） |
-
-**重驗（2026-11-13，Codex 0.167.0；使用端回報「0.167.0 以 `rg` 讀含中文註解之行，審查者引用與原文不符」——未能重現）**：本機 `codex --version` 為 `codex-cli 0.167.0`，以技能根之 `w-dispatch-ai`（實裝 1.0.90）`dispatchCodex()`、`gpt-6.1-terra`／`model_reasoning_effort="low"`、`sandbox: 'read-only'`、`--json`，實呼 2 次；以 `--json` 事件流中 `item.completed`（`item.type` 為 `command_execution`）之 `aggregated_output`（Codex 實際收到之內容，不經模型轉述）逐行與原檔比對。事件之 `command` 欄為 `"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "…"`，與上文「Codex 以 PS 5.1 執行每個命令」一致。樣本為含中文註解、全形標點與 `〔〕「」＝→` 之公開套件原始碼：17 行節錄（另加 1 行純 ASCII），及同一檔之完整副本（1073 行、112,396 位元組）：
-
-| 讀法 | 檔 | 結果 |
-|---|---|---|
-| `rg -n '^' -- <絕對路徑>` | 17 行節錄 | **完好**（17 行逐行與原檔一致，U+FFFD 0） |
-| `rg -n -m 3 '^' -- <絕對路徑>` | 17 行節錄 | **完好**（3 行一致，U+FFFD 0） |
-| `cmd /c type "<檔>"` | 17 行節錄 | **完好**（整段與原檔逐字相等，U+FFFD 0） |
-| `rg -n '^' -- <絕對路徑> \| Select-Object -First 3` | 17 行節錄 | **失真**（U+FFFD 81，3 行皆與原檔不符）——對照組，證明本測法分辨得出失真 |
-| `rg -n '^' -- providers-copy.mjs`（相對路徑、cwd 為該檔所在夾） | 完整副本 1073 行 | **完好**（1073 行逐行一致，U+FFFD 0） |
-| `rg -n -C 2 'Hydrogen' -- providers-copy.mjs` | 完整副本 | **完好**（30 行一致，U+FFFD 0） |
-
-兩次實呼中模型最後引用之原文（第 2 行；含「提出端」之第一行〔119 行〕）亦與原檔逐字一致。**結論**：`rg` 直接輸出於 0.167.0 本機（單次、模型為 terra low、各讀法各 1 次）**未見失真**，「rg 直接輸出為可行讀法」維持成立，PowerShell 管線之失真照舊。回報之失真**未能重現**，其當時所用之讀法與命令輸出**未留存**，無法確認：「審查者回覆之引用與原文不符」本身分不出是 Codex 收到之內容失真，還是模型轉述／引用出錯，也可能是當次混用了 `Get-Content`、管線或 `git diff` 等其他讀法——遇到時先看該次 `aggregated_output` 是否含 U+FFFD 或與原檔不符（見下方驗收），再判斷是讀檔失真或模型引用出錯，不要因此就捨棄 `rg`。**未涵蓋**：`gpt-6.1-terra` 以 `max` 推理之派工、更大之檔案、`git diff` 輸出、`Get-Content` 於 0.167.0 之行為（上表 0.156.1 之失真結果未重測）；單次實呼不代表不可能偶發。
+**實測結果摘要**（完整實測表〔2026-09-27，Codex 0.156.1〕與 2026-11-13 於 Codex 0.167.0 之重驗〔含對照組、驗證方法與未涵蓋項〕已移至 [references/codex-win-nonascii-log.md](references/codex-win-nonascii-log.md)）：`rg -n '^' -- <檔>`（含 `-m`、`-C`）與 `cmd /c type` 讀中文檔**完好**；任何接上 PowerShell 管線（`| Select-Object` 等）、`Get-Content`（含 `-Encoding utf8`、先 `chcp 65001`）皆**失真**（U+FFFD 或 ANSI 亂碼）；`[System.IO.File]::ReadAllText` 與 `[Console]::OutputEncoding=…` 於沙箱之受限語言模式**被拒**。2026-11-13 於 0.167.0 重驗：`rg` 直接輸出**未見失真**（使用端回報之失真未能重現、當時條件未留存），「`rg` 為可行讀法」維持成立；遇到審查者引用與原文不符時，先看該次 `aggregated_output`（或 1.0.109 起之 `result.commands[].output`）是否含 U+FFFD 或與原檔不符，再判斷是讀檔失真或模型引用出錯，不要因此捨棄 `rg`。
 
 **正解**：讀檔一律用 `rg -n '^' -- <檔>`；要限範圍用 rg 自己的 `-m <N>`／`-A`／`-B`／`-C`，不要接 `| Select-Object`；要原樣位元組用 `cmd /c type "<檔>"`。`rg` 由 Codex 環境提供（本機 PowerShell 之 PATH 未必有 rg，Codex 沙箱內可用）。**派工提示詞要寫明這個讀法**——模型會自行挑讀法而混用 `Get-Content`，不寫就會部分失真。
 
-**驗收（canary）**：提示詞裡指定一個你已知的中文字串，要求 Codex 原文引用，收回後逐字比對。比對不過是編碼問題，不是模型理解問題，不要靠改寫提示詞繞過去。要確認 Codex 實際讀到什麼，看 session 紀錄之 `aggregated_output`（同一事件另有 `item_started`，其輸出為空，須取 `item_completed`）；**0.167.0 實測：派工時於 `extraArgs` 加 `--json`，stdout 之 JSONL 事件流即含同樣之 `item.completed`（`command_execution`）與其 `aggregated_output`，不必翻 session 紀錄**（用 `onStdout` 落檔；此時 stdout 是 JSONL，不可搭配 `validate: 'json'`，見〈輸出〉）。比對時逐行去掉 `rg -n` 之行號前綴後與原檔相比，並數 U+FFFD。
+**驗收（canary）**：提示詞裡指定一個你已知的中文字串，要求 Codex 原文引用，收回後逐字比對。比對不過是編碼問題，不是模型理解問題，不要靠改寫提示詞繞過去。要確認 Codex 實際讀到什麼，看 session 紀錄之 `aggregated_output`（同一事件另有 `item_started`，其輸出為空，須取 `item_completed`）；**0.167.0 實測：派工時於 `extraArgs` 加 `--json`，stdout 之 JSONL 事件流即含同樣之 `item.completed`（`command_execution`）與其 `aggregated_output`，不必翻 session 紀錄**；**w-dispatch-ai 1.0.109 起結果直接帶 `commands`（最後一次嘗試之各命令：`command`、`exitCode`、`status`、`output`〔即 `aggregated_output`，Codex 實際收到之命令輸出〕）與 `raw`（完整事件流文字），成功與失敗皆帶，驗收直讀 `result.commands`，不必再以 `onStdout` 落檔後自行解析**（`stdout` 不改、仍是 JSONL，不可搭配 `validate: 'json'`，見〈輸出〉）。比對時逐行去掉 `rg -n` 之行號前綴後與原檔相比，並數 U+FFFD。
 
-**更正舊記載**：原載「`Get-Content -Encoding utf8` 與 `ReadAllText` 兩種寫法皆通過（2026-09-08 於 0.153.4 實測）」於 2026-09-27、0.156.1 之沙箱不成立：前者輸出端仍被編成 950 而失真，後者被受限語言模式拒絕；原載「本機實測 LanguageMode 為 FullLanguage」亦不成立（沙箱內為 ConstrainedLanguage）。當時為何通過未查證（推測當時之輸出代碼頁或語言模式與現況不同）。**非沙箱重現時的陷阱**：非沙箱之 FullLanguage 下 `[Console]::OutputEncoding=UTF8` 可用，但它改的是**整個主控台**的輸出代碼頁（`SetConsoleOutputCP`），同一主控台下之後啟動的行程全都改用 UTF-8 輸出——本機以同一 node 行程連續 spawn 驗證時（2026-09-27），第一回合 10 種讀法中 8 種失真（只有兩種先設 `[Console]::OutputEncoding` 者完好），第二回合 10 種全數「完好」，差別只在第一回合中途執行過這行。重現實驗每種讀法都要在乾淨主控台或以輸出位元組比對，不要讓前一個命令污染後一個。
+**更正舊記載與非沙箱重現之陷阱**（原文移至 [references/codex-win-nonascii-log.md](references/codex-win-nonascii-log.md)）：原載「`Get-Content -Encoding utf8` 與 `ReadAllText` 兩種寫法皆通過（2026-09-08 於 0.153.4）」於 2026-09-27、0.156.1 之沙箱不成立——前者輸出端仍被編成 950 而失真，後者被受限語言模式拒絕；原載「LanguageMode 為 FullLanguage」亦不成立（沙箱內為 ConstrainedLanguage）。**非沙箱重現時**：FullLanguage 下 `[Console]::OutputEncoding=UTF8` 改的是**整個主控台**之輸出代碼頁，會污染其後啟動之行程；重現實驗每種讀法都要在乾淨主控台或以輸出位元組比對，不要讓前一個命令污染後一個。
 
 **寫入方向同樣有坑**（未於 2026-09-27 重驗）：PS 5.1 的 `Out-File` 預設 UTF-16LE，`Set-Content` 與 `>` 走 ANSI。要 Codex 以 shell 寫出含中文的檔案時一律明寫 `-Encoding utf8`，收回後驗檔案內容；能不經 shell 寫檔（`apply_patch` 或 `--output-last-message`）就不經 shell。
 
 **不要拿這些當解**：
 
-- `chcp 65001`：2026-09-27 實測無效（見上表）。
+- `chcp 65001`：2026-09-27 實測無效（見 [references/codex-win-nonascii-log.md](references/codex-win-nonascii-log.md) 之實測表）。
 - `[Console]::OutputEncoding = [Text.Encoding]::UTF8`：沙箱之受限語言模式直接拒絕（實測；上游 issue #9767 亦回報 Codex 自己下這行時撞到）。
-- `$PROFILE` 加 `$PSDefaultParameterValues['Get-Content:Encoding']='utf8'`：只修讀入端，輸出端仍被編成 950（依上表 `-Encoding utf8` 之結果推論，未另測）。
+- `$PROFILE` 加 `$PSDefaultParameterValues['Get-Content:Encoding']='utf8'`：只修讀入端，輸出端仍被編成 950（依實測表 `-Encoding utf8` 之結果推論，未另測）。
 
 **影響全機的檔位（需使用者同意，本技能未實測）**：Windows 區域設定的「Beta：使用 Unicode UTF-8 提供全球語言支援」把系統 ANSI 代碼頁改成 65001（推測可同時修讀入與輸出兩端）。會影響本機其他程式，採用前先徵得使用者同意。
 
@@ -190,6 +165,8 @@ console.log(result.stdout);
 
 只有在使用者任務確實需要，而且執行環境已妥善隔離時，才可使用 `danger-full-access`。
 
+**`sandbox` 給了而無效即拒絕**（w-dispatch-ai 1.0.109 起）：給了而非非空字串（含 `''`、數字、物件、`String` 包裝物件）回 `params`、`attempts: 0`、不起子程序，**不再退回 `workspace-write`**（修前要求 `read-only` 之意圖寫錯型別時會被悄悄放寬成可寫）。要用預設就不給該欄（`undefined`／`null`）。轉接器只檢查「是非空字串」，值本身是否為 Codex 認得之檔位（`read-only`／`workspace-write`／`danger-full-access`）由 CLI 判定。
+
 workspace-write 的網路權限是獨立設定。只有在任務需要安裝套件等網路操作時才啟用：
 
 ```javascript
@@ -229,16 +206,7 @@ await wda.dispatchCodex(prompt, {
 
 ### 沙箱擋寫的實際樣子（2026-09-08 於 0.153.4 實測）
 
-同一段提示詞（讀 `probe.txt` 第一行，再於同目錄建立 `out.txt`），以 `--sandbox read-only` 執行：
-
-| 觀察點 | 結果 |
-|---|---|
-| 讀取 | 成功（Codex 起 PowerShell 讀檔——再次印證讀檔就是執行 shell） |
-| 寫入 | 被拒，stderr 出現 `error=patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings` |
-| `out.txt` | **未建立** |
-| stdout | 一行看似正常的回覆 |
-| 離開碼 | **0** |
-| `--output-last-message <FILE>` 指定的檔案 | **有**建立——該檔由 CLI 本身寫出，不經模型的沙箱 |
+**實測摘要**（完整表移至 [references/codex-sandbox-write-test.md](references/codex-sandbox-write-test.md)；同一段提示詞〔讀 `probe.txt` 第一行，再於同目錄建立 `out.txt`〕，`--sandbox read-only`）：讀取成功（Codex 起 PowerShell 讀檔——再次印證讀檔就是執行 shell）；寫入被拒，stderr 出現 `error=patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings`；`out.txt` **未建立**；stdout 一行看似正常之回覆；離開碼 **0**；`--output-last-message <FILE>` 指定之檔**有**建立（由 CLI 本身寫出，不經模型之沙箱）。
 
 - **離開碼與非空輸出都不是成功判準**：exit 0 ＋ stdout 非空，`validate: 'nonempty'` 直接放行，實際什麼都沒寫成。判成功要看產物是否落地，並檢查 stderr 有無 `blocked by read-only sandbox`／`blocked by policy` 字樣。
 - 症狀與「Windows 前置」一節的靜默失敗同型，只是換到寫入維度：那節談的是讀不到，這裡是寫不了。
@@ -358,14 +326,14 @@ Bash({ run_in_background: true, timeout: 7200000,
 | 層 | 誰在殺 | 預設 | 正式派工怎麼設 |
 |---|---|---|---|
 | ①呼叫端（Claude Code 的工具呼叫時限） | harness 終止整個行程 | 見上節表格，最長 2 小時 | 派工照〈執行步驟〉detached 執行，此層即不作用；只有等待受它約束，所以等待要分段 |
-| ②轉接器 `timeoutMs`（單次嘗試） | 逾時終止程序樹 | 300000 | `14_400_000` |
+| ②轉接器 `timeoutMs`（單次嘗試） | 逾時終止程序樹 | 300000 | `14_400_000`（須為 1～2147483647 之整數或其十進位數字字串；其餘〔0、負數、小數、超過 2147483647、`Infinity`、`'0x10'`、包裝物件〕視為未給而用預設 300000，不夾上限、不報錯，1.0.92 起；`14_400_000` 在範圍內） |
 | ③CLI 自身內層逾時 | — | `codex exec` **旗標表上沒有**此類旗標 | 不適用（只有 agy 有 `--print-timeout`）；惟 Codex 支援任意 `-c <key=value>` 設定覆寫，是否存在逾時類設定鍵未查證 |
 | ④單一名額之遞補鏈 `budgetMs` | 預算用盡即停止遞補 | `null`（不限） | 要嘛不給，要嘛 ≥ `鏈組數 K × 14_400_000`；給小了會把第②層壓下去 |
 | ⑤工作流總時長 | 無獨立參數，由結構推導 | 無（刻意） | `runRolePipeline` 最壞 ≈ M×K×`timeoutMs`。K=4、M=3 配 4 小時就是 **48 小時**——先算再決定要不要拆階段 |
 
 **最常見的假象**：`timeoutMs` 明明給了 4 小時，派工卻在 2 分鐘、10 分鐘、30 分鐘或 2 小時整斷掉——全是第①層砍的：派工掛在前景，或掛在 `run_in_background` 上（沒給 `timeout` 是 30 分鐘，給滿也只有 2 小時）。**只改 `timeoutMs` 沒用，派工一定要照〈執行步驟〉detached 執行**。
 
-**單次派工還會乘上去的**：`timeoutMs` 是**每次嘗試**的上限，不是總時長；自訂 `validate` 的等待也算在同一次嘗試內（`src/runExecCli.mjs`）。`maxRetries: N` 時總時長約 `timeoutMs × (1+N)`，再加重試間隔（`retryDelayMs` 預設 5000，實際間隔為 `retryDelayMs × 已嘗試次數`、單次上限 15000）；**`TIMEOUT` 會被重試，每次耗滿 `timeoutMs`**；1.0.86 起有 `budgetMs` 時，每次重試之逾時以剩餘預算封頂、剩餘不足 `minAttemptMs` 即不再重試（1.0.85 以前不受 `budgetMs` 約束）。不重試、立即中止的只有確定性失敗：`ENOENT`（命令不存在、不存在的 `.cmd`／`.bat`、npm shim 的入口檔缺失）、exit code 2（參數錯誤）、`cwd` 不存在，以及子進程根本起不來的同步錯誤（命令列過長、權限不足、非有效執行檔、參數含空字元；這類結果 `code` 為 `null`、`errorType` 為 `spawn`）。
+**單次派工還會乘上去的**：`timeoutMs` 是**每次嘗試**的上限，不是總時長；自訂 `validate` 的等待也算在同一次嘗試內（`src/runExecCli.mjs`）。`maxRetries: N`（N 須為 0～4294967295 之整數或其十進位數字字串；`Infinity`、`'0x10'`、小數、負數、超過上限視為未給＝0，1.0.109 起，修前 `Infinity` 會令驗證不過者近乎無限重試）時總時長約 `timeoutMs × (1+N)`，再加重試間隔（`retryDelayMs` 預設 5000，實際間隔為 `retryDelayMs × 已嘗試次數`、單次上限 15000）；**`TIMEOUT` 會被重試，每次耗滿 `timeoutMs`**；1.0.86 起有 `budgetMs` 時，每次重試之逾時以剩餘預算封頂、剩餘不足 `minAttemptMs` 即不再重試（1.0.85 以前不受 `budgetMs` 約束）。不重試、立即中止的只有確定性失敗：`ENOENT`（命令不存在、不存在的 `.cmd`／`.bat`、npm shim 的入口檔缺失）、exit code 2（參數錯誤）、`cwd` 不存在，以及子進程根本起不來的同步錯誤（命令列過長、權限不足、非有效執行檔、參數含空字元；這類結果 `code` 為 `null`、`errorType` 為 `spawn`）。
 
 **走遞補鏈或工作流時，三個值必須成套設，缺一即壞**（以下皆為 `w-dispatch-ai/src/dispatchAiFallback.mjs` 之實際行為）：
 
@@ -376,14 +344,14 @@ Bash({ run_in_background: true, timeout: 7200000,
 | 選項 | 預設 | 實際行為與陷阱 |
 |---|---|---|
 | `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**；給得比 `timeoutMs` 小，4 小時等於白設；1.0.86 起 `0` 與負數為「已無時間」（不送出、回 `budget`），小數取整；被預算封頂而逾時之嘗試回 `budget`（事件 `budget-cut`），不記冷卻、不計連敗 |
-| `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
+| `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」。1.0.109 起：呼叫端另給 `spawnGate.minAttemptMs` 時，取兩來源有效（正整數）值之**較大者**，守門與暫時性重試之預算判斷同一規則（修前呼叫端之物件優先；小數如 `1500.5` 現視為無效） |
 | `cooldownMs` | `0`（關閉） | 只對**有明給 `id`** 的條目記冷卻；內建觸發只有 HTTP 429 與逾時，而 **429 僅 REST 類偵測得到**；CLI 類的限流埋在輸出文字裡，內建規則抓不到；1.0.86 起可加長：`cooldownGrowth`（預設 1＝固定視窗）、`cooldownMaxMs`（預設 24 小時），視窗外再觸發即乘以 growth、成交歸零；另有持久連敗 `coolAfterFails`（整組皆敗連續 N 次即降序，給 `store` 才跨行程累計） |
 | `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣：`(r) => r.errorType !== 'validation' && /<觀察到的限流字樣>/i.test(r.stderr \|\| '')`；字樣由觀察到的呼叫端維護，套件不內建（codex 的額度字樣套件未見過、不內建；要讓失敗文字進額度帳，見下列 `quotaGate` 列的 `quotaUntilOf`） |
-| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
-| `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**codex 預設不限**（只有 opencode 預設啟用）。依據：套件在 8 核心 Windows 機觀察現役 `codex.exe`（1 個）數十秒窗內為 0.0% 單核——等候模型回應時幾乎不占 CPU；若比照 opencode 以 `核心數−1` 計數，同時派多個 `codex exec` 反而讓新派工白等。**未驗證處**：這是對現役行程之觀察，**未以真實 `codex exec` 派工量測**（會耗訂閱額度）。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `codex.exe` 之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
+| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損）。1.0.109 起：呼叫端另給 `spawnGate.shouldStop` 時兩來源以「**或**」合併（任一回傳恰為 `true` 即中止；修前呼叫端給了則遞補層之中止請求不能中止守門等待） |
+| `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**codex 預設不限**（只有 opencode 預設啟用）。依據：套件在 8 核心 Windows 機觀察現役 `codex.exe`（1 個）數十秒窗內為 0.0% 單核——等候模型回應時幾乎不占 CPU；若比照 opencode 以 `核心數−1` 計數，同時派多個 `codex exec` 反而讓新派工白等。**未驗證處**：這是對現役行程之觀察，**未以真實 `codex exec` 派工量測**（會耗訂閱額度）。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `codex.exe` 之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；1.0.109 起有期限（`budgetMs` 換算之期限與呼叫端 `spawnGate.deadlineAt` 取較早者）時，探針逾時亦不超過「期限 − `minAttemptMs` − 現在」、排互斥鎖之等候受同一期限約束，到點即 fail-open 放行（`onTrace` 之 `fail-open` 事件 `reason` 為 `'deadline'`／`'lock-timeout'`；因期限縮短而逾時者不算探針故障、不冷卻）；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
 | `quotaGate` | 未給＝**預設開**（codex 條目自 1.0.79 起；此鍵為遞補層與 `createAiCaller` 的選項，不是 `dispatchCodex()` 的自用鍵、不轉傳轉接器） | 遞補層選到 `codex` 條目（**無 `keys` 者**；條目 `env.CODEX_HOME` 與本行程不同者不適用——讀者繼承本行程環境，查的會是別的帳號）、呼叫轉接器前，先看**額度帳**（`store.quota`，`now < until` 即略過、不查不派），再以 `getQuotaCodex`（`codex app-server`，唯讀、不耗額度）查用量，**任一視窗 `usedPercent ≥ 95` 即略過、不派**——事件 `quota-skip`（帶 `source`：`'usage-api'`／`'ledger'`／`'limit-text'`）、`tried[].outcome: 'quota-skip'`、合成失敗結果 `errorType: 'quota'`、`failureKind: 'no-credit'`、`error` 以 `QUOTA_COOLDOWN:` 開頭、`attempts: 0`；**不寫條目冷卻**（`cooldownMs` 之既有語意不變）。此前額度滿期間，每輪每席都先空試一次（可達逾時）。**模型別視窗只在 model 相符時計入**：視窗帶 `scope` 者，只在條目 `model` 含該 scope（忽略大小寫與非英數）時計入；無 `scope` 的視窗一律計入。**入帳**：判定為被擋且被擋視窗的重置時刻可解析時，寫入 `store.quota`（`until` 為被擋視窗重置時刻之最晚者，上限現在＋8 天，跨行程經既有 `store` 持久化；`store` 無效時退回行程內記憶體），之後 `now < until` 不再查詢，過期才重查；codex 的額度字樣本套件未見過、**不內建**，要靠失敗文字入帳者由呼叫端注入 `quotaUntilOf(r)`（以 `entry:<id>` 入帳，只對明給 `id` 的條目有效）。**預設只作用於 `exe` 為真的 `codex`（或未給 `exe`）**，假 CLI 與包裝腳本不被預設查詢，明給 `quotaGate: true` 或物件才不論 `exe`。**fail-open**：讀者逾時、拋錯、未授權、欄位缺漏、`usedPercent` 缺漏或非數字一律不擋（另發 `quota-gate-error`）。**成本**：讀者約 4.6 秒（套件本機實測 1 次），claude／codex 讀者結果預設快取 60 秒（`cacheMs`）、查詢逾時 15 秒（`timeoutMs`）。**關閉**：`quotaGate: false`（遞補層頂層或單一條目；查用量、讀帳、寫帳三處全關）；只想調門檻用 `codexMax`（`false` 關閉該家）或 `windowMax`。帳在重置前不重查，期間若升級方案或補充額度，須清除 `store.quota` 之該鍵或 `quotaGate: false` |
 
-遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰。
+遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀或給了非物件、`exe`／`cwd`／`sandbox`／`cleanCodexRefs` 給了而無效）時**整組跳過**，不在同組內逐把換金鑰。1.0.109 起條目層之 `params` 失敗（含上述安全相關 opt 給了而無效）於發 `try` 事件**之前**即判，**不發 `try`**（`onUsage` 不入帳；仍進 `tried`）；轉接器自身才得知之 `params`（如 `model` 缺漏）仍在 `try` 之後，結果帶 `attempts: 0` 可辨。
 
 **`budgetFor()` 有陷阱，不要照抄**：它**只累加條目自己的 `timeoutMs`**，讀不到你寫在 opt／`defaults` 的那一個；而套件內建的 providers 條目**刻意不帶 `timeoutMs`**，所以 `budgetFor(內建條目)` 恆為「條目數 × 300000」（1.0.53 內建 21 條就是 105 分鐘）——比你的 4 小時還小，反而把它壓下去。要用它就得先把 `timeoutMs: 14_400_000` 逐條寫進每個條目，否則直接寫 `K × 14_400_000`。
 
@@ -412,24 +380,38 @@ await wda.dispatchCodex(prompt, {
 
 使用 `--json` 時，不可搭配 `validate: 'json'`，因為 stdout 是 JSONL 事件流。
 
-## 轉接器契約（w-dispatch-ai 1.0.53）
+**帶 `--json` 時結果另帶 `raw` 與 `commands`**（w-dispatch-ai 1.0.109 起；`extraArgs` 含 `--json` 才介入，未帶者結果形狀不變）：`stdout` 仍是 JSONL 事件流（不改）；`raw` 為該次呼叫累積之完整事件流文字（`execCli` 依 `maxRetries` 內部重試時含各次嘗試；失敗結果之 `stdout` 只留 500 字元，`raw` 不裁；累積上限 32 MiB）；`commands` 為**最後一次嘗試**之各命令完成事件（取 `item.completed` 之 `command_execution`，每遇 `thread.started` 重置），各項含 `id`、`command`、`exitCode`、`status`、`output`（即 `aggregated_output`＝Codex 實際收到之命令輸出，單筆上限 2 MiB，超過標 `outputTruncated`）；成功與失敗皆帶，事件流無任何已知事件者不帶。用途：審查回覆之引用與原文不符時，分辨「讀檔時內容已失真」或「模型引用錯」（見〈Windows 讀非 ASCII 檔案〉之驗收）。與 agy 之 `raw` 不同處：agy 之 `stdout` 改為純回覆，codex 之 `stdout` 不改。
+
+## 轉接器契約（w-dispatch-ai 1.0.109）
+
+**給了而無效之處置（1.0.109 起，勿再依賴「無效即退回預設」）**：影響安全之純量 opt（`exe`、`cwd`、`sandbox`、`env`、`cleanCodexRefs`）**給了而無效（含 `''`）即以 `params` 拒絕**（`ok: false`、`attempts: 0`、不起子程序、訊息不回顯值）；`undefined`／`null` 才視為未給。`timeoutMs`、`maxRetries` 等量級／次數類則**視為未給而用預設**（不報錯）。要用預設就**不給該欄**。
 
 | 選項 | 轉接器預設值 | 行為 |
 |---|---:|---|
-| `exe` | `codex` | 執行檔名稱或絕對路徑 |
+| `exe` | `codex` | 執行檔名稱或絕對路徑；給了而非非空字串（含 `''`）回 `params`（1.0.109 起，修前退回 PATH 上之 `codex`） |
 | `model` | 省略 | 有值時展開為 `-m <value>` |
-| `sandbox` | `workspace-write` | 展開為 `--sandbox <value>` |
-| `extraArgs` | `[]` | 接在 Codex 固定參數之後 |
-| `timeoutMs` | `300000` | 逾時時終止程序樹 |
-| `cwd` | 目前目錄 | 傳給子程序的工作目錄 |
-| `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`；以淺層副本轉傳，物件不可讀（拋錯之 getter 等）時於啟動前回 `errorType: 'params'` |
+| `sandbox` | `workspace-write` | 展開為 `--sandbox <value>`；給了而非非空字串回 `params`（1.0.109 起，修前退回 `workspace-write`） |
+| `extraArgs` | `[]` | 接在 Codex 固定參數之後；只讀一次 |
+| `timeoutMs` | `300000` | 逾時時終止程序樹；須為 1～2147483647 之整數或其十進位數字字串，其餘（0、負數、小數、超過上限、`Infinity`、`'0x10'`、包裝物件）視為未給而用 300000，不夾上限、不報錯（1.0.92 起） |
+| `cwd` | 目前目錄 | 傳給子程序的工作目錄；給了而非非空字串（含 `''`）回 `params`（1.0.109 起，修前退回目前目錄＝在別的目錄動手）；亦為 `cleanCodexRefs` 清除所在之 git repo |
+| `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`；以淺層副本轉傳（只讀一次）；**給了而非可讀之一般物件（字串含 `''`、數字、布林、陣列、`Map`、函數、包裝物件、不可讀者如拋錯之 getter、已撤銷之 `Proxy`）於啟動前回 `errorType: 'params'`**（1.0.109 起，修前非物件視為未給而令子程序繼承 `process.env`；於派工前之 git 基準列舉**之前**即判） |
+| `cleanCodexRefs` | `true` | **1.0.109 新增**，自用鍵、不轉交 `execCli`：派工結束後清除該次新留下之 `refs/codex/*`，見下節；須為原始布林，給了非布林（`0`、`'false'`、`'no'` 等）回 `params`（不退回「開」） |
 | `validate` | 省略 | 由套件自身判定（`src/runExecCli.mjs`；1.0.49 起不交 `execCli`）：規則字串或自訂函數，函數可回傳 Promise，等待時間算在同一次嘗試的 `timeoutMs` 內；拋錯、reject、逾時皆為 `OUTPUT_VALIDATION_FAILED`（`errorType: 'validation'`） |
 | `spawnGate` | 未給＝不限 | **1.0.73 新增**，自用鍵、不轉交 `execCli`。每次 spawn 前守門（驗證不過而重試者每次重守）；預設與依據見〈逾時分層〉選項表 |
-| `maxRetries`、`retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
+| `maxRetries` | `0` | 須為 0～4294967295 之整數或其十進位數字字串，其餘（`Infinity`、`'0x10'`、小數、負數、超過上限）視為未給＝0（1.0.109 起）；以判定後之值轉交 `execCli` |
+| `retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
 
-提示詞透過 stdin 傳入。回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`（守門實際等過時另帶 `gateWaitedMs`，逾時放行者再帶 `gateFailOpen: true`，`durationMs` 不含守門等待）；應檢查 `ok`，不要假設失敗會造成 reject。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`（1.0.48 起回結果物件，此前部分情形會 reject）；`durationMs` 含驗證時間。1.0.81 起：失敗（非零離開、訊號結束、逾時）之 `error` 為 `Exit code N: <尾段>`／`TIMEOUT after Ns: <尾段>`（尾段取子進程輸出之真正尾端並遮金鑰），另帶 `errorDetail: { exitCode, stderrTail, stdoutTail? }`；成功另帶 `finish`、`outputChars`。勿以 `error === 'Exit code 1'` 精確比對，改看 `errorDetail.exitCode`；`coolDetect` 之字樣判定照舊讀 `stderr`，不讀 `error`。
+提示詞透過 stdin 傳入。回傳結果包含 `{ ok, stdout, stderr, code, error, errorType, durationMs, pid, attempts }`（守門實際等過時另帶 `gateWaitedMs`，逾時放行者再帶 `gateFailOpen: true`，`durationMs` 不含守門等待；帶 `--json` 時另帶 `raw`、`commands`，有清除 ref 時另帶 `codexRefsRemoved`）；應檢查 `ok`，不要假設失敗會造成 reject。子進程未能啟動時 `code` 為 `null`、`pid` 為 `undefined`、`errorType` 為 `spawn`（1.0.48 起回結果物件，此前部分情形會 reject）；`durationMs` 含驗證時間。1.0.81 起：失敗（非零離開、訊號結束、逾時）之 `error` 為 `Exit code N: <尾段>`／`TIMEOUT after Ns: <尾段>`（尾段取子進程輸出之真正尾端並遮金鑰），另帶 `errorDetail: { exitCode, stderrTail, stdoutTail? }`；成功另帶 `finish`、`outputChars`。勿以 `error === 'Exit code 1'` 精確比對，改看 `errorDetail.exitCode`；`coolDetect` 之字樣判定照舊讀 `stderr`，不讀 `error`。
 
 請使用套件的 UMD 預設匯出：`import wda from 'w-dispatch-ai'`。
+
+### 派工後清除 `refs/codex/*`（`cleanCodexRefs`，1.0.109 起預設開）
+
+Codex 於目標 repo 留下之 `refs/codex/turn-diffs/checkpoints/*`（turn-diff 檢查點）曾有指向不存在物件者，使該 repo 之 `git gc` 報 `fatal: bad object`、`failed to run repack`。Codex 0.167.1 查無關閉此檢查點之設定（`codex features list` 無旗標、執行檔字串無該 ref 前綴），故轉接器於收尾清除：
+
+- 派工前列出 `cwd` 所在 repo 之 `refs/codex/` 既有 ref 為基準，結束後**只刪新出現且前綴恰為 `refs/codex/` 者**（含壞 ref；不碰其他 ref）；`cwd` 非 repo、無 git、無基準者略過；最佳努力，不拋錯；成功與失敗皆清；有清除者結果帶 `codexRefsRemoved`（個數）。每次派工多兩次本機 `git for-each-ref`（`windowsHide`、列舉逾時 5 秒、刪除逾時 15 秒）。
+- **限制**：同 repo 同時段**他 Codex 工作階段**新建之 `refs/codex/*` 亦會被刪（只是檢查點、非提交，代價為該工作階段之 turn-diff 顯示）；`runFanout` 等同 `cwd` 並行多個 codex 名額者請給 `cleanCodexRefs: false`。`extraArgs` 帶 `-C`／`--cd` 令 Codex 作用於他目錄者，清除之 repo 仍為 `cwd` 所在者。
+- 不需要者給 `cleanCodexRefs: false`；給了非布林回 `params`。
 
 ### 表以外的細節一律查原始碼（當前安裝版）
 
@@ -439,12 +421,12 @@ await wda.dispatchCodex(prompt, {
 
 | 想知道 | 讀哪個檔 |
 |---|---|
-| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchCodex.mjs`（固定旗標順序為 `exec` → `--sandbox <值>` → `--skip-git-repo-check` → `-m` → `extraArgs`；`exe`／`model`／`sandbox`／`extraArgs`／`input` 為自用鍵，其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`（`validate` 除外，由該檔自行判定）） |
+| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchCodex.mjs`（固定旗標順序為 `exec` → `--sandbox <值>` → `--skip-git-repo-check` → `-m` → `extraArgs`；`exe`／`model`／`sandbox`／`extraArgs`／`input`／`cleanCodexRefs`（1.0.109 起）為自用鍵，其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`（`validate` 除外，由該檔自行判定）；`--json` 之 `raw`／`commands` 見 `src/parseCodexEvents.mjs`、`refs/codex/*` 清除見 `src/cleanCodexRefs.mjs`） |
 | 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
 | 實際可用且已被實測過的模型條目（含沙箱檔位、實測耗時） | `src/providers.mjs` |
 | `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。validate 字串要逐字核對，或直接傳自訂函數 |
 | `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（`params`／`timeout`／`spawn`／`validation`／`exec`／`http`／`fetch`…；子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`；1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時亦回 `aborted`） |
-| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
+| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/castTimerMs.mjs`（`timeoutMs` 判定單一來源）、`src/castCountOr.mjs`（`maxRetries` 等次數類）、`src/readSafeOpt.mjs`（`exe`／`cwd`／`sandbox`／`env` 給了而無效即拒絕）、`src/gateHints.mjs`（`shouldStop`／`minAttemptMs` 兩來源合併）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
 | spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
 | 遞補層送出前的額度門檻（`quotaGate`）與額度帳（1.0.79 起） | `src/subQuotaGate.mjs` 檔頭（適用範圍、選項、fail-open）、`src/quotaLedger.mjs`（`store.quota` 形狀與 8 天上限）、`src/quotaJudge.mjs`（視窗判定與快取）；codex 讀者為 `src/quota/getQuotaCodex.mjs` |
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
@@ -456,14 +438,7 @@ await wda.dispatchCodex(prompt, {
 
 Codex 0.163.0 的執行期模型型錄（`codex debug models`，2026-10-27 實查，全表 10 支、其中 `visibility: list` 者 8 支）新增 `gpt-6.1-terra`（priority 3、描述 `GPT-6.1 Terra Codex model.`、脈絡 500K），支援 `low`／`medium`／`high`／`xhigh`／`max`／`ultra`，`default_reasoning_level` 為 **`low`**，所以必須明確傳入 `max`。
 
-| slug | priority | 預設 effort | 脈絡 | 備註 |
-|---|---|---|---|---|
-| `gpt-6.1-sol` | 1 | `low` | 500K | `Latest workhorse model for coding and everyday work.`；2026-09-30～10-27 之本技能預設值 |
-| `gpt-6-astra` | 2 | `low` | 272K | `Frontier intelligence for the most demanding work.`（2026-09-30 之前曾為 priority 1） |
-| **`gpt-6.1-terra`** | **3** | **`low`** | 500K | **本技能必要預設值**（2026-10-27 起）；單價為 Sol 之半 |
-| `gpt-6-sol` | 4 | `medium` | 272K | `Previous generation workhorse model.` |
-| `gpt-6-luna` | 5 | `medium` | 272K | `Fast and affordable model for easier tasks.`；2026-10-18 查時**不支援 `ultra`** |
-| `gpt-5.6-sol`／`-terra`／`-luna` | 6／8／9 | `low`／`medium`／`medium` | 272K | 前代，描述皆標 `Older …`；`gpt-5.5` 已自型錄移除（2026-09-30 時仍在） |
+（2026-10-27 型錄之完整表〔`gpt-6.1-sol`、`gpt-6-astra`、`gpt-6.1-terra`、`gpt-6-sol`、`gpt-6-luna`、`gpt-5.6-*` 之 priority、預設 effort、脈絡、備註〕移至 [references/codex-model-catalog-log.md](references/codex-model-catalog-log.md)；重點：`gpt-6.1-sol` priority 1、`gpt-6-astra` 2、**`gpt-6.1-terra` 3＝本技能必要預設值**，其預設 effort 為 `low`，所以必須明傳 `max`。）
 
 型錄另有兩支 `visibility: hide` 之項目（`gpt-reserve`、`codex-auto-review`），非派工用。**型錄幾週內就會重排**（2026-09-30 前 7 支、priority 1 為 astra；09-30 為 10 支；10-18 為 9 支；10-27 為 10 支），所以固定 slug 前一律重跑 `codex debug models`，不要照抄本表。
 
@@ -481,6 +456,7 @@ codex login status
 
 - **被派對象必須能自行讀檔**：不能讀檔就不是獨立審查，先解決讀檔（見〈靜默失敗警語〉與〈沙箱與網路：先定能力下限，再往下收斂〉），不得改成把檔案內容貼進提示詞充數。派長任務前先以「讀某檔並原文引用第 N 行」做最小探測；`validate` 須要求回覆引用指定內容，不只驗非空。
 - **複審的價值在找出我漏掉的格**，不在評價我已列的方案——方案再好也補不了輸入空間的漏格。提示詞必依序要求：①挑戰表的完整性（缺軸、缺格、格內現況不屬實者，附 `file:line`）；②審對標（同類成熟產品之作法與本系統之差異）與對稱性（同型元素之規則是否一致）；③最後才審方案與步驟。
+- **讀到不可辨識之內容時要標明，不得臆測**：提示詞須要求被派對象遇到亂碼、替換字元（U+FFFD）或無法解碼之中文註解時，明寫「該處不可讀」，不補寫、不臆測引用；收回後把回覆中之引用與原文逐字比對，不符者先查該次工具輸出是否已失真（如 codex 之 `commands[].output`），再判斷是讀檔失真或模型引用出錯。
 - **表還沒建好就先建表，不派工**：沒有表就派人審方案，等於把漏格帶進實作。
 - **收回後逐格核對原始碼**（`file:line`）才採納，不整批接受，也不整批駁回；採納／駁回逐條附理由。
 - **自審的表一定有洞**：曾有一張自認完整的互動矩陣，交外部複審後仍被找出 30 格缺口，且全部屬實。所以派工不是「請你確認我對」，是「請你找我漏的格」；自己檢查過也不能跳過複審。
@@ -495,67 +471,18 @@ codex exec --help
 ls ~/.codex/.sandbox/setup_marker.json   # Windows：存在才代表 elevated 沙箱設定已完成
 ```
 
-2026-11-13 查核：本機 Codex CLI **0.167.0**，技能根實裝 `w-dispatch-ai` **1.0.90**（npm 最新 1.0.92）；本輪只重驗「Windows 讀非 ASCII 檔案」一節：
+2026-11-23 對照：以 `w-dispatch-ai` **1.0.109** 之原始碼（`src/dispatchCodex.mjs`、`src/parseCodexEvents.mjs`、`src/cleanCodexRefs.mjs`、`src/readSafeOpt.mjs`、`src/castTimerMs.mjs`、`src/castCountOr.mjs`、`src/gateHints.mjs`、`src/runExecCli.mjs`、`src/cliSpawnGate.mjs`）與 README 行為變更紀錄第 79、80、82、83、86 條核對（**未實際呼叫 Codex**；`refs/codex/*` 之查證為套件 2026-11-22 對 Codex 0.167.1 之紀錄，本技能未重驗）。`dispatchCodex()` 之固定參數（`exec`、`--sandbox`、`--skip-git-repo-check`、`-m`）不變；**新增自用鍵 `cleanCodexRefs`，並改變給了無效值之處置**——使用端若依賴「無效即退回預設」須改為不給該欄：
 
-| 項目 | 結果 |
+| 項目 | 1.0.109 之行為（修前） |
 |---|---|
-| 讀中文檔（`read-only` 沙箱，`gpt-6.1-terra`／low，`--json` 事件比對，實呼 2 次） | `rg -n '^' -- <檔>`、`rg -n -m 3`、`rg -n -C 2 '<字>'`、`cmd /c type` 皆完好（含 1073 行完整檔，逐行與原檔一致、U+FFFD 0）；PowerShell 管線對照組失真（U+FFFD 81）。使用端回報之「`rg` 讀中文註解失真」**未能重現**，條件未留存；詳見該節〈重驗〉 |
-| 驗收方式 | 派工加 `--json`，事件流之 `item.completed`（`command_execution`）`aggregated_output` 即 Codex 實際收到之內容（0.167.0 實測），不必翻 session 紀錄 |
-| 未重驗 | 旗標表、型錄、沙箱擋寫、`dispatchCodex()` 與 1.0.91～1.0.92 之差異（未比對原始碼）；上表 0.156.1 之 `Get-Content` 等失真結果未於 0.167.0 重測 |
+| `--json` | 結果另帶 `raw`（完整事件流）與 `commands`（最後一次嘗試之命令、`exitCode`、`output`），`stdout` 不改；未帶 `--json` 不介入 |
+| `cleanCodexRefs` | 預設 `true`：派工後刪該次新出現之 `refs/codex/*`（結果帶 `codexRefsRemoved`）；同 repo 他工作階段同時段新建者亦會被刪；非布林回 `params` |
+| `sandbox`、`exe`、`cwd` | 給了而非非空字串（含 `''`）回 `params`（修前退回 `workspace-write`／PATH 上之 `codex`／目前目錄） |
+| `env` | 給了而非一般物件（含字串、數字、陣列、`Map`、函數、不可讀者）回 `params`，起任何子程序（含派工前之 git 基準列舉）之前判（修前非物件視為未給、子程序繼承 `process.env`） |
+| `maxRetries` | 0～4294967295 之整數或十進位數字字串才採用，`Infinity`、`'0x10'`、小數、超過上限視為未給＝0（修前 `Infinity` 令驗證不過者近乎無限重試） |
+| `timeoutMs` | 1.0.92 起：1～2147483647 之整數才採用，其餘用預設 300000，不夾上限 |
+| 遞補層 `shouldStop`／`minAttemptMs`／守門期限 | 與呼叫端 `spawnGate` 物件之同名鍵以「或」／「取較大者」合併；有期限時探針與排鎖等候受期限約束（見〈逾時分層〉選項表） |
+| 遞補層之條目層 `params` 失敗 | 於發 `try` 之前判，不發 `try`、`onUsage` 不入帳 |
+| `providers.mjs` | codex 條目仍 3 條；內建 providers 現為 35 條 |
 
-2026-11-07 對照：以 `w-dispatch-ai` **1.0.80** 之原始碼與 README 行為變更紀錄第 67 條核對（讀 `src/subQuotaGate.mjs`、`src/quotaLedger.mjs`、`src/dispatchAiFallback.mjs` 檔頭與 `dispatchCodex.mjs` 之自用鍵；**未實際呼叫模型**，讀者耗時為套件同日之本機實測紀錄，本技能未重驗）：
-
-| 項目 | 結果 |
-|---|---|
-| `dispatchCodex()` 固定參數與自用鍵 | 不變（`exec`、`--sandbox`、`--skip-git-repo-check`、`-m`；自用鍵 `exe`／`model`／`sandbox`／`extraArgs`／`input`）；`quotaGate`／`quotaUntilOf` 為遞補層選項，不是本轉接器的自用鍵、不轉傳，**呼叫方式不變** |
-| `quotaGate`（1.0.79） | 擴及 `codex` 條目（無 `keys` 者），預設開：額度帳 → `getQuotaCodex` → 任一適用視窗 ≥95% 即略過；codex 額度字樣不內建；讀者失敗一律不擋 |
-| 額度帳之帳號比對與重探（1.0.82） | 入帳時另記帳號識別（登入 email 之雜湊，帳內不存本文）；讀帳命中後依節流以讀者重探：有帳號識別之帳每 30 分鐘、無者之長視窗（距重置逾 6 小時）每 6 小時，節流起點記於帳、跨行程有效；帳號改變或重探之用量證據已低於門檻即作廢該帳並改依現況判定（換訂閱帳號後最長約 30 分鐘自動恢復）；讀者失敗、取不到帳號或無證據一律維持帳。要立即清帳：`forgetQuota(state 或 store, 'codex')`（`WDispatchAi.forgetQuota`；家族名、精確鍵或 `'*'`）。作廢時記 `quota-ledger-void` 事件（帳號只記雜湊前 8 碼） |
-| `providers.mjs` | codex 條目仍 3 條（`codex:gpt-5.6-luna`、`codex:gpt-6.1-terra`、`codex:gpt-6.1-sol`）；全表 38 條（1.0.78 新增的 1 條為 `ocgo:`，與 codex 無關） |
-
-2026-11-04 對照：以已發布的 `w-dispatch-ai` **1.0.73** 原始碼核對（取自 `npm pack` 之實際程式；**未實際呼叫模型**，守門之 CPU 實測為套件同日之紀錄，本技能未重驗）：
-
-| 項目 | 結果 |
-|---|---|
-| `dispatchCodex()` 固定參數與自用鍵 | 固定參數不變（`exec`、`--sandbox`、`--skip-git-repo-check`、`-m`）；**新增自用鍵 `spawnGate`**（與 `spawnGateKind` 同為 `runExecCli` 自用、不轉交 `execCli`），**呼叫方式不變** |
-| `spawnGate` 預設 | `KIND_DEFAULT_LIMITED` 只有 `opencode`；codex 未給即守門為 no-op（不查 `tasklist`／`ps`、不取樣）。依據為現役 `codex.exe` 之觀察，**未以真實 `codex exec` 派工量測** |
-
-2026-10-28 追加：`w-dispatch-ai` **1.0.59** 新增條目 `codex:gpt-6.1-terra`（`sandbox: 'read-only'`、強度 `high`，排在 luna 之後、sol 之前；欄位比照 sol）。`dispatchCodex()` 未變。唯讀沙箱金絲雀未對 terra 重測（沿用 sol 條目之實測）。
-
-2026-10-27 查核：本機 Codex CLI **0.163.0**，技能根實裝 `w-dispatch-ai` **1.0.55**（npm 最新 1.0.57；`dispatchCodex()` 未變）。
-
-| 項目 | 結果 |
-|---|---|
-| 必要預設模型 | `gpt-6.1-sol` → **`gpt-6.1-terra`**（使用者指定；OpenAI 同日發表）。`-m gpt-6.1-terra -c model_reasoning_effort="max"` 實跑通過，CLI 標頭回報 `model: gpt-6.1-terra`／`reasoning effort: max`；`dispatchCodex`＋`workspace-write` 以 `rg` 讀中文檔並寫檔通過（29 秒） |
-| 型錄 | 10 支；`gpt-6.1-terra` 為 priority 3、預設 effort `low`、脈絡 500K（見「模型驗證」） |
-| `providers.mjs` | 當時尚無 terra 條目（1.0.59 起才有，見上段），codex 為 `codex:gpt-5.6-luna`、`codex:gpt-6.1-sol` |
-
-本次未重驗旗標表、沙箱與 Windows 讀非 ASCII 檔案之實測表（除上列 `rg` 讀中文外）。
-
-2026-10-18 查核：技能根實裝 `w-dispatch-ai` **1.0.53**，本機 Codex CLI 為 **0.163.0**。
-
-| 項目 | 結果 |
-|---|---|
-| `dispatchCodex()` 固定參數與自用鍵 | 不變（`exec`、`--sandbox`、`--skip-git-repo-check`、`-m`），**呼叫方式不變** |
-| 必要預設值 | `gpt-6.1-sol` ＋ `model_reasoning_effort="max"` 維持不變；以 1.0.53、`sandbox: 'workspace-write'` 實跑「以 `rg` 讀中文檔＋寫檔」通過（69 秒、中文原樣讀回、檔案落地；CLI 標頭回報 `model: gpt-6.1-sol`） |
-| 型錄 | 9 支，`gpt-6.1-sol` 仍為 priority 1、預設 effort `low`；`gpt-5.5` 已移除（見「模型驗證」） |
-| `providers.mjs` | `codex:gpt-5.6-luna` 與 `codex:gpt-6.1-sol` 兩條不變，皆帶 `sandbox: 'read-only'` 與 `model_reasoning_effort="high"`；全表由 17 條增為 21 條（增加的是 opencode 與 agy 條目） |
-| `validate` | 1.0.49 起由套件自行判定（`src/runExecCli.mjs`）：可回傳 Promise、與子進程共用 `timeoutMs`，拋錯與逾時回 `validation`；規則名打錯仍被靜默忽略。「靜默失敗警語」要求的自訂驗證函數因此也可以是 async |
-| 啟動失敗與重試 | 1.0.48 起子進程未能啟動一律回結果物件（`spawn`，此前部分情形 reject），不重試、遞補鏈整組跳過；`env` 不可讀回 `params` |
-| 控制回調 | `coolDetect`／`shouldStop` 為同步契約（回傳 Promise 視同 `false`）；`coolDetect` 宜先排除 `validation` |
-
-本次未於 0.163.0 重驗旗標表與 Windows 讀非 ASCII 檔案之實測表；`rg` 讀中文於本次探測仍完好。
-
-2026-09-27 補查：技能根實裝 `w-dispatch-ai` 1.0.39，`src/dispatchCodex.mjs` 之參數與固定旗標與 1.0.34 相同（`exe`／`model`／`sandbox`／`extraArgs`／`timeoutMs`／`cwd`／`validate`／`maxRetries`，旗標順序 `exec` → `--sandbox` → `--skip-git-repo-check` → `-m` → `extraArgs`）；Codex CLI 0.156.1。同日實測沙箱內 PowerShell 為受限語言模式與中文讀法（見「Windows 讀非 ASCII 檔案」），並新增「提示詞之限制句」一節。
-
-2026-09-30 查核：npm 最新版為 `w-dispatch-ai` **1.0.40**（技能根實裝 1.0.39）、Codex CLI **0.159.2**。
-
-| 項目 | 結果 |
-|---|---|
-| `dispatchCodex()` 固定參數與選項 | 與 1.0.17 起各版相同（`exec`、`--sandbox`、`--skip-git-repo-check`、`-m`），**呼叫方式不變** |
-| 必要預設模型 | `gpt-6-sol` → **`gpt-6.1-sol`**（使用者指定）。以 `-m gpt-6.1-sol -c model_reasoning_effort="max" --sandbox read-only` 實跑通過，CLI 標頭回報 `model: gpt-6.1-sol`／`reasoning effort: max` |
-| 型錄重排 | `gpt-6.1-sol` 升為 priority 1、預設 effort 為 `low`；`gpt-6-sol` 退為 priority 3 並改標為前代（見「模型驗證」） |
-| 推理值域 | 沿用 2026-09-23 由 API 400 錯誤訊息取得之權威清單：`none`／`minimal`／`low`／`medium`／`high`／`xhigh`／`max`；型錄另列 `ultra`（編排模式非更深推理） |
-| `providers.mjs` | `codex:gpt-6-sol` 已換成 **`codex:gpt-6.1-sol`**（套件同日跟進使用者指示），與 `codex:gpt-5.6-luna` 並存；**兩條都新增自帶推理強度 `['--config','model_reasoning_effort="high"']`**——是 `high` 不是本技能的 `max`，照抄條目要自己覆寫。全表由 15 條增為 17 條 |
-| 條目為何寫全名不寫別名 | 套件條目註解記載：Codex 沒有「最新版 sol」之別名（官方 Models 文件未載、`model/list` 各筆亦無別名欄位且 `upgrade` 為 null），不給 `-m` 則改用執行機 `config.toml` 之 model（實測不帶 `-m` 時跑 `gpt-5.6-sol`），故新版發布時**必須手動換 slug** |
-
-Codex 0.152.1 相對 0.149.0 之派工相關差異（沿用前次查核）：`--full-auto` 已移除（實測回 `unexpected argument`），新增 `--enable`／`--disable`／`--approve-for-me`／`--dangerously-bypass-hook-trust`／`--thread-source`／`--color`；詳見 references。**0.156.1 未重新逐項比對旗標表**，Windows elevated 沙箱之行為亦維持 0.149／0.152.1 之查核結論（本機 `setup_marker.json` 存在，`--sandbox read-only` 於 0.156.1 實跑正常）。
+歷次查核（2026-11-13 及更早之對照表與實測紀錄）已移至 [references/codex-check-history.md](references/codex-check-history.md)；Windows 讀中文檔之實測表與 2026-11-13 重驗已移至 [references/codex-win-nonascii-log.md](references/codex-win-nonascii-log.md)。

@@ -5,7 +5,7 @@ description: 當任務需要委派給 Claude，或需要把 Claude 納入多代�
 
 # dispatch-claude
 
-使用 `w-dispatch-ai` 的 `dispatchClaude()` 執行 Claude Code（本技能對照 1.0.80；`dispatchClaude()` 之固定旗標自 1.0.17 起未變動，呼叫方式不受版本影響；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，claude 預設不限，見〈逾時分層〉選項表；1.0.79 起遞補層對**無金鑰**之 `claude` 條目於呼叫前先看額度、用量 ≥95% 即略過（`quotaGate`，遞補層選項、非 `dispatchClaude()` 的自用鍵），見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉；1.0.56 起可帶 Anthropic Console 之 API 金鑰改走 API 額度計費，見〈以 Anthropic Console API 額度派工〉；1.0.57 起帶金鑰之失敗結果多帶 `failureKind`，沒額度與上下文過長分開處置，見〈失敗判讀：以 API 回應為準，不查餘額〉）。轉接器會呼叫 `claude -p`、透過 stdin 傳入提示詞、管理逾時與程序樹清理，並一律回傳結果物件，不會因一般 CLI 失敗而 reject。
+使用 `w-dispatch-ai` 的 `dispatchClaude()` 執行 Claude Code（本技能對照 1.0.109；`dispatchClaude()` 之固定旗標自 1.0.17 起未變動，**但 1.0.92 起 `timeoutMs`、1.0.105 起 `key`、1.0.109 起 `skipPermissions`／`exe`／`cwd`／`env`／`maxRetries` 給了無效值之處置已改為拒絕或視為未給，見〈轉接器契約〉與〈安裝檢查〉2026-11-23 對照**；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，claude 預設不限，見〈逾時分層〉選項表；1.0.79 起遞補層對**無金鑰**之 `claude` 條目於呼叫前先看額度、用量 ≥95% 即略過（`quotaGate`，遞補層選項、非 `dispatchClaude()` 的自用鍵），見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉；1.0.56 起可帶 Anthropic Console 之 API 金鑰改走 API 額度計費，見〈以 Anthropic Console API 額度派工〉；1.0.57 起帶金鑰之失敗結果多帶 `failureKind`，沒額度與上下文過長分開處置，見〈失敗判讀：以 API 回應為準，不查餘額〉）。轉接器會呼叫 `claude -p`、透過 stdin 傳入提示詞、管理逾時與程序樹清理，並一律回傳結果物件，不會因一般 CLI 失敗而 reject。
 
 需要變更 CLI 旗標、排查版本差異或改用非預設模型時，讀取 [references/claude-flags.md](references/claude-flags.md)。
 
@@ -144,7 +144,7 @@ const r = await wda.dispatchClaude(prompt, {
 | 寫測試、驗證猜想、重現問題 | 讀檔 ＋ 寫測試檔 ＋ 執行測試 | `--allowedTools 'Read,Glob,Grep,Edit,Write,Bash'`，或 `--permission-mode acceptEdits` |
 | 修改、實作 | 讀 ＋ 寫 ＋ 執行 | 工作區可信時用轉接器預設的 `skipPermissions: true` |
 
-`dispatchClaude()` 的 `skipPermissions` 預設為 `true`（加入 `--dangerously-skip-permissions`），只有在工作區與提示詞內容皆可信時才適用。要收斂時，收的是上表右欄的範圍，不是把能力砍到下限以下。
+`dispatchClaude()` 的 `skipPermissions` 預設為 `true`（加入 `--dangerously-skip-permissions`），只有在工作區與提示詞內容皆可信時才適用。要收斂時，收的是上表右欄的範圍，不是把能力砍到下限以下。**`skipPermissions` 只接受原始布林**（1.0.109 起）：給了非布林（`'false'`、`0`、`''`、物件等）回 `params` 失敗、不起子程序；修前非布林一律退回 `true` 而悄悄關掉權限閘門。要收斂就明給 `false`，不要給字串。
 
 - **審計必須自己讀檔**。把檔案內容貼進提示詞不算獨立審計：被派對象只看得到你挑給它的片段，找不出你漏掉的地方，而那正是複審的唯一價值。
 - **驗證猜想必須能寫檔並執行**。不能寫測試就只剩推論；「我認為可能是 X」沒有可重現的執行結果，不是結論。
@@ -301,7 +301,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 | 層 | 誰在殺 | 預設 | 正式派工怎麼設 |
 |---|---|---|---|
 | ①呼叫端（Claude Code 的工具呼叫時限） | harness 終止整個行程 | 見上節表格，最長 2 小時 | 派工照〈執行步驟〉detached 執行，此層即不作用；只有等待受它約束，所以等待要分段 |
-| ②轉接器 `timeoutMs`（單次嘗試） | 逾時終止程序樹 | 300000 | `14_400_000` |
+| ②轉接器 `timeoutMs`（單次嘗試） | 逾時終止程序樹 | 300000 | `14_400_000`（須為 1～2147483647 之整數或其十進位數字字串；其餘〔0、負數、小數、超過 2147483647、`Infinity`、`'0x10'`、包裝物件〕視為未給而用預設 300000，不夾上限、不報錯，1.0.92 起；`14_400_000` 在範圍內） |
 | ③CLI 自身內層逾時 | — | Claude Code **沒有**此類旗標 | 不適用（只有 agy 有 `--print-timeout`） |
 | ④單一名額之遞補鏈 `budgetMs` | 預算用盡即停止遞補 | `null`（不限） | 要嘛不給，要嘛 ≥ `鏈組數 K × 14_400_000`；給小了會把第②層壓下去 |
 | ⑤工作流總時長 | 無獨立參數，由結構推導 | 無（刻意） | `runRolePipeline` 最壞 ≈ M×K×`timeoutMs`。K=4、M=3 配 4 小時就是 **48 小時**——先算再決定要不要拆階段 |
@@ -310,7 +310,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 
 **最常見的假象**：`timeoutMs` 明明給了 4 小時，派工卻在 2 分鐘、10 分鐘、30 分鐘或 2 小時整斷掉——全是第①層砍的：派工掛在前景，或掛在 `run_in_background` 上（沒給 `timeout` 是 30 分鐘，給滿也只有 2 小時）。**只改 `timeoutMs` 沒用，派工一定要照〈執行步驟〉detached 執行**。
 
-**單次派工還會乘上去的**：`timeoutMs` 是**每次嘗試**的上限，不是總時長；自訂 `validate` 的等待也算在同一次嘗試內（`src/runExecCli.mjs`）。`maxRetries: N` 時總時長約 `timeoutMs × (1+N)`，再加重試間隔（`retryDelayMs` 預設 5000，實際間隔為 `retryDelayMs × 已嘗試次數`、單次上限 15000）；**`TIMEOUT` 會被重試，每次耗滿 `timeoutMs`**；1.0.86 起有 `budgetMs` 時，每次重試之逾時以剩餘預算封頂、剩餘不足 `minAttemptMs` 即不再重試（1.0.85 以前不受 `budgetMs` 約束）。不重試、立即中止的只有確定性失敗：`ENOENT`（命令不存在、不存在的 `.cmd`／`.bat`、npm shim 的入口檔缺失）、exit code 2（參數錯誤）、`cwd` 不存在，以及子進程根本起不來的同步錯誤（命令列過長、權限不足、非有效執行檔、參數含空字元；這類結果 `code` 為 `null`、`errorType` 為 `spawn`）。
+**單次派工還會乘上去的**：`timeoutMs` 是**每次嘗試**的上限，不是總時長；自訂 `validate` 的等待也算在同一次嘗試內（`src/runExecCli.mjs`）。`maxRetries: N`（N 須為 0～4294967295 之整數或其十進位數字字串；`Infinity`、`'0x10'`、小數、負數、超過上限視為未給＝0，1.0.109 起，修前 `Infinity` 會令驗證不過者近乎無限重試）時總時長約 `timeoutMs × (1+N)`，再加重試間隔（`retryDelayMs` 預設 5000，實際間隔為 `retryDelayMs × 已嘗試次數`、單次上限 15000）；**`TIMEOUT` 會被重試，每次耗滿 `timeoutMs`**；1.0.86 起有 `budgetMs` 時，每次重試之逾時以剩餘預算封頂、剩餘不足 `minAttemptMs` 即不再重試（1.0.85 以前不受 `budgetMs` 約束）。不重試、立即中止的只有確定性失敗：`ENOENT`（命令不存在、不存在的 `.cmd`／`.bat`、npm shim 的入口檔缺失）、exit code 2（參數錯誤）、`cwd` 不存在，以及子進程根本起不來的同步錯誤（命令列過長、權限不足、非有效執行檔、參數含空字元；這類結果 `code` 為 `null`、`errorType` 為 `spawn`）。
 
 **走遞補鏈或工作流時，三個值必須成套設，缺一即壞**（以下皆為 `w-dispatch-ai/src/dispatchAiFallback.mjs` 之實際行為）：
 
@@ -321,14 +321,14 @@ Bash({ run_in_background: true, timeout: 7200000,
 | 選項 | 預設 | 實際行為與陷阱 |
 |---|---|---|
 | `budgetMs` | `null`（不限） | 有給時**每次嘗試的逾時被壓成 `min(timeoutMs, 剩餘預算)`**；給得比 `timeoutMs` 小，4 小時等於白設；1.0.86 起 `0` 與負數為「已無時間」（不送出、回 `budget`），小數取整；被預算封頂而逾時之嘗試回 `budget`（事件 `budget-cut`），不記冷卻、不計連敗 |
-| `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」 |
+| `minAttemptMs` | 20000 | **只有給了 `budgetMs` 才作用**。與 `timeoutMs` 同值時，第一家跑完剩餘必然不足 → 第二家永遠不開工；若 `budgetMs` 又給小了，**連第一次嘗試都不會發生**，直接回 `budget exhausted`（`errorType: 'budget'`），極易被誤讀成「額度用完」。1.0.109 起：呼叫端另給 `spawnGate.minAttemptMs` 時，取兩來源有效（正整數）值之**較大者**，守門與暫時性重試之預算判斷同一規則（修前呼叫端之物件優先；小數如 `1500.5` 現視為無效） |
 | `cooldownMs` | `0`（關閉） | 只對**有明給 `id`** 的條目記冷卻；內建觸發只有 HTTP 429 與逾時，而 **429 僅 REST 類偵測得到**；CLI 類的限流埋在輸出文字裡，內建規則抓不到；1.0.86 起可加長：`cooldownGrowth`（預設 1＝固定視窗）、`cooldownMaxMs`（預設 24 小時），視窗外再觸發即乘以 growth、成交歸零；另有持久連敗 `coolAfterFails`（整組皆敗連續 N 次即降序，給 `store` 才跨行程累計） |
 | `coolDetect` | 無 | CLI 類限流的唯一入口（依賴注入）。**須為同步函數**：回傳 Promise 或拋錯皆視同 `false`。以字樣判定時先排除驗證失敗——其 `stderr` 帶驗證函數自己的訊息，可能誤中字樣。Claude Code 的執行期失敗印在 **stdout** 的 result（套件 README 引官方 headless 文件），兩邊都要看：`(r) => r.errorType !== 'validation' && /<觀察到的限流字樣>/i.test((r.stdout \|\| '') + (r.stderr \|\| ''))`；字樣由觀察到的呼叫端維護，套件不內建（1.0.79 起唯一例外：Claude Code 官方額度訊息的**重置時刻**會被解析、供 `quotaGate` 入帳，見下列 `quotaGate` 列；它不觸發冷卻） |
-| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損） |
-| `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**claude 預設不限**（只有 opencode 預設啟用）。依據：套件在 8 核心 Windows 機觀察現役 `claude.exe`（2 個）數十秒窗內僅 0.0%／4.9% 單核——等候模型回應時幾乎不占 CPU（CPU 花在其子行程）；若比照 opencode 以 `核心數−1` 計數，同時派多個 `claude -p`（或開著多個互動 `claude.exe`）反而讓新派工白等。**未驗證處**：這是對現役行程之觀察，**未以真實 `claude -p` 派工量測**（會耗訂閱額度）。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `claude.exe` 之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
+| `shouldStop` | 無 | 4 小時派工中途要止損的唯一手段：於每次嘗試之間，**以及 `spawnGate` 守門等待中**檢查，回 `ABORTED`／`errorType: 'aborted'`。它不會中斷進行中的那一次嘗試（守門等待尚未 spawn，所以可中止）；同為**同步契約**，回傳 Promise 視同 `false`（等於從不止損）。1.0.109 起：呼叫端另給 `spawnGate.shouldStop` 時兩來源以「**或**」合併（任一回傳恰為 `true` 即中止；修前呼叫端給了則遞補層之中止請求不能中止守門等待） |
+| `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**claude 預設不限**（只有 opencode 預設啟用）。依據：套件在 8 核心 Windows 機觀察現役 `claude.exe`（2 個）數十秒窗內僅 0.0%／4.9% 單核——等候模型回應時幾乎不占 CPU（CPU 花在其子行程）；若比照 opencode 以 `核心數−1` 計數，同時派多個 `claude -p`（或開著多個互動 `claude.exe`）反而讓新派工白等。**未驗證處**：這是對現役行程之觀察，**未以真實 `claude -p` 派工量測**（會耗訂閱額度）。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `claude.exe` 之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；1.0.109 起有期限（`budgetMs` 換算之期限與呼叫端 `spawnGate.deadlineAt` 取較早者）時，探針逾時亦不超過「期限 − `minAttemptMs` − 現在」、排互斥鎖之等候受同一期限約束，到點即 fail-open 放行（`onTrace` 之 `fail-open` 事件 `reason` 為 `'deadline'`／`'lock-timeout'`；因期限縮短而逾時者不算探針故障、不冷卻）；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
 | `quotaGate` | 未給＝**預設開**（claude 無金鑰者自 1.0.79 起；此鍵為遞補層與 `createAiCaller` 的選項，不是 `dispatchClaude()` 的自用鍵、不轉傳轉接器） | 遞補層選到**無金鑰之 `claude` 條目**（訂閱登入態：條目無 `keys`／`key`、`env` 無有效 `ANTHROPIC_API_KEY`；條目 `env.CLAUDE_CONFIG_DIR` 另指設定目錄者，讀者改查該目錄）、呼叫轉接器前，先看**額度帳**（`store.quota`，`now < until` 即略過、不查不派），再以 `getQuotaClaude`（OAuth usage API，讀本機登入態，唯讀、不耗額度）查用量，**任一視窗 `usedPercent ≥ 95` 即略過、不派**——事件 `quota-skip`（帶 `source`：`'usage-api'`／`'ledger'`／`'limit-text'`）、`tried[].outcome: 'quota-skip'`、合成失敗結果 `errorType: 'quota'`、`failureKind: 'no-credit'`、`error` 以 `QUOTA_COOLDOWN:` 開頭、`attempts: 0`；**不寫條目冷卻**（`cooldownMs` 之既有語意不變）。此前這類條目撞額度時走「失敗 → `cooldownMs` 降鏈尾 → 之後每輪再試一次」，額度滿期間每輪每席都先空試一次（Claude 數秒）。**模型別視窗只在 model 相符時計入**：視窗帶 `scope`（如「7天(Fable)」）者，只在條目 `model` 含該 scope（忽略大小寫與非英數）時計入——他模型的週限額到頂不擋本條目；無 `scope` 的視窗一律計入。**入帳**：判定為被擋且被擋視窗的重置時刻可解析時，寫入 `store.quota`（`until` 為被擋視窗重置時刻之最晚者，上限現在＋8 天，跨行程經既有 `store` 持久化；`store` 無效時退回行程內記憶體），之後 `now < until` 不再查詢，過期才重查；另外 `claude` 條目的失敗結果若命中 Claude Code 官方額度字樣（形如 `You've hit your weekly limit · resets Nov 9, 5pm (<IANA 時區名>)`，以括號內 IANA 時區解析），或呼叫端注入的 `quotaUntilOf(r)` 回傳時刻，以 `entry:<id>` 入帳（事件 `source: 'limit-text'`，只對明給 `id` 的條目有效；字樣解析不到時只是少一次入帳）。**預設只作用於 `exe` 為真的 `claude`（或未給 `exe`）**，假 CLI 與包裝腳本不被預設查詢，明給 `quotaGate: true` 或物件才不論 `exe`；**帶金鑰之 `claude`（API 計費，`claude-api:` 條目）不適用**，行為不變。**fail-open**：讀者逾時、拋錯、未授權（如 Claude 權杖逾 8 小時未刷新）、欄位缺漏、`usedPercent` 缺漏或非數字一律不擋（另發 `quota-gate-error`）。**成本**：讀者約 1.4 秒（套件本機實測 1 次），claude／codex 讀者結果預設快取 60 秒（`cacheMs`）、查詢逾時 15 秒（`timeoutMs`）。**關閉**：`quotaGate: false`（遞補層頂層或單一條目；查用量、讀帳、寫帳三處全關）；只想調門檻用 `claudeMax`（`false` 關閉該家）或 `windowMax`。帳在重置前不重查，期間若升級方案或補充額度，須清除 `store.quota` 之該鍵或 `quotaGate: false` |
 
-遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀）時**整組跳過**，不在同組內逐把換金鑰。
+遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀或給了非物件、`exe`／`cwd`／`skipPermissions` 給了而無效）時**整組跳過**，不在同組內逐把換金鑰。1.0.109 起條目層之 `params` 失敗（含上述安全相關 opt 給了而無效）於發 `try` 事件**之前**即判，**不發 `try`**（`onUsage` 不入帳；仍進 `tried`）；轉接器自身才得知之 `params`（如 `model` 缺漏）仍在 `try` 之後，結果帶 `attempts: 0` 可辨。
 
 **`budgetFor()` 有陷阱，不要照抄**：它**只累加條目自己的 `timeoutMs`**，讀不到你寫在 opt／`defaults` 的那一個；而套件內建的 providers 條目**刻意不帶 `timeoutMs`**，所以 `budgetFor(內建條目)` 恆為「條目數 × 300000」（1.0.53 內建 21 條就是 105 分鐘）——比你的 4 小時還小，反而把它壓下去。要用它就得先把 `timeoutMs: 14_400_000` 逐條寫進每個條目，否則直接寫 `K × 14_400_000`。
 
@@ -355,22 +355,25 @@ await wda.dispatchClaude(prompt, {
 
 若需限制結構，再透過 `--json-schema` 傳入 JSON Schema 字串。`stream-json` 會產生 JSONL 事件，不能使用只接受單一 JSON 文件的 `validate: 'json'`。
 
-## 轉接器契約（w-dispatch-ai 1.0.57）
+## 轉接器契約（w-dispatch-ai 1.0.109）
+
+**給了而無效之處置（1.0.109 起，勿再依賴「無效即退回預設」）**：影響安全或計費之純量 opt（`exe`、`cwd`、`skipPermissions`、`env`、`key`）**給了而無效（含 `''`）即以 `params` 拒絕**（`ok: false`、`attempts: 0`、不起子程序、訊息不回顯值）；`undefined`／`null` 才視為未給。`timeoutMs`、`maxRetries` 等量級／次數類則**視為未給而用預設**（不報錯）。要用預設就**不給該欄**（傳 `undefined`／`null`）。
 
 | 選項 | 轉接器預設值 | 行為 |
 |---|---:|---|
 | `key` | 省略 | 1.0.56 起：Anthropic Console 之 API 金鑰。給了即只在該次子程序設 `ANTHROPIC_API_KEY` 並移除繼承之父工作階段連結變數，改走 API 額度；省略即沿用訂閱登入（行為與舊版相同）。見〈以 Anthropic Console API 額度派工〉 |
 | `crossCheck` | `true` | 1.0.57 起：帶金鑰之 CLI 回沒額度字樣時，以同金鑰對 REST 送極小請求確認（REST 成功即判 `env-error`）；`crossCheckBaseURL`／`crossCheckModel` 可改端點與模型。見〈失敗判讀：以 API 回應為準，不查餘額〉 |
-| `exe` | `claude` | 執行檔名稱或絕對路徑 |
+| `exe` | `claude` | 執行檔名稱或絕對路徑；給了而非非空字串（含 `''`）回 `params`（1.0.109 起，修前退回 PATH 上之 `claude`） |
 | `model` | 省略 | 有值時展開為 `--model <value>` |
-| `skipPermissions` | `true` | 加入 `--dangerously-skip-permissions` |
+| `skipPermissions` | `true` | 加入 `--dangerously-skip-permissions`；須為原始布林，給了非布林回 `params`（1.0.109 起，修前退回 `true`） |
 | `extraArgs` | `[]` | 接在 Claude 固定旗標之後 |
-| `timeoutMs` | `300000` | 逾時時終止程序樹 |
-| `cwd` | 目前目錄 | 傳給子程序的工作目錄 |
-| `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`（如需以 `CLAUDE_CODE_EFFORT_LEVEL` 傳 effort 時用得到）；以淺層副本轉傳，物件不可讀（拋錯之 getter 等）時於啟動前回 `errorType: 'params'` |
+| `timeoutMs` | `300000` | 逾時時終止程序樹；須為 1～2147483647 之整數或其十進位數字字串，其餘（0、負數、小數、超過上限、`Infinity`、`'0x10'`、包裝物件）視為未給而用 300000，不夾上限、不報錯（1.0.92 起） |
+| `cwd` | 目前目錄 | 傳給子程序的工作目錄；給了而非非空字串（含 `''`）回 `params`（1.0.109 起，修前退回目前目錄＝在別的目錄動手） |
+| `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`（如需以 `CLAUDE_CODE_EFFORT_LEVEL` 傳 effort 時用得到）；以淺層副本轉傳（只讀一次）；**給了而非可讀之一般物件（字串含 `''`、數字、布林、陣列、`Map`、函數、包裝物件、不可讀者如拋錯之 getter、已撤銷之 `Proxy`）於啟動前回 `errorType: 'params'`**（1.0.109 起，修前非物件視為未給而令子程序繼承 `process.env`）；`key` 模式亦同，訊息仍遮蔽金鑰 |
 | `validate` | 省略 | 由套件自身判定（`src/runExecCli.mjs`；1.0.49 起不交 `execCli`）：規則字串或自訂函數，函數可回傳 Promise，等待時間算在同一次嘗試的 `timeoutMs` 內；拋錯、reject、逾時皆為 `OUTPUT_VALIDATION_FAILED`（`errorType: 'validation'`） |
 | `spawnGate` | 未給＝不限 | **1.0.73 新增**，自用鍵、不轉交 `execCli`。每次 spawn 前守門（驗證不過而重試者每次重守）；預設與依據見〈逾時分層〉選項表 |
-| `maxRetries`、`retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
+| `maxRetries` | `0` | 須為 0～4294967295 之整數或其十進位數字字串，其餘（`Infinity`、`'0x10'`、小數、負數、超過上限）視為未給＝0（1.0.109 起）；以判定後之值轉交 `execCli` |
+| `retryDelayMs`、`onStdout`、`maxBuffer` 等 | 依選項而定 | 原樣轉交給 `wsemi` 的 `execCli`；長任務建議掛 `onStdout` 邊跑邊落檔 |
 
 提示詞透過 stdin 傳入，因此多行文字與 shell 特殊字元不需做命令列跳脫。不要再使用舊版的 `CLI_INPUT_FILE` 手法。
 
@@ -391,7 +394,7 @@ await wda.dispatchClaude(prompt, {
 | 實際可用且已被實測過的模型條目（含權限鎖、金鑰環境變數、實測耗時） | `src/providers.mjs` |
 | `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。validate 字串要逐字核對，或直接傳自訂函數 |
 | `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（`params`／`timeout`／`spawn`／`validation`／`exec`／`http`／`fetch`…；子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`；1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時亦回 `aborted`） |
-| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
+| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000）、`src/castTimerMs.mjs`（`timeoutMs` 判定單一來源：1～2147483647 之整數才採用，其餘回預設，不夾上限）、`src/castCountOr.mjs`（`maxRetries` 等次數類之判定）、`src/readSafeOpt.mjs`（`exe`／`cwd`／`skipPermissions`／`env` 給了而無效即拒絕之判定）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
 | spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
 | 遞補層送出前的額度門檻（`quotaGate`）與額度帳（1.0.79 起） | `src/subQuotaGate.mjs` 檔頭（適用範圍、選項、fail-open）、`src/quotaLedger.mjs`（`store.quota` 形狀與 8 天上限）、`src/claudeLimitUntil.mjs`（Claude Code 官方額度訊息的重置時刻解析，只認實見字樣）、`src/quotaJudge.mjs`（視窗判定與快取）；claude 讀者為 `src/quota/getQuotaClaude.mjs` |
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
@@ -414,6 +417,7 @@ await wda.dispatchClaude(prompt, {
 
 - **被派對象必須能自行讀檔**：不能讀檔就不是獨立審查，先解決讀檔（見〈權限：先定能力下限，再往下收斂〉），不得改成把檔案內容貼進提示詞充數。派長任務前先以「讀某檔並原文引用第 N 行」做最小探測；`validate` 須要求回覆引用指定內容，不只驗非空。
 - **複審的價值在找出我漏掉的格**，不在評價我已列的方案——方案再好也補不了輸入空間的漏格。提示詞必依序要求：①挑戰表的完整性（缺軸、缺格、格內現況不屬實者，附 `file:line`）；②審對標（同類成熟產品之作法與本系統之差異）與對稱性（同型元素之規則是否一致）；③最後才審方案與步驟。
+- **讀到不可辨識之內容時要標明，不得臆測**：提示詞須要求被派對象遇到亂碼、替換字元（U+FFFD）或無法解碼之中文註解時，明寫「該處不可讀」，不補寫、不臆測引用；收回後把回覆中之引用與原文逐字比對，不符者先查該次工具輸出是否已失真（如 codex 之 `commands[].output`），再判斷是讀檔失真或模型引用出錯。
 - **表還沒建好就先建表，不派工**：沒有表就派人審方案，等於把漏格帶進實作。
 - **收回後逐格核對原始碼**（`file:line`）才採納，不整批接受，也不整批駁回；採納／駁回逐條附理由。
 - **自審的表一定有洞**：曾有一張自認完整的互動矩陣，交外部複審後仍被找出 30 格缺口，且全部屬實。所以派工不是「請你確認我對」，是「請你找我漏的格」；自己檢查過也不能跳過複審。
@@ -426,6 +430,19 @@ npm install -g @anthropic-ai/claude-code@latest
 claude --version
 claude --help
 ```
+
+2026-11-23 對照：以 `w-dispatch-ai` **1.0.109** 之原始碼（`src/dispatchClaude.mjs`、`src/readSafeOpt.mjs`、`src/castTimerMs.mjs`、`src/castCountOr.mjs`、`src/gateHints.mjs`、`src/runExecCli.mjs`、`src/cliSpawnGate.mjs`）與 README 行為變更紀錄第 77、79、82、83、86 條核對（**未實際呼叫模型**）。`dispatchClaude()` 之固定旗標（`-p`、`--dangerously-skip-permissions`、`--model`）與自用鍵（`exe`／`model`／`key`／`skipPermissions`／`extraArgs`／`input`／`crossCheck`／`crossCheckBaseURL`／`crossCheckModel`／`fetch`）不變；**變的是給了無效值之處置**——使用端若依賴「無效即退回預設」須改為不給該欄：
+
+| 項目 | 1.0.109 之行為（修前） |
+|---|---|
+| `skipPermissions` | 給了非布林回 `params`（修前退回 `true`） |
+| `exe`、`cwd` | 給了而非非空字串（含 `''`）回 `params`（修前退回 PATH 上之 `claude`／目前目錄） |
+| `env` | 給了而非一般物件（含字串、數字、陣列、`Map`、函數、不可讀者）回 `params`，起子程序之前判（修前非物件視為未給、子程序繼承 `process.env`） |
+| `maxRetries` | 0～4294967295 之整數或十進位數字字串才採用，`Infinity`、`'0x10'`、小數、超過上限視為未給＝0（修前 `Infinity` 令驗證不過者近乎無限重試） |
+| `timeoutMs` | 1.0.92 起：1～2147483647 之整數才採用，其餘用預設 300000，不夾上限（修前超過上限者於 CLI 類被 `execCli` 改用其自有之 120000） |
+| 遞補層 `shouldStop`／`minAttemptMs`／守門期限 | 與呼叫端 `spawnGate` 物件之同名鍵以「或」／「取較大者」合併；有期限時探針與排鎖等候受期限約束（見〈逾時分層〉選項表） |
+| 遞補層之條目層 `params` 失敗 | 於發 `try` 之前判，不發 `try`、`onUsage` 不入帳 |
+| `claude`／`claude-api:` 條目 | `key` 給了而無效即拒絕（1.0.105 起，見〈以 Anthropic Console API 額度派工〉）；內建 providers 現為 35 條（claude 條目仍 5 條） |
 
 2026-11-07 對照：以 `w-dispatch-ai` **1.0.80** 之原始碼與 README 行為變更紀錄第 67 條核對（讀 `src/subQuotaGate.mjs`、`src/quotaLedger.mjs`、`src/claudeLimitUntil.mjs`、`src/dispatchAiFallback.mjs` 檔頭與 `dispatchClaude.mjs` 之自用鍵；**未實際呼叫模型**，讀者耗時為套件同日之本機實測紀錄，本技能未重驗）：
 
@@ -455,7 +472,7 @@ claude --help
 | 必要預設值 | `claude-fable-5-1` ＋ `--effort max` 維持不變；以 1.0.53 實跑「讀檔（中文）＋寫檔」通過（27 秒、檔案落地）；`--help` 之 `--effort` 值域仍為 `low, medium, high, xhigh, max` |
 | `providers.mjs` | `claude:sonnet`、`claude:opus-5.5` 兩條不變（`--tools Read,Glob,Grep --strict-mcp-config --effort high`）；另新增 `agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`（經 agy 呼叫，額度與 Claude Code 訂閱分開）；全表由 17 條增為 21 條 |
 | `validate` | 1.0.49 起由套件自行判定（`src/runExecCli.mjs`）：可回傳 Promise、與子進程共用 `timeoutMs`，拋錯與逾時回 `validation`；規則名打錯仍被靜默忽略 |
-| 啟動失敗與重試 | 1.0.48 起子進程未能啟動一律回結果物件（`spawn`，此前部分情形 reject），不重試、遞補鏈整組跳過；`env` 不可讀回 `params` |
+| 啟動失敗與重試 | 1.0.48 起子進程未能啟動一律回結果物件（`spawn`，此前部分情形 reject），不重試、遞補鏈整組跳過；`env` 不可讀回 `params`（1.0.109 起 `env` 給了而非物件亦回 `params`，見 2026-11-23 對照） |
 | 控制回調 | `coolDetect`／`shouldStop` 為同步契約（回傳 Promise 視同 `false`）；`coolDetect` 宜先排除 `validation` |
 
 本次未於 2.1.302 重驗旗標表其餘項目，僅重查 `--effort` 值域與預設模型可用性。

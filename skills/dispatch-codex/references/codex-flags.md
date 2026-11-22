@@ -143,6 +143,8 @@ codex exec fork <SESSION_ID> "從此分支續作"
 
 `--json` 會輸出 JSONL，須逐行解析。只需要最終自然語言結果時，`--output-last-message` 是最簡單的介面。
 
+經 `w-dispatch-ai` 的 `dispatchCodex()` 派工時（1.0.109 起），`extraArgs` 帶 `--json` 則結果另帶 `raw`（完整事件流文字）與 `commands`（最後一次嘗試之命令完成事件：`command`、`exitCode`、`status`、`output`），`stdout` 仍為 JSONL；要看 Codex 實際收到之命令輸出，直讀 `commands`，不必自行解析 `stdout`。另：該轉接器於派工後預設清除該次新留下之 `refs/codex/*`（`cleanCodexRefs`，詳見 SKILL.md〈轉接器契約〉）。
+
 ## 執行期驗證
 
 ```bash

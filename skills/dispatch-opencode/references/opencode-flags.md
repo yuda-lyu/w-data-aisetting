@@ -147,7 +147,7 @@ config: { permission: { edit: 'deny', bash: 'ask' } }   // 1.0.34 起之唯讀�
 
 **`permission` 可用之鍵**（2026-11-13 自 opencode 1.19.5 執行檔內之設定綱要查得）：`read`、`edit`、`glob`、`grep`、`list`、`bash`、`task`、`external_directory`、`todowrite`、`question`、`webfetch`、`websearch`、`lsp`、`doom_loop`、`skill`，另接受任意字串鍵；值為 `allow`／`ask`／`deny` 或「樣式 → 動作」之物件，字串值展開為 `{ '*': <值> }`。使用者規則接在代理預設規則之後，比對取最後一筆符合者。`build` 代理預設為 `ask` 者：`external_directory`、`doom_loop`、`read` 之 `*.env` 與 `*.env.*`。
 
-**`ask` 被拒會結束工作階段，`deny` 不會**：`ask` 在 `opencode run` 被自動拒絕後，整個工作階段於該步驟結束後停止（離開碼 0）；`deny` 只是該次工具呼叫失敗。`config.experimental.continue_loop_on_deny: true`（`experimental` 與 `permission` 同層、不在其下；布林；綱要說明 `Continue the agent loop when a tool call is denied`）可讓被拒只把錯誤交回模型、工作階段續跑。行為、判別法、代價與 `external_directory` 之陷阱見 SKILL.md〈`ask` 被自動拒絕＝整個工作階段結束〉。
+**`ask` 被拒會結束工作階段，`deny` 不會**：`ask` 在 `opencode run` 被自動拒絕後，整個工作階段於該步驟結束後停止（離開碼 0）；`deny` 只是該次工具呼叫失敗。`config.experimental.continue_loop_on_deny: true`（`experimental` 與 `permission` 同層、不在其下；布林；綱要說明 `Continue the agent loop when a tool call is denied`）可讓被拒只把錯誤交回模型、工作階段續跑。行為、判別法、代價與 `external_directory` 之陷阱見 SKILL.md〈`ask` 被自動拒絕＝整個工作階段結束〉。經 `w-dispatch-ai` 派工（1.0.109 起）：被拒而結束者回 `ok: false`、`errorType: 'denied'`（`PERMISSION_DENIED:`、`deniedTool`、`deniedRule`），遞補層整組跳過；選項 `continueLoopOnDeny: true` 把上述鍵併入注入之 `config`（預設不開、內建條目不帶）；自給 `--format json` 而未開 `detectTruncation`、或預設格式下已有文字才被拒者不判，被拒敏感之派工一律開 `detectTruncation: true`。
 
 被鎖擋下時的回覆長相因模型而異：2026-09-08 以舊鎖（`edit`／`write`／`bash` 全 `deny`）實測，讀取照常、建檔失敗且 `out.txt` 未建立，但**離開碼仍為 0、stdout 非空**，轉錄裡甚至出現 `✓ Create out.txt file`（建檔被轉交子代理，子代理回報成功）；套件 2026-10-18 對 beam-free、deepseek-v4.1-flash-free 的寫檔金絲雀則是**回空字串而 `ok: true`**。派需要寫入的任務時要把對應項目放開，一律以產物是否落地判成敗，並掛 `validate: 'nonempty'` 讓空回覆判失敗。
 
@@ -202,7 +202,7 @@ opencode auth list
 opencode auth logout
 ```
 
-必要預設模型以匿名取用 OpenCode 自家供應商的免費模型（`useStoredAuth: false`），不需登入；要用付費模型或改走自己的帳號時，`opencode auth login` 完成一次即可。第三方供應商（如 NVIDIA）的模型才需要該供應商憑證；`dispatchOpencode()` 也能透過 `provider` 與 `key`，僅為當次程序注入 `OPENCODE_AUTH_CONTENT`，不會修改已保存的認證檔案。
+必要預設模型以匿名取用 OpenCode 自家供應商的免費模型（`useStoredAuth: false`），不需登入；要用付費模型或改走自己的帳號時，`opencode auth login` 完成一次即可。第三方供應商（如 NVIDIA）的模型才需要該供應商憑證；`dispatchOpencode()` 也能透過 `provider` 與 `key`，僅為當次程序注入 `OPENCODE_AUTH_CONTENT`，不會修改已保存的認證檔案；`key` 有效而 `provider` 給了非空字串以外之定義值、或 `useStoredAuth` 給了非布林，1.0.109 起回 `params`（不再悄悄改用 `auth.json` 既有登入，見 SKILL.md〈轉接器契約〉）。
 
 第三方供應商定義可透過轉接器的 `config` 選項注入為 `OPENCODE_CONFIG_CONTENT`。供應商、模型、base URL 與憑證來源必須互相對應。
 
