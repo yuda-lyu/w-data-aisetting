@@ -8,9 +8,9 @@
     "opencc-js": "1.4.2",
     "unpdf": "1.9.1",
     "w-dispatch-ai": "^1.0.108",
-    "w-dwdata-hub": "^1.0.51",
+    "w-dwdata-hub": "^1.0.52",
     "w-dwload-dlp": "^1.0.81",
-    "w-fetch-web": "^1.0.57",
+    "w-fetch-web": "^1.0.58",
     "w-orm-lmdb": "^1.0.79",
     "w-zip": "^1.0.76",
     "wsemi": "^1.9.71"
