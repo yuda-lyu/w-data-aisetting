@@ -30,7 +30,7 @@
 **觸發**:寫腳本,選用程式語言或 shell,寫 `.bat` 時.
 
 - **優先程式語言**:腳本優先 `.mjs`(ES modules),優先用專案內 `node_modules` 套件;非必要不寫 `.js`,`.py` 次之.
-- **避免使用**:避免 PowerShell;不得已要用先徵詢使用者.只有 Windows PowerShell 5.1 之環境(如 Windows Server 之維運)之已知雷區,見 skill[role-command-windows].
+- **避免使用**:避免 PowerShell;不得已要用先徵詢使用者.Windows 內建之 PowerShell 為 5.1(Win10、Win11 與 Server 皆然;PowerShell 7 須另裝),其已知雷區(中文之讀寫編碼、`&&`、`2>&1` 等)見 skill[role-command-windows].
 - **bat**:含中文一律 Big5(cp950)編碼,不要默默把現有 Big5 .bat 重存成 UTF-8(理由與實測見 skill[role-command-windows]).
 
 ## 3. 暫存檔一律存放於`./tmp/`
@@ -124,7 +124,7 @@
 
 ### 8.3 Windows 之程序、大量檔案、子行程與殼層
 
-**觸發**:Windows 上殺程序或取 PID;以 node 調用 chrome/chromium 背景繪圖或截圖(playwright、puppeteer、w-html2png 系)且涉及常駐服務、排程重啟或清 chrome 殘留;刪除、複製數萬以上檔案或量其目錄大小、刪除可能含目錄連結之目錄、以 robocopy 部署或覆蓋目錄、判讀 Windows 指令之離開碼;撰寫或修改會以背景方式(detached、`nohup`、排程、常駐服務)執行且會再起子行程之腳本;node 之 `spawn`／`exec` 起外部程式失敗(如 `spawn UNKNOWN`);使用者剛改過環境變數、或外部程式像沒讀到設定;長時間背景 node 計算比預期慢而各邏輯處理器負載不均;實作鎖檔而遇 `EPERM`／`EBUSY`;Git Bash 之 `tar` 帶磁碟機代號;寫 `.bat`;只有 Windows PowerShell 5.1 之環境.命中即先調用 skill[role-command-windows].
+**觸發**:Windows 上殺程序或取 PID;以 node 調用 chrome/chromium 背景繪圖或截圖(playwright、puppeteer、w-html2png 系)且涉及常駐服務、排程重啟或清 chrome 殘留;刪除、複製數萬以上檔案或量其目錄大小、刪除可能含目錄連結之目錄、以 robocopy 部署或覆蓋目錄、判讀 Windows 指令之離開碼;撰寫或修改會以背景方式(detached、`nohup`、排程、常駐服務)執行且會再起子行程之腳本;node 之 `spawn`／`exec` 起外部程式失敗(如 `spawn UNKNOWN`);使用者剛改過環境變數、或外部程式像沒讀到設定;長時間背景 node 計算比預期慢而各邏輯處理器負載不均;實作鎖檔而遇 `EPERM`／`EBUSY`;Git Bash 之 `tar` 帶磁碟機代號;寫 `.bat`;須用 PowerShell 時(Windows 內建為 5.1).命中即先調用 skill[role-command-windows].
 
 - 先記住四句:①背景行程再起之子行程,**每一處** `child_process` 呼叫(`spawn`/`spawnSync`/`exec`/`execSync`/`execFile`/`execFileSync`/`fork`)皆設 `windowsHide: true`;②Git Bash 內殺程序寫 `cmd //c "taskkill /F /PID <pid> /T"`,取 PID 勿依賴 wmic(Windows 11 已移除);何時可主動 taskkill:專案 `CLAUDE.md` 明確授權或使用者明確要求,否則先回報;③不用檔案總管或 `Remove-Item -Recurse` 刪大量檔案,含目錄連結之目錄先拆連結再刪;④離開碼非 0 不代表失敗(robocopy 0~7 皆正常、≥8 才是錯誤).
 - 以程式經 COM 驅動 Word／Excel／PowerPoint(轉檔器等)或寫其測試時,另先調用 skill[role-coder-for-office-com](`DispatchEx` 不用 `Dispatch`、只關自己之文件、隱藏實例仍會跳對話框、成敗不看離開碼).

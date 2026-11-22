@@ -2,7 +2,7 @@
 name: role-command-windows
 description: |
   Windows 上執行指令、組路徑、管理程序與大量檔案之規範:PowerShell 5.1 之已知雷區、.bat 含中文一律 Big5;路徑與檔案 I/O(兩種出檔場景、禁用 URL.pathname、git-bash 之 /c/ 路徑不可交給原生程式或 node、tar 不吃磁碟機代號、寫入前驗收);Git Bash 下 taskkill 寫法與取 PID(wmic 已移除);刪除／殺程序／重啟後必回驗(只殺到在監聽者、memory-mapped 舊映射、健康檢查分不出新舊實例;刪除進行中之 EPERM／EBUSY,鎖檔與 EEXIST 同視為占用而重試);背景 Chrome 孤兒程序之三層回收;大量檔案以 robocopy 鏡像空目錄刪除、目錄連結先拆再刪(robocopy 會穿過 junction)、robocopy 與 Remove-Item 分兩道指令、/E 與 /MIR 之分、離開碼判讀表;以 node 起子行程(背景行程再起之子行程一律 windowsHide、spawn UNKNOWN 等啟動失敗之判讀、session 啟動後才設之環境變數子行程讀不到、無視窗背景計算被排到節能核心);量目錄大小用 robocopy 列舉模式 /L 取代 Git Bash 之 du.
-  觸發條件:Windows 上殺程序或取 PID;量目錄之總大小或檔案數(含數萬檔以上之目錄,或 du 逾時);刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄(含清 ./tmp)、以 robocopy 部署或覆蓋目錄、判讀離開碼;以 node 調用 chrome 背景繪圖或截圖且涉及常駐服務、排程重啟或清殘留;撰寫或修改會以背景方式(detached、nohup、排程、常駐服務)執行且會再起子行程之腳本;node 之 spawn/exec 起外部程式失敗(spawn UNKNOWN、errno -4094);使用者說剛改過環境變數、或外部程式像沒讀到設定;長時間背景 node 計算比預期慢而各邏輯處理器負載不均;實作鎖檔而遇 EPERM／EBUSY;Git Bash 之 tar 報 Cannot connect to C:;寫 .bat;只有 Windows PowerShell 5.1 之環境;組裝路徑而工作目錄含空格、中文或須在 git-bash 與原生程式之間傳遞——必先調用本技能,整篇入 context 逐項比對後才動工.
+  觸發條件:Windows 上殺程序或取 PID;量目錄之總大小或檔案數(含數萬檔以上之目錄,或 du 逾時);刪除或複製數萬以上檔案、刪除可能含目錄連結之目錄(含清 ./tmp)、以 robocopy 部署或覆蓋目錄、判讀離開碼;以 node 調用 chrome 背景繪圖或截圖且涉及常駐服務、排程重啟或清殘留;撰寫或修改會以背景方式(detached、nohup、排程、常駐服務)執行且會再起子行程之腳本;node 之 spawn/exec 起外部程式失敗(spawn UNKNOWN、errno -4094);使用者說剛改過環境變數、或外部程式像沒讀到設定;長時間背景 node 計算比預期慢而各邏輯處理器負載不均;實作鎖檔而遇 EPERM／EBUSY;Git Bash 之 tar 報 Cannot connect to C:;寫 .bat;須用 PowerShell(Windows 內建為 5.1);組裝路徑而工作目錄含空格、中文或須在 git-bash 與原生程式之間傳遞——必先調用本技能,整篇入 context 逐項比對後才動工.
 ---
 
 # role-command-windows — Windows 之指令、路徑、程序與大量檔案操作
@@ -13,7 +13,7 @@ description: |
 
 | 任務 | 章節 |
 |---|---|
-| 只有 Windows PowerShell 5.1 之環境;寫 `.bat` | §1 |
+| 須用 PowerShell(Windows 內建為 5.1);寫 `.bat` | §1 |
 | 組裝路徑、寫檔、在 git-bash 與原生程式／node 之間傳路徑;Git Bash 之 `tar` 報 `Cannot connect to C:` | §2(§2.3) |
 | 殺程序、取 PID | §3 |
 | 刪除、殺程序、重啟服務之後;實作鎖檔而遇 `EPERM`／`EBUSY`(刪除進行中對同名路徑之操作) | §4 |
@@ -24,7 +24,7 @@ description: |
 
 ## 1. 殼層:Windows PowerShell 5.1 與 `.bat`
 
-- **環境只有 Windows PowerShell 5.1 時**(如 Windows Server 之維運)之已知雷區:①`ConvertFrom-Json` 解析含中文之內容(如 pino JSONL log)會失敗(`Unterminated string passed in`,主控台編碼所致),改以正則抓欄位:`if ($line -match '"msg":"([^"]*)"') { $msg = $Matches[1] }`;②`Select-String` 之結果不能直接 `-split`,須先 `.ToString()`:`($line.ToString() -split '│')[6]`;③無 `&&`,`||`,三元運算子,`??`;④對原生執行檔避免 `2>&1`(會產生 NativeCommandError 並使 `$?` 為 false).離開碼之判讀見 §6(4).
+- **Windows 內建之 PowerShell 為 5.1**(`powershell.exe`;Win10、Win11 與 Windows Server 皆然,不只伺服器;PowerShell 7〔`pwsh`〕須另裝.2026-11-22 於 Win11 實測:未內建 `pwsh`,下列雷區皆仍在).已知雷區:①`ConvertFrom-Json` 解析含中文之內容(如 pino JSONL log)會失敗(`Unterminated string passed in`,主控台編碼所致),改以正則抓欄位:`if ($line -match '"msg":"([^"]*)"') { $msg = $Matches[1] }`;②`Select-String` 之結果不能直接 `-split`,須先 `.ToString()`:`($line.ToString() -split '│')[6]`;③無 `&&`,`||`,三元運算子,`??`;④對原生執行檔避免 `2>&1`(會產生 NativeCommandError 並使 `$?` 為 false,離開碼為 0 亦然);⑤**讀寫中文之預設編碼**:`Set-Content`／`Add-Content` 預設寫系統 ANSI 碼頁(中文 Windows 為 Big5),`Out-File` 與 `>` 預設寫 UTF-16LE(帶 BOM),`Get-Content` 讀無 BOM 之 UTF-8 檔把中文解錯(其後 `ConvertFrom-Json` 之值靜默錯誤)——寫入一律 `-Encoding utf8`、讀取一律 `Get-Content -Encoding UTF8`,交給 node 等其他程式讀之檔尤然.離開碼之判讀見 §6(4).
 - **bat**:寫`.bat`注意含中文一律 Big5(cp950)編碼:cmd.exe 用系統 codepage 解析,UTF-8 各種 workaround(BOM,`chcp 65001`)實測都壞.不要默默把現有 Big5 .bat 重存成 UTF-8.
 
 ## 2. 路徑與檔案 I/O
