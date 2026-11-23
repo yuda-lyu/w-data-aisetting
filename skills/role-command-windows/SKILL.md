@@ -14,7 +14,8 @@ description: |
 | 任務 | 章節 |
 |---|---|
 | 須用 PowerShell(Windows 內建為 5.1);寫 `.bat` | §1 |
-| 組裝路徑、寫檔、在 git-bash 與原生程式／node 之間傳路徑;Git Bash 之 `tar` 報 `Cannot connect to C:` | §2(§2.3) |
+| 組裝路徑、寫檔、在 git-bash 與原生程式／node 之間傳路徑;Git Bash 之 `tar` 報 `Cannot connect to C:`,或 `-C` 報 `Cannot open`(含 node 起 tar) | §2(§2.3) |
+| 判斷檔案之換行是 CRLF 或 LF | §2.5 |
 | 殺程序、取 PID | §3 |
 | 刪除、殺程序、重啟服務之後;實作鎖檔而遇 `EPERM`／`EBUSY`(刪除進行中對同名路徑之操作) | §4 |
 | node 調用 chrome 背景繪圖或截圖之常駐服務、清 chrome 殘留 | §5 |
@@ -46,9 +47,19 @@ description: |
 
 另有一種同樣出在 Git Bash 之路徑坑:**帶磁碟機代號之路徑交給 Git Bash 內之 GNU `tar`**.這與上兩段(路徑被誤讀、被改寫)不是同一機制——實測加 `MSYS_NO_PATHCONV=1` 仍報同錯——而是 tar 自己依 `主機:路徑` 之規則把 `C:` 當遠端主機:`-f` 之檔名帶磁碟機代號(`C:/x.tgz`、`C:\x.tgz` 皆然;解壓 `-x`、建立 `-c`、有無 `-z` 皆然)即報 `tar (child): Cannot connect to C: resolve failed`(不帶 `-z` 時前綴為 `tar:`;離開碼非 0;帶 `-z` 時其後之 `gzip: stdin: unexpected end of file` 只是連帶).對策三擇一(實測皆正常):①加 `--force-local`:`tar --force-local -xzf "C:/…/x.tgz" -C "C:/…"`;②`-f` 改 POSIX 形式 `/c/…/x.tgz`(tar 是 MSYS 程式,不經原生程式,不需旗標);③`-f` 改相對路徑 `./tmp/x.tgz`.`-C` 之引數帶磁碟機代號不受影響.**典型錯誤形狀**:Git Bash 內以 `tar -xzf "C:/…/x.tgz" -C "C:/…"` 解壓 `.tgz`(如 `npm pack` 之產物),得上述錯誤——訊息指向連線而非檔案.
 
+**GNU tar 之 `-C` 不收反斜線分隔之路徑**(2026-11-23 本庫實測,Git for Windows 所附 GNU tar 1.35):GNU tar 預設對 `-C` 之引數做跳脫還原(`--unquote`),`\t` 變成 tab、`\5` 之類被當八進位跳脫,報 `Cannot open: No such file or directory`,訊息中之路徑已變形(如 `tmp\00596`);**絕對或相對、ASCII 或中文皆然**.以 `/` 分隔者(`C:/…/中文夾`、`/c/…/中文夾`、相對路徑)皆正常解壓——含中文不是原因;`-f` 之相對路徑帶 `\` 亦正常.node 之 `path.join`／`path.resolve` 在 Windows 產出 `\` 分隔,而 `spawnSync('tar', …)` 取 PATH 上第一個 tar:**自 Git Bash 起之 node 取到 Git 之 GNU tar 而失敗,自 PowerShell 起之 node 取到 `C:\Windows\System32\tar.exe`(bsdtar 3.8.9)則同一組引數全數正常**——同一支腳本隨啟動之殼層而異.對策三擇一(實測皆正常):①交給 tar 之路徑轉為 `/` 分隔(`p.split(path.sep).join('/')`);②以 `cwd` 設基準、`-C` 給 `/` 分隔之相對路徑;③加 `--no-unquote`.**典型錯誤形狀**:以 node 起 tar 解壓 `git archive` 之輸出至 `path.join` 組出之絕對路徑(路徑含中文),報 `Cannot open`,被歸因為「`-C` 之路徑含中文即失敗」——實為反斜線被當跳脫,同路徑改 `/` 分隔即正常.
+
 ### 2.4 寫入前驗收
 
 路徑經組裝(join,replace,URL 轉換)後,fs 操作前先 `console.log(path.resolve(...))` 印 absolute 路徑驗收;寫入後 `ls` 確認落點;發現孤兒資料夾立刻徵求允許後刪除.警覺訊號:工作目錄含空格,中文/非 ASCII,Windows `D:\...`——任一符合就雙倍仔細.
+
+### 2.5 判斷檔案之換行(CRLF／LF):不用 grep
+
+Git Bash 下以 `grep` 判 CR 不可靠(2026-11-23 本庫實測,GNU grep 3.0;提案端亦據此誤判兩次):①未加 `-U` 時 grep 以文字模式讀檔,行尾之 CR 先被去掉,**CRLF 檔回 0**;②`$'\r'` 寫在 `$( … )` 之內時樣式之 CR 消失、樣式變空,**LF 檔也回全數行**(同一寫法放進腳本檔則報語法錯誤).只有直接下指令並加 `-U` 時才正確,寫法稍變即錯,故不用.改用:
+
+1. `git ls-files --eol -- <檔>`:`i/` 為索引、`w/` 為工作樹之換行(`lf`、`crlf`、`mixed`);未追蹤之檔預設不列,加 `--others` 才列(只有 `w/` 欄).
+2. node:`fs.readFileSync(f, 'utf8').includes('\r\n')`——依換行調整之程式(變異腳本之錨點、逐字比對)以此於程式內自適應.
+3. `file <檔>`:CRLF 者印 `with CRLF line terminators`.
 
 ## 3. Windows / Git Bash 下 `taskkill` 與取 PID
 
@@ -249,5 +260,6 @@ let dirSize = (src, dst = './tmp/__null__') => new Promise((resolve, reject) => 
 - [ ] 長時間背景計算比預期慢者:已看各邏輯處理器之負載而非整機讀數(§7.4);估時之試跑與長跑同工作者數、同行程形態;是否解除節能排程由專案決定,採用者已記於專案文件
 - [ ] 使用者剛改過環境變數、或外部程式像沒讀到設定時,已比對 `process.env` 與登錄檔(§7.3),並於 `env` 補值且註明理由、或請使用者重開宿主程式,回報中寫明採何者
 - [ ] 交給原生程式或 node 之路徑皆為帶磁碟機代號之形式,寫入前已印絕對路徑(§2)
-- [ ] Git Bash 之 `tar`:`-f` 之檔名帶磁碟機代號者已加 `--force-local`,或改 POSIX(`/c/…`)／相對路徑(§2.3)
+- [ ] Git Bash 之 `tar`:`-f` 之檔名帶磁碟機代號者已加 `--force-local`,或改 POSIX(`/c/…`)／相對路徑;`-C` 之路徑(含 node 以 `path.join` 組出者)為 `/` 分隔或已加 `--no-unquote`(§2.3)
+- [ ] 判斷檔案換行用 `git ls-files --eol`、node 或 `file`,未用 grep 判 CR(§2.5)
 - [ ] 量大目錄用 robocopy `/L`(§8):摘要表依列序解析、失敗欄 >0 已註明數字偏低、目的路徑未被建立;未以 `du` 之數字與 robocopy 混比

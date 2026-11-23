@@ -61,3 +61,7 @@ NODE_OPTIONS="--import=file:///<守門模組絕對路徑>" SANDBOX_ROOT=<沙箱�
 2. 不用 git(沙箱在另一個倉庫之樹下時,git 會向上找到上層專案之倉庫);eslint 明指該套件之設定:`-c <設定檔>`(eslint 8 另有 `--no-eslintrc`,8.57.1 實測有此旗標;9 以上之 flat config 無此旗標,依其說明).
 3. 於發布包解開之目錄跑全套:`npm pack` 之發布包**不含 `.gitignore`**(實測 `npm pack --dry-run`,tarball 內只有 `package.json` 與原始檔),依賴它之測試於此配置必敗,驗證步驟須寫明哪些測試因此排除;安裝相依所產生之 `package-lock.json` 於提案端環境含倉庫位址,須在跑「發布內容不含內網位址」類之測試前檢查並刪除(本機 npm 12.1.0 所產鎖檔無 `resolved` 欄,視 npm 版本與設定而異,故不假設,以檢查為準).
 4. 以 `npm --prefix <根> test` 起測時,script 之 `process.cwd()` 即 `<根>`(實測).
+5. **發布包配置之全套(每輪)**(提案端之作法,本庫未另行實跑):`npm pack` → 解開 → 複製 lockfile → `npm ci`(依 lockfile 精確安裝)→ 被測物會起外部程式者,移除真實 CLI 之 PATH 並以 `where`／`which` 驗證(SKILL §5.2)→ 平行執行時 `--jobs` 不超過邏輯核數減 2(以免占滿使用中之機器).
+   - 本機 npm 設有新版冷卻期(`min-release-age`)而 lockfile 之版本仍在冷卻期內者,`npm ci` 報 `ETARGET`(提案所述:約 3 分鐘後才失敗,並留下半裝之 `node_modules`,重試前先刪除);只在 lockfile 之版本與工作樹已安裝者相同時,才對該驗證複本以 `--min-release-age=0` 覆寫——不藉此引入新版本.
+   - 解開之目錄自帶 `node_modules`、無目錄連結,可兼作變異之鏡像根.
+   - 每輪步驟相同而各套件各寫一份包裝者,宜提案由自有套件之共用工具提供,不在技能內附腳本.

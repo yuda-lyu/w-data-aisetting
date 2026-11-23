@@ -19,6 +19,7 @@ description: |
 |---|---|---|
 | runner 與比對方式？ | `package.json` scripts、`test/tools/e2e-setup.mjs` 有無 `pixelmatch` | 本技能全量適用 / 只採通用原則 |
 | 服務拓撲？ | setup 內 spawn 什麼：前端 dev server + 後端，或後端 serve build；port 是否經 `reserveE2ePorts`（基準埠不必為了不撞而與他專案錯開） | 契約 C2 模式 |
+| 各案例之被測前端從哪來？ | 各案例之開頁網址：經 dev server（`baseUrl`）者讀 `src/`；經後端 serve 建置產物者（server 注入語系、`apiBaseUrl`）讀已建置之 `dist/`——同一專案常兩者並存 | 以 `dist/` 為被測物之案例：改 `src/` 後先重建（或建至暫存夾暫時覆蓋後跑並還原），變異驗證亦同（§10〈以後端 serve 之建置產物開頁〉） |
 | 語系與資料來源？ | 有無 i18n（語系迴圈）；seed 腳本、mock 開關、fixture log | C4 / C5 是否需要、§10 場景 |
 | 時間戳從哪層寫入？ | grep schema 預設值、ORM 服務層、Worker、前端暫態；另 grep 產製／打包腳本寫入之時間與畫面上之耗時、即時數值；再 grep 讀取端（統計窗、排序、到期判斷、前端依現在算出之計數）取時間處，後端與瀏覽器端都查 | 執行期寫入者：假時鐘錨點放哪層、寫入與讀取是否同一時鐘（§8.2，含瀏覽器端）；建置時寫入、耗時、即時數值：列入不可固定之值盤點（unfixable-values-masking §1～§2） |
 | 專案映射表存在嗎？ | 規則帳本(`sgud/rule/rulebook.md`;舊制為 `CLAUDE_rulebook.md`)之 e2e 映射節 | 缺 → 先依範本補，再寫 case |
@@ -155,6 +156,7 @@ description: |
 每步先偵測對象存在 / 就緒才進下一步（`waitUntilExist`；`fn` 跨 process 序列化不能 closure，傳值用 `arg`）。**`page.waitForFunction` 之判斷函數不可為 async**：Playwright 同步呼叫判斷函數，async 回傳之 Promise 為 truthy → 第一次即放行、不重試、逾時無效，條件不成立也照樣通過（2026-09-28 盤點姊妹專案共 20 處「看似在等、其實沒等」）；判斷內須 await（如頁面內 fetch 後端再判斷）者改用 `waitUntilExist`——套件版偵測到 async 函數即改以逐次 `page.evaluate` 輪詢並 await 結果。audit：`grep -rn "waitForFunction(async" test/`、`waitUntilExist(.*async` 逐處確認走套件版。可單獨用 `waitForTimeout` 的僅：跨頁 redirect 前 buffer（舊頁殘留 DOM 會 false-positive，數值依專案校準）、editor mount 後 type 前 settle、截圖前 final settle（captureStable 已含）。
 
 - **固定等待以「非同步來源」判，不以秒數判**：盤點全部 `waitForTimeout`（共用層 `tools/auditWaits`，依前後語句分出「後接截圖／讀取／斷言而前無偵測」之候選），逐一判讀前一動作到預期狀態之間有無非同步來源——伺服器往返、轉址、後端或前端計時器、廣播同步、防抖；有則改偵測：頁面內條件用 `waitUntilExist`／`Locator.waitFor`，瀏覽器外之結果（後端週期計時器寫資料庫、背景程序產檔）用測試行程端輪詢（共用層 `pollUntil`）至成立，含伺服器往返者上限給 60s 級（上限只影響失敗多久才報，不影響通過多快）。以秒數門檻（「5 秒以上」）盤點會漏掉變數秒數（`waitForTimeout(waitMs)`）與 2–3 秒級等後端 2 秒計時器者（殷鑑：固定 3 秒等封鎖計時器，負載高時讀到尚未寫入之資料）。前端同步重繪後之短暫 settle、Locator 操作前之 settle 照留。
+- **導覽就緒不以 `goto` 之 `networkidle` 加固定上限當閘**：負載使資源載入與回應變慢即逾時，與被測行為無關；改 `waitUntil: 'domcontentloaded'` 加其後之偵測（表單、元件就緒等終態條件）。只為取得 origin（以便設定儲存區等）之首次導覽，其等候失敗不影響案例者，以 `.catch` 盡力等候。
 - **改偵測前先列出原固定等待「順帶」等到的所有事**：轉址、提示浮窗消失、動畫、debounce。只改成等目標出現，會在轉址途中讀取（`Execution context was destroyed`；殷鑑：原固定 10 秒順帶等過登入轉址，改等權杖寫入 LS 後隨即 evaluate，落在轉址途中）或截到未消失之浮窗（§8.1）。偵測條件寫成**終態**：「無密碼欄且已見使用者頁且權杖已寫入」，不是「權杖已寫入」。
 - **規格語意之時間不是同步手段，照留，但補確定性觀察**：spec 規定之等待（封鎖到期、「10 秒後仍為連線中才能斷定被擋」之觀察期）與負向斷言之觀察窗照等；其判斷若會被負載誤導（正常連線本身慢於觀察期時「仍為連線中」也成立 → 測試假通過），另補一個確定性觀察（網路層回應標頭、DB 狀態）並寫進 spec。
 - **把目標帶進視野也走使用者動作**：虛擬捲動的樹／清單只渲染可見列，目標不在畫面時用該畫面本來就有的過濾／搜尋把它列出，不用滾輪或程式捲動去找——滾輪會連帶捲到別的容器（主選單），`locator.click` 的自動捲入會改版面，兩者都製造正式路徑不會有的假現象；已渲染列數是版面產物，不能當資料筆數斷言。
@@ -172,6 +174,7 @@ description: |
 - 能驗端到端不變式（外部應用實際查到的解析後結果）就驗它，不只驗中間資料存對。
 - pixel baseline 是補強層：先語意斷言，穩定視覺態再 baseline；modal / 轉跳 case 只有 innerText 不接受。
 - 以虛擬捲動表格之 `aria-rowcount` 推列數時先用已知列數校準偏移（含標頭列、過濾列）。
+- 旁路輸出（瀏覽器 console、網路回應）之斷言：物件引數展開後判定，否定斷言（「不含某資料」）另以正向證據確認被測路徑確已執行，作法見 §10〈瀏覽器 console 之斷言〉。
 - Reflex：①這條 assert 是 spec 要求還是我選最容易驗的？②UI 描述都翻成 assert 了嗎？③DB 寫入當最終真相？④動作鏈走完了嗎？
 
 ## 6. 每 case 隔離：fresh browser + DB 重置
@@ -382,6 +385,8 @@ headless Chromium 預設 GPU 光柵化 + subpixel AA 非決定性（拉丁字偶
 | 高頻 API（rate limit / 封鎖） | `page.evaluate` 內 `Promise.allSettled` 並行 fetch（走 browser stack）；門檻可用 `genTempSettings` 暫調小；`>` vs `>=` 以 spec 為準 |
 | 模擬不同 client IP | `ctx.route('**/*')` 僅本機 URL 加 `X-Forwarded-For`（`newContext({extraHTTPHeaders})` 會套到 CDN → icon 缺圖）；絕不封 127.0.0.1；後端不信任 XFF 的專案改 fixture log |
 | in-memory 計數清除 | 僅本機 + token 放行的清除 API，`beforeEach` 打；fail-closed 情境下沉 unit |
+| 瀏覽器 console 之斷言（純語意 e2e：只收 console、無標準圖） | `page.on('console')` 收集；判定以 `msg.args()[i].jsonValue()` 之結構化內容為準——`msg.text()` 對物件引數之表示隨 Playwright 版本而異（提案端：舊版為 `JSHandle@object`，較新版為預覽字串如 `{errType: string}`），只認其一之斷言換版即紅；字串引數已在 `msg.text()` 內，把 `text` 與各引數之 `jsonValue()` 串成一段時同一文字出現兩次，斷言之正規式須容許；等待以輪詢「某則 console 出現」為條件（§4.4），不用固定秒數。**「console 不含某資料」之否定斷言須另有正向證據**：被測路徑之那則 console（如 catch 內之摘要）確實出現，否則路徑沒執行時照綠。要走失敗路徑時**只讓目標請求失敗**：`page.route` 依請求本體判別目標函數（如 `postDataBuffer()` 含函數名）才 `abort`；全部中止共用之 API 端點會使連線閘後之同步不完成，目標函數根本不被呼叫（提案端：用戶端只印重試訊息） |
+| 以後端 serve 之建置產物（`dist/`）開頁之案例 | 被測物是已建置之 `dist/`，不是 `src/`：改 `src/` 後不重建即驗不到（提案端：只改 `src/` 之變異存活；全套因當時 `dist/` 為舊建置而綠，重建後才紅）。改前端後先重建；不動正式 `dist/` 者建至暫存夾、暫時覆蓋後跑並還原——覆蓋前備份逐檔 sha256 清單，還原後逐檔回驗**且無多餘檔**（後端啟動時可能改寫被 gitignore 之入口檔），專案特有之建置後處理（入口檔之路徑轉換等）照做。變異驗證亦同：變異改 `src/` 後須重建才進到被測物。各專案重複之覆蓋／還原工具宜由共用之 e2e 工具套件提供，不各自複製 |
 | server 注入語系之初始畫面 | 打後端 serve 的 build 非 dev server；保留不可變模板或冪等還原佔位符；URL 不帶 `?lang=`；**最低覆蓋**：連線中畫面（`page.route` 攔截不回應使懸置；abort 會變斷線畫面）＋ 登入 / 主畫面；其他連線狀態以前端狀態 API 強制切換（setup 例外） |
 | email round-trip（重設密碼、變更通知、註冊驗證信） | 先三步探測（建收件匣→產品寄信→API 讀全文）再擴案例；一收信者一個 API 可讀之收件匣，收件匣不足時多帳號＋「收件匣→金鑰」對應；涉信案例才用真實 SMTP，其餘指向拒絕埠；假時鐘會讓 Date 標頭落在過去而送不到，後端殼補 `date: Date.now()`；輪詢取信（案例起始減 1 分鐘、同主旨多封以識別碼排除）；憑證缺 fail-fast 不 skip；信件標準圖用固定版式檢視器頁（無時間、密碼／識別碼黑條），不截儀表板；先盤點產品全部寄信點（grep 寄信呼叫與設定之信件鍵），每個寄信點至少一個收信案例，不只做最先想到的那種信；斷言以逐行純文字對 spec〈信件對照〉；模板或文案改版（版式、點名所屬系統、結果頁文案）時模板檔、spec〈信件對照〉、測試之期望文字三處同步並 grep 舊主旨，只重產含信件與結果頁之圖；只能由套件改的文案先寫建議檔、升版後再改三處。全文：[references/mail-roundtrip-verification.md](references/mail-roundtrip-verification.md) |
 | 統計 / 依時間漂移 | 後端確定性優先：假時鐘（§8.2）、mock 資料集（settings 開關）、fixture log（非 ISO 檔名繞過輪替清理）、合成 log 目錄 + `restartBackend`；仍漂移先查為何漂移（§8.2〈盤點寫入時鐘與讀取時鐘〉），查明不可固定才貼圖覆蓋 |
@@ -407,6 +412,8 @@ headless Chromium 預設 GPU 光柵化 + subpixel AA 非決定性（拉丁字偶
 ### 11.2 Timing flake 自己修
 
 「給它無限時間會穩定通過嗎？」會 → timing flake 自己 iterate（加 wait → 具體 ready 訊號：元件狀態機優先，其次內容＋幾何簽章連續穩定（§8.1；不用雙重 rAF）→ 5s 仍 flake 才隔離）；不會 → 真問題才問使用者。不把 flake 包裝成「A 或 B」拋給使用者；不拿掉 pixel 層。超容差真差異照 references 七步。
+
+**負載下偶紅、而在允許之 CPU 壓力下重現不出時**（壓力行程 ≤ 邏輯核數 − 2、與測試同為低於標準之優先權；提案端：6 個壓力行程對單機單一 e2e 幾乎無影響，單案 20.0 → 20.4 秒）：以 Playwright 路由對本機請求注入延遲（在暫存副本上，不改專案測試檔），掃出舊碼之失敗閾值，於同一閾值驗新碼（提案端：舊碼注入 6.5 秒仍綠、9 秒全紅）；回報寫「已緩解、未證實根除」，不寫「已修復」。此即「非缺陷之時序變異」之 e2e 作法（skill[role-coder-for-test] 之 references/timer-tests.md §12 末段）。
 
 ### 11.3 w-screenctl 探索
 
@@ -446,7 +453,8 @@ token 檔不存在時由服務自動產生（啟動輸出不印全文）；一�
 - [ ] case 對照表：spec 每 bullet × 語系 → it() → baseline，gap 已分類
 - [ ] 6 步 user path 在每個新 case 註解；抹平步驟標「未走 UI」；按鈕 covered/uncovered 已輸出
 - [ ] act 無 L4–L6；assert 每條對應 spec；動作鏈步數 ≥ spec；彈窗內元素以最上層彈窗為範圍
-- [ ] 固定等待已盤點（`auditWaits`）：後接截圖／讀取／斷言之候選逐一判讀非同步來源，有者已改偵測（頁面內 `waitUntilExist`，瀏覽器外 `pollUntil`），偵測條件為終態（原等待順帶等到之轉址／浮窗／debounce 已列入）；照留者屬 spec 時間、負向觀察窗或偵測後 settle
+- [ ] 固定等待已盤點（`auditWaits`）：後接截圖／讀取／斷言之候選逐一判讀非同步來源，有者已改偵測（頁面內 `waitUntilExist`，瀏覽器外 `pollUntil`），偵測條件為終態（原等待順帶等到之轉址／浮窗／debounce 已列入）；照留者屬 spec 時間、負向觀察窗或偵測後 settle；導覽就緒未以 `networkidle` 加固定上限當閘
+- [ ] console 等旁路輸出之斷言以 `jsonValue()` 判定（不只認 `msg.text()` 之某一種表示）、否定斷言另有路徑已執行之正向證據、失敗路徑只中止目標請求；以 `dist/` 為被測物之案例於改 `src/` 後已重建（暫時覆蓋者已逐檔雜湊還原且無多餘檔），變異驗證亦然
 - [ ] 每 case fresh browser + DB 重置；所有語系皆跑；regen 端與比對端呼叫同一案例函數（runBaselineCase），產製端寫檔前語意斷言與不變式皆過
 - [ ] 篩選以 createBaselineGate（邊界前綴、不符即報錯、--langs 完全比對、--write-mode、E2E_BASELINE_OUT_DIR）；`--names __none__` 於啟動服務前報錯；共用圖之另一案 compareOnly
 - [ ] 改共用層或管線時已走等價驗證協定（暫存目錄重產 → compareImageDirs 分層 → write-mode changed 零寫出 → test/pics 快照與 git status 不變）；共用實作經 test/tools/e2eLib.mjs 單一橋接
