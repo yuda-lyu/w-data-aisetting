@@ -1,6 +1,6 @@
 # dispatch-opencode：歷次查核對照表（自 SKILL.md〈安裝檢查〉移入）
 
-本檔收 SKILL.md〈安裝檢查〉2026-11-13 及更早之各次對照表與實測紀錄（原文逐字自 SKILL.md 搬移，未刪改；其中「全表 N 條」「opencode N 條」「`oc:` N 條」「`WDispatchAi` N 個鍵」「`ocgo:` 9 條」等為查核當日之狀態，不代表現況）。最新一次對照（2026-11-23，w-dispatch-ai 1.0.109）留在 SKILL.md。
+本檔收 SKILL.md〈安裝檢查〉2026-11-13 及更早之各次對照表與實測紀錄（原文逐字自 SKILL.md 搬移，未刪改；其中「全表 N 條」「opencode N 條」「`oc:` N 條」「`WDispatchAi` N 個鍵」「`ocgo:` 9 條」等為查核當日之狀態，不代表現況）。最新兩次對照（2026-11-23，w-dispatch-ai 1.0.110 與 1.0.109）留在 SKILL.md。
 
 2026-11-13 對照（Gitea #141）：本機 opencode **1.19.5**，技能根實裝 `w-dispatch-ai` **1.0.90**（讀原始碼庫 1.0.92 之 `dispatchOpencode.mjs`、`parseOpencodeEvents.mjs`、`failureDiag.mjs` 核對 `finish` 之來源）。只重查「權限被自動拒絕」之行為：實呼免費模型 `deepseek-v4.1-flash-free` 共 21 次（各設定之最小重現與補充探測，結果見〈`ask` 被自動拒絕＝整個工作階段結束〉），另以 `opencode agent list` 注入各 `config` 查生效規則、自執行檔內之程式字串核對 `continue_loop_on_deny` 之鍵名與位置；其餘段落未重驗。
 

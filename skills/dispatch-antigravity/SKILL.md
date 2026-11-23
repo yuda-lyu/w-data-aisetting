@@ -5,7 +5,7 @@ description: 當任務需要委派給 Antigravity，或需要使用其提供的 
 
 # dispatch-antigravity
 
-使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.109，其中預設模型與〈skipPermissions: false 只擋工作區外之寫入〉另依 2026-11-13 之 1.0.92 內建條目與 agy 1.5.7 實測更新，見文末對照；固定旗標與自用鍵自 1.0.17 起未變動，**但 1.0.92 起 `timeoutMs` 無效值改用預設 300000、`printTimeout` 之推導不再另行封頂，1.0.109 起 `skipPermissions`／`addDirs`／`exe`／`cwd`／`env`／`maxRetries` 給了無效值之處置改為拒絕或視為未給，見〈逾時分層〉、〈轉接器契約〉與〈安裝檢查〉2026-11-23 對照**（1.0.73 另加自用鍵 `spawnGate`：每次 spawn 前有機器級守門，agy 預設不限，見〈逾時分層〉選項表；1.0.80 另加自用鍵 `promptVia`：提示詞不超過 30,000 字元仍走 `--print`、逐位元不變，超過才改走 stdin，見〈提示詞傳輸〉；1.0.79 起遞補層對 agy 條目於送出前先看額度，見〈逾時分層〉選項表之 `quotaGate`），**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-11-13 以 1.5.7 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
+使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.110，其中預設模型與〈skipPermissions: false 只擋工作區外之寫入〉另依 2026-11-13 之 1.0.92 內建條目與 agy 1.5.7 實測更新，見文末對照；固定旗標與自用鍵自 1.0.17 起未變動，**但 1.0.92 起 `timeoutMs` 無效值改用預設 300000、`printTimeout` 之推導不再另行封頂，1.0.109 起 `skipPermissions`／`addDirs`／`exe`／`cwd`／`env`／`maxRetries` 給了無效值之處置改為拒絕或視為未給；1.0.110 起再收嚴：影響計費之 `model`、`effort` 給了而非原始非空字串、`env` 各變數之值給了而非字串（`undefined` 與 `''` 合法）即回 `params`（`attempts: 0`、不起子程序），見〈逾時分層〉、〈轉接器契約〉與〈安裝檢查〉2026-11-23（1.0.110）對照**（1.0.73 另加自用鍵 `spawnGate`：每次 spawn 前有機器級守門，agy 預設不限，見〈逾時分層〉選項表；1.0.80 另加自用鍵 `promptVia`：提示詞不超過 30,000 字元仍走 `--print`、逐位元不變，超過才改走 stdin，見〈提示詞傳輸〉；1.0.79 起遞補層對 agy 條目於送出前先看額度，見〈逾時分層〉選項表之 `quotaGate`），**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-11-13 以 1.5.7 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
 
 需要變更模型 slug、effort、print 模式旗標、逾時或工作區可視範圍時，讀取 [references/agy-flags.md](references/agy-flags.md)。
 
@@ -110,7 +110,7 @@ claude-opus-5-5-*、claude-sonnet-5-5-*（各 low／medium／high）、gpt-oss-1
 
 `gemini-pro-orchestrator-g1-pro`（顯示名 Orchestrator (Argon)）為 1.5.7 新見之項目，`/effort` 回不可調；本技能未實呼、不用於派工。3.7 Flash、3.6 Flash、3.1 Pro 與 Claude 4.6 系已全數下架（套件記錄 `gemini-3.6-flash-low`、`gemini-3.1-pro` 於 agy 1.4.0 回 `not recognized as a known model`）。
 
-Antigravity 也接受 `--effort`（各模型實際可用值以「必要預設值」一節之 `/effort` 實查為準）。若使用轉接器的 `effort` 選項，應搭配相容的基礎模型 slug。帶有等級的 slug 若再搭配不一致的 effort，agy 會拒絕執行。本技能預設固定使用 `gemini-4-hydrogen-high`，並省略 `effort`。
+Antigravity 也接受 `--effort`（各模型實際可用值以「必要預設值」一節之 `/effort` 實查為準）。若使用轉接器的 `effort` 選項（須為原始非空字串，1.0.110 起給了而非即回 `params`；`''` 與未給不帶旗標），應搭配相容的基礎模型 slug。帶有等級的 slug 若再搭配不一致的 effort，agy 會拒絕執行。本技能預設固定使用 `gemini-4-hydrogen-high`，並省略 `effort`。
 
 ## 提示詞傳輸
 
@@ -248,7 +248,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**antigravity 預設不限**（只有 opencode 預設啟用，其 `opencode.exe` 單次短呼叫實測約占 1.1 核心）。**未驗證處**：`agy.exe` 在套件實測機上沒有行程，**其 CPU 占用從未量測**——預設不限是「未證實會占核故不擋」，不是「已證實不占核」，有實測後預設可能改為限制。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `agy.exe`〔非 Windows 為 `agy`〕之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；1.0.109 起有期限（`budgetMs` 換算之期限與呼叫端 `spawnGate.deadlineAt` 取較早者）時，探針逾時亦不超過「期限 − `minAttemptMs` − 現在」、排互斥鎖之等候受同一期限約束，到點即 fail-open 放行（`onTrace` 之 `fail-open` 事件 `reason` 為 `'deadline'`／`'lock-timeout'`；因期限縮短而逾時者不算探針故障、不冷卻）；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
 | `quotaGate` | 未給＝**預設開**（antigravity 條目自 1.0.79 起；此鍵為遞補層與 `createAiCaller` 的選項，不是 `dispatchAntigravity()` 的自用鍵、不轉傳轉接器） | 遞補層選到 agy 條目（**無 `keys` 者**）、呼叫轉接器前，先看**額度帳**（`store.quota`，`now < until` 即略過、不查不派），再以 `getQuotaAntigravity`（`agy -p "/usage"`，唯讀、不耗額度）查用量，**任一視窗 `usedPercent ≥ 95` 即略過、不派**——事件 `quota-skip`（帶 `source`：`'usage-api'`／`'ledger'`／`'limit-text'`）、`tried[].outcome: 'quota-skip'`、合成失敗結果 `errorType: 'quota'`、`failureKind: 'no-credit'`、`error` 以 `QUOTA_COOLDOWN:` 開頭、`attempts: 0`；**不寫條目冷卻**（`cooldownMs` 之既有語意不變）。此前額度滿期間，每輪每席都先空試一次（可達逾時）。視窗依 `model` 對到 `/usage` 的群組：`gemini-4-argon*`→「Gemini 4 Argon」、`gemini-*`→「Gemini Models」、`claude-*`／`gpt-oss-*`→「Claude and GPT models」，**對不到取全部視窗**——所以 `agy:claude-*` 條目看的是「Claude and GPT models」群組（含 5 小時窗），不是 Gemini 的。**入帳**：判定為被擋且被擋視窗的重置時刻可解析時，寫入 `store.quota`（`until` 為被擋視窗重置時刻之最晚者，上限現在＋8 天，跨行程經既有 `store` 持久化；`store` 無效時退回行程內記憶體），之後 `now < until` 不再查詢，過期才重查；agy 的額度字樣本套件未見過、**不內建**，要靠失敗文字入帳者由呼叫端注入 `quotaUntilOf(r)`（以 `entry:<id>` 入帳，只對明給 `id` 的條目有效）。**預設只作用於 `exe` 為真的 `agy`（或未給 `exe`）**，假 CLI 與包裝腳本不被預設查詢，明給 `quotaGate: true` 或物件才不論 `exe`。**fail-open**：讀者逾時、拋錯、未授權、欄位缺漏、`usedPercent` 缺漏或非數字一律不擋（另發 `quota-gate-error`）。**成本**：agy `/usage` 較慢（套件本機實測 1 次 9.5 秒；套件 README 稱 10～60 秒），讀者結果預設快取 300 秒（`antigravityCacheMs`）、查詢逾時 60 秒（`antigravityTimeoutMs`），首次呼叫與快取到期後的第一次呼叫會多等這段。**關閉**：`quotaGate: false`（遞補層頂層或單一條目；查用量、讀帳、寫帳三處全關）；只想調門檻用 `antigravityMax`（`false` 關閉該家）或 `windowMax`。帳在重置前不重查，期間若升級方案或補充額度，須清除 `store.quota` 之該鍵或 `quotaGate: false` |
 
-遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀或給了非物件、`exe`／`cwd`／`skipPermissions`／`addDirs` 給了而無效）時**整組跳過**，不在同組內逐把換金鑰。1.0.109 起條目層之 `params` 失敗（含上述安全相關 opt 給了而無效）於發 `try` 事件**之前**即判，**不發 `try`**（`onUsage` 不入帳；仍進 `tried`）；轉接器自身才得知之 `params`（如 `model` 缺漏）仍在 `try` 之後，結果帶 `attempts: 0` 可辨。
+遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀或給了非物件、`exe`／`cwd`／`skipPermissions`／`addDirs` 給了而無效）時**整組跳過**，不在同組內逐把換金鑰。1.0.109 起條目層之 `params` 失敗（含上述安全相關 opt 給了而無效）於發 `try` 事件**之前**即判，**不發 `try`**（`onUsage` 不入帳；仍進 `tried`）；轉接器自身才得知之 `params`（如 `model` 缺漏）仍在 `try` 之後，結果帶 `attempts: 0` 可辨。1.0.110 起此「發 `try` 之前即判」另涵蓋條目層之 `model`、`effort` 給了而非原始非空字串，以及 `env` 資料屬性之值非字串（getter 不執行，由轉接器物化時才判，那時 `try` 已發）；這些條目同樣不發 `try`、`onUsage` 不入帳。
 
 **`budgetFor()` 有陷阱，不要照抄**：它**只累加條目自己的 `timeoutMs`**，讀不到你寫在 opt／`defaults` 的那一個；而套件內建的 providers 條目**刻意不帶 `timeoutMs`**，所以 `budgetFor(內建條目)` 恆為「條目數 × 300000」（1.0.53 內建 21 條就是 105 分鐘）——比你的 4 小時還小，反而把它壓下去。要用它就得先把 `timeoutMs: 14_400_000` 逐條寫進每個條目，否則直接寫 `K × 14_400_000`。
 
@@ -342,15 +342,17 @@ await wda.dispatchAntigravity(prompt, {
 
 **提示詞超過 30,000 字元時**，預設的 `promptVia: 'auto'` 會改走 stdin（固定 `--output-format stream-json`，`stdout` 已還原為純回覆文字、原始 NDJSON 在 `raw`；見〈提示詞傳輸〉），此時 `extraArgs` 若帶 `--output-format`（如上例）會回 `params` 錯誤、不 spawn。超長提示詞的呼叫請去掉該旗標；要保留該旗標者明給 `promptVia: 'argv'` 並把提示詞縮到 30,000 字元內。
 
-## 轉接器契約（w-dispatch-ai 1.0.109）
+## 轉接器契約（w-dispatch-ai 1.0.110）
 
 **給了而無效之處置（1.0.109 起，勿再依賴「無效即退回預設」）**：影響安全或可視範圍之 opt（`exe`、`cwd`、`skipPermissions`、`addDirs`、`env`）**給了而無效（含 `''`）即以 `params` 拒絕**（`ok: false`、`attempts: 0`、不起子程序〔含 stdin 路徑之 `agy --version` 探測〕、訊息不回顯值）；`undefined`／`null` 才視為未給。`timeoutMs`、`maxRetries` 等量級／次數類則**視為未給而用預設**（不報錯）。要用預設就**不給該欄**。
+
+**1.0.110 起再加兩類，同樣回 `params`、`attempts: 0`、不起子程序（含 `agy --version` 探測）**：①影響計費之 `model`、`effort` 給了而非原始非空字串（數字、物件、包裝物件等）——修前整段 `--model`／`--effort` 旗標不出現而改用 agy 自行決定之模型與檔位（計費隨之改變）；**`''` 與未給（`undefined`／`null`）照舊不帶旗標**（`''` 是文件載明之預設）；`effort` 與帶檔位 slug 之衝突仍由 agy 判定。②`env` 各變數之值須為字串——`undefined` 合法（代表移除該變數，可遮蔽繼承值）、`''` 合法；`null`、數字、布林、物件、陣列、包裝物件、函數、`Symbol`、`BigInt` 回 `params`（修前被 Node 轉成字面字串 `'null'`／`'123'` 交給子程序，`Symbol` 則使 spawn 拋錯；訊息只寫不合規個數與首個之 `typeof`，不含值與變數名），**要移除變數就給 `undefined`，不要給 `null`**。**仍維持「給了無效視為未給」者**：`promptVia`（無效回退 `'auto'`）、`printTimeout`、`maxRetries`、`timeoutMs`、`retryDelayMs`、`extraArgs`、`spawnGate` 等不改變計費之 opt。
 
 | 選項 | 轉接器預設值 | 行為 |
 |---|---:|---|
 | `exe` | `agy` | 執行檔名稱或絕對路徑；給了而非非空字串（含 `''`）回 `params`（1.0.109 起，修前退回 PATH 上之 `agy`） |
-| `model` | 省略 | 展開為 `--model <slug>` |
-| `effort` | 省略 | 展開為 `--effort <level>` |
+| `model` | 省略 | 展開為 `--model <slug>`；給了而非原始非空字串回 `params`（1.0.110 起，修前整段旗標不出現而改用 agy 預設模型）；未給（`undefined`／`null`）與 `''` 照舊不帶旗標 |
+| `effort` | 省略 | 展開為 `--effort <level>`；給了而非原始非空字串回 `params`（1.0.110 起，修前不帶 `--effort` 而用 agy 預設檔位）；未給與 `''` 照舊不帶旗標 |
 | `skipPermissions` | `true` | 加入 `--dangerously-skip-permissions`；須為原始布林，給了非布林回 `params`（1.0.109 起，修前退回 `true`） |
 | `printTimeout` | `timeoutMs` 秒數 + 30 | agy 內層逾時；預設推導值恆晚於外層，只作後備（推導不另行封頂，見〈逾時分層〉）。明給小於 `timeoutMs` 的值會讓慢回合變成 `ok: true` 的截斷輸出 |
 | `addDirs` | 實際 `cwd` | 重複展開為 `--add-dir`；明確傳入 `[]` 可停用自動加入；給了而非陣列、不可讀、元素數逾 10000、或非空而元素全無效者回 `params`（1.0.109 起，修前退回 `[cwd]`） |
@@ -358,7 +360,7 @@ await wda.dispatchAntigravity(prompt, {
 | `extraArgs` | `[]` | 接在固定旗標之後、`--print <prompt>`（argv 路徑）或 `--input-format stream-json --output-format stream-json`（stdin 路徑；此路徑下不得含衝突旗標，見〈提示詞傳輸〉）之前 |
 | `timeoutMs` | `300000` | 外層程序樹逾時；須為 1～2147483647 之整數或其十進位數字字串，其餘（0、負數、小數、超過上限、`Infinity`、`'0x10'`、包裝物件）視為未給而用 300000，不夾上限、不報錯（1.0.92 起） |
 | `cwd` | 目前目錄 | 子程序工作目錄；給了而非非空字串（含 `''`）回 `params`（1.0.109 起，修前退回目前目錄）。**它本身不會讓 agy 看得到檔案**——agy 以自身 scratch 目錄為工作區，可視範圍只由 `--add-dir` 決定；未給 `addDirs` 時轉接器自動把有效 `cwd` 加進去，就是為了補這個落差 |
-| `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`；以淺層副本轉傳（只讀一次）；**給了而非可讀之一般物件（字串含 `''`、數字、布林、陣列、`Map`、函數、包裝物件、不可讀者如拋錯之 getter、已撤銷之 `Proxy`）於啟動前回 `errorType: 'params'`**（1.0.109 起，修前非物件視為未給而令子程序繼承 `process.env`；stdin 路徑之 `agy --version` 探測亦在判定之後） |
+| `env` | 省略 | 額外子程序環境變數，只作用於該次呼叫、不污染 `process.env`；以淺層副本轉傳（只讀一次）；**給了而非可讀之一般物件（字串含 `''`、數字、布林、陣列、`Map`、函數、包裝物件、不可讀者如拋錯之 getter、已撤銷之 `Proxy`）於啟動前回 `errorType: 'params'`**（1.0.109 起，修前非物件視為未給而令子程序繼承 `process.env`；stdin 路徑之 `agy --version` 探測亦在判定之後）；**各變數之值須為字串**（1.0.110 起，`undefined` 與 `''` 合法，`null`、數字、布林、物件等回 `params`，見本節開頭） |
 | `validate` | 省略 | 由套件自身判定（`src/runExecCli.mjs`；1.0.49 起不交 `execCli`）：規則字串或自訂函數，函數可回傳 Promise，等待時間算在同一次嘗試的 `timeoutMs` 內；拋錯、reject、逾時皆為 `OUTPUT_VALIDATION_FAILED`（`errorType: 'validation'`） |
 | `spawnGate` | 未給＝不限 | **1.0.73 新增**，自用鍵、不轉交 `execCli`。每次 spawn 前守門（驗證不過而重試者每次重守）；預設與依據見〈逾時分層〉選項表 |
 | `maxRetries` | `0` | 須為 0～4294967295 之整數或其十進位數字字串，其餘（`Infinity`、`'0x10'`、小數、負數、超過上限）視為未給＝0（1.0.109 起）；以判定後之值轉交 `execCli` |
@@ -428,6 +430,15 @@ agy update       # 版本低於 1.1.25 時升級
 ```
 
 無人值守／無介面執行前，須先以互動方式完成 Google 認證。
+
+2026-11-23 對照（1.0.110）：以 `w-dispatch-ai` **1.0.110** 之原始碼（`src/readSafeOpt.mjs`、`src/dispatchAntigravity.mjs`、`src/runExecCli.mjs`、`src/dispatchAiFallback.mjs`）與 README 行為變更紀錄第 87、88 條核對（**未實際呼叫 agy**）。固定旗標順序與自用鍵不變；**變的是給了無效值之處置再收嚴到影響計費之 `model`／`effort` 與 `env` 各變數之值**——使用端若依賴「無效即退回預設」或「`env` 值為 `null`／數字會被轉成字串」須改為不給該欄或給有效值（要移除 `env` 變數就給 `undefined`）：
+
+| 項目 | 1.0.110 之行為（修前） |
+|---|---|
+| `model`、`effort` | 給了而非原始非空字串回 `params`、不起子程序（修前整段 `--model`／`--effort` 不出現、改用 agy 預設模型與檔位）；未給與 `''` 照舊不帶旗標 |
+| `env` 各變數之值 | 須為字串：`null`、數字、布林、物件、陣列、包裝物件、函數、`Symbol`、`BigInt` 回 `params`、於 stdin 路徑之 `agy --version` 探測之前判（修前被 Node 轉成字面字串，`Symbol` 使 spawn 拋錯）；**`undefined`（移除該變數）與 `''` 合法** |
+| 遞補層之條目層 `params` 失敗 | 另涵蓋 `model`／`effort` 給了而無效與 `env` 資料屬性之值非字串，於發 `try` 之前判，不發 `try`、`onUsage` 不入帳（`SAFE_SPEC` 新增之列） |
+| 仍維持「給了無效視為未給」者 | `promptVia`、`printTimeout`、`maxRetries`、`timeoutMs`、`extraArgs`、`spawnGate` 等不改變計費之 opt |
 
 2026-11-23 對照：以 `w-dispatch-ai` **1.0.109** 之原始碼（`src/dispatchAntigravity.mjs`、`src/readSafeOpt.mjs`、`src/castTimerMs.mjs`、`src/castCountOr.mjs`、`src/gateHints.mjs`、`src/runExecCli.mjs`、`src/cliSpawnGate.mjs`）與 README 行為變更紀錄第 73、79、82、83、86 條核對（**未實際呼叫 agy**；agy 版本、型錄與 `/effort` 仍依 2026-11-13 於 1.5.7 之實查，未重驗）。固定旗標順序與九個自用鍵（`exe`／`model`／`effort`／`skipPermissions`／`printTimeout`／`addDirs`／`extraArgs`／`input`／`promptVia`）不變；**更正 2026-11-13 查核表之「已知與 1.0.92 不符待另案更正」**（`timeoutMs` 無效值改用預設、`--print-timeout` 推導不再封頂，已於〈逾時分層〉與〈轉接器契約〉更正），並補 1.0.109 之變動——使用端若依賴「無效即退回預設」須改為不給該欄：
 

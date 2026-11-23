@@ -204,7 +204,7 @@ opencode auth logout
 
 必要預設模型以匿名取用 OpenCode 自家供應商的免費模型（`useStoredAuth: false`），不需登入；要用付費模型或改走自己的帳號時，`opencode auth login` 完成一次即可。第三方供應商（如 NVIDIA）的模型才需要該供應商憑證；`dispatchOpencode()` 也能透過 `provider` 與 `key`，僅為當次程序注入 `OPENCODE_AUTH_CONTENT`，不會修改已保存的認證檔案；`key` 有效而 `provider` 給了非空字串以外之定義值、或 `useStoredAuth` 給了非布林，1.0.109 起回 `params`（不再悄悄改用 `auth.json` 既有登入，見 SKILL.md〈轉接器契約〉）。
 
-第三方供應商定義可透過轉接器的 `config` 選項注入為 `OPENCODE_CONFIG_CONTENT`。供應商、模型、base URL 與憑證來源必須互相對應。
+第三方供應商定義可透過轉接器的 `config` 選項注入為 `OPENCODE_CONFIG_CONTENT`；`config` 須為字串或一般物件，1.0.110 起給了而非兩者（數字、布林、陣列等）回 `params`、不再被略過而沿用既有設定（見 SKILL.md〈轉接器契約〉）。供應商、模型、base URL 與憑證來源必須互相對應。
 
 ## 輸出與工作階段
 
