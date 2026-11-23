@@ -5,7 +5,7 @@ description: 當任務需要委派給 Codex，或需要把 Codex 納入多代理
 
 # dispatch-codex
 
-使用 `w-dispatch-ai` 的 `dispatchCodex()` 執行自動化 Codex 任務（本技能對照 1.0.110；`dispatchCodex()` 之固定參數自 1.0.17 起未變動，**但 1.0.109 起新增自用鍵 `cleanCodexRefs`（派工後預設清除該次新留下之 `refs/codex/*`）、帶 `--json` 時結果另帶 `raw`／`commands`，且 `sandbox`／`exe`／`cwd`／`env`／`maxRetries` 給了無效值之處置改為拒絕或視為未給；1.0.110 起再收嚴：影響計費之 `model` 給了而非原始非空字串、`env` 各變數之值給了而非字串（`undefined` 與 `''` 合法）即回 `params`（`attempts: 0`、不起子程序），見〈轉接器契約〉與〈安裝檢查〉2026-11-23（1.0.110）對照**；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，codex 預設不限，見〈逾時分層〉選項表；1.0.79 起遞補層對 `codex` 條目於呼叫前先看額度、用量 ≥95% 即略過（`quotaGate`，遞補層選項、非 `dispatchCodex()` 的自用鍵），見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。轉接器會呼叫 `codex exec`、透過 stdin 傳入提示詞、設定沙箱政策、略過 Git 儲存庫限制、管理逾時與程序樹清理，並以結果物件回報失敗。
+使用 `w-dispatch-ai` 的 `dispatchCodex()` 執行自動化 Codex 任務（本技能對照 1.0.112，**1.0.111、1.0.112 對本轉接器無使用端改變**〔以 `src/` 核對：自 1.0.110 起 `dispatchCodex.mjs` 與 codex 條目皆未動，1.0.112 只動 `dispatchAntigravity` 與條目表之 `oc:opencode/hy4-flash-free`、agy 條目〕，故下列 1.0.110 之改變與〈轉接器契約〉、〈安裝檢查〉2026-11-23（1.0.110）對照仍為現行；`dispatchCodex()` 之固定參數自 1.0.17 起未變動，**但 1.0.109 起新增自用鍵 `cleanCodexRefs`（派工後預設清除該次新留下之 `refs/codex/*`）、帶 `--json` 時結果另帶 `raw`／`commands`，且 `sandbox`／`exe`／`cwd`／`env`／`maxRetries` 給了無效值之處置改為拒絕或視為未給；1.0.110 起再收嚴：影響計費之 `model` 給了而非原始非空字串、`env` 各變數之值給了而非字串（`undefined` 與 `''` 合法）即回 `params`（`attempts: 0`、不起子程序），見〈轉接器契約〉與〈安裝檢查〉2026-11-23（1.0.110）對照**；1.0.73 起每次 spawn 前有機器級守門 `spawnGate`，codex 預設不限，見〈逾時分層〉選項表；1.0.79 起遞補層對 `codex` 條目於呼叫前先看額度、用量 ≥95% 即略過（`quotaGate`，遞補層選項、非 `dispatchCodex()` 的自用鍵），見〈逾時分層〉選項表；1.0.49 起 `validate` 改由套件自行判定，見〈轉接器契約〉）。轉接器會呼叫 `codex exec`、透過 stdin 傳入提示詞、設定沙箱政策、略過 Git 儲存庫限制、管理逾時與程序樹清理，並以結果物件回報失敗。
 
 需要變更模型／設定旗標、沙箱行為或非互動輸出時，讀取 [references/codex-flags.md](references/codex-flags.md)。
 

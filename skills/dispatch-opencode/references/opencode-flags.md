@@ -14,6 +14,8 @@
 
 2026-11-07 增補（`crouton-alpha-free`、Go 型錄漂移與未收清單、免費額度逐模型計三處）之來源：`w-dispatch-ai` **1.0.80** 之 `src/providers.mjs` 檔頭與條目註解、`src/filterOpencodeFree.mjs`（其中〔本機實測〕與逐模型額度為套件或提出端於 2026-11-07 以 opencode 1.19.5 所做；本檔**未重跑**）。
 
+2026-11-24 增補（免費池重查、`hy4-flash-free` 收錄、`tidepool-alpha-free` 與 `iceman-free` 未收）之來源：`w-dispatch-ai` **1.0.112** 之 `src/providers.mjs` 檔頭漂移紀錄與 `oc:opencode/hy4-flash-free` 條目註解（套件以 opencode 1.19.5 實測；本檔**未重跑**）。
+
 ## 非互動語法
 
 ```text
@@ -50,6 +52,7 @@ variant：low、high、max
 |---|---|---|---|
 | `opencode/deepseek-v4.1-flash-free` | low／high／max | 200,000／32,000 | **本技能必要預設值**。2026-10-19 以 `--variant max`、匿名跑讀中文檔＋建檔兩次皆通過（21.8 秒、18.2 秒，檔案落地、中文原樣往返），工作階段紀錄確認 variant 為 `max` |
 | `opencode/beam-free` | low／medium／high／xhigh／max | 1,048,576／131,072 | 套件條目；2026-10-18 以 `--variant max`、匿名跑讀中文檔＋建檔兩次皆通過（8.3 秒、11.4 秒）；10-18 至 10-19 曾為預設 |
+| `opencode/hy4-flash-free` | none／high | 1,048,576／65,536 | 套件條目（1.0.112 起，條目帶 `--variant high`）；2026-11-24 套件實測（opencode 1.19.5）簡答 11.7 秒、推理題 8.8 秒答對、讀檔 24.2 秒正確、寫檔金絲雀被唯讀鎖擋下（轉接器回 `errorType: 'denied'`）、針在乾草堆 950,292 token 答對；可輸入文字與圖片；官方載明供應商零保留、不以資料訓練 |
 | ~~`opencode/glm-5.3-flash-free`~~ | — | — | **2026-11-18 已自 opencode 下架**（當日 `opencode models opencode --refresh` 無此條）；w-dispatch-ai 1.0.102 起自目錄移除，勿再指定（原紀錄：上游不穩，10 次中 4 次約 80 秒後失敗） |
 | `opencode/flint-40b-free` | low／medium／high／xhigh／max | 262,144／65,536 | 套件條目（1.0.60 起，條目帶 `--variant high`）；2026-10-30 實測簡答約 5～6 秒、讀檔 25 秒；high 與 low 之推理 token 皆 0，未見檔位差異；只收文字輸入 |
 | `opencode/big-pickle` | 無 | 200,000／32,000 | 套件條目 |
@@ -58,6 +61,8 @@ variant：low、high、max
 | `opencode/nemotron-3.5-super-vl-free` | none／minimal／low／medium／high／xhigh | 1,048,576／131,072 | 套件條目（1.0.54 起）；同上 |
 
 **2026-11-07 重查（套件記載）**：`opencode models opencode --refresh` 列 11 個免費模型（匿名 `GET …/zen/v1/models` 單價 0 者亦為 11 個），目錄 `oc:opencode/*` 收 8 個皆仍在（`filterOpencodeFree(providers, { refresh: true })` 回 `removed` 為空），`uncatalogued` 為 3 個：`opencode/crouton-alpha-free`（同一模型已另以 Go 路徑收為 `ocgo:opencode-go/crouton-alpha-free`）、`opencode/iceman-free`、`opencode/inkling-2-small-free`。這 3 個未收（收錄須簡答、推理題、read、寫檔金絲雀、型錄欄位、REST 對照與脈絡長度全數實測），上表只涵蓋已收的 8 個。
+
+**2026-11-24 重查（套件記載，`w-dispatch-ai` 1.0.112；opencode 1.19.5，本檔未重跑）**：`opencode models opencode --refresh --verbose` 列 10 個免費模型、單價皆 0；目錄 `oc:opencode/*` 原有 7 個皆仍在清單（無下架）；清單有列而目錄未收者 3 個：`hy4-flash-free`（release 2026-11-16）、`iceman-free`（2026-11-06）、`tidepool-alpha-free`（2026-11-18）；先前紀錄之 `inkling-2-small-free`、`longcat-2.5-free` 已不在清單。依收錄實測項逐一實測後**收 `hy4-flash-free`**（上表），**不收 `tidepool-alpha-free` 與 `iceman-free`**：官方〈Privacy〉載明二者「During its free period, collected data is retained and used to improve the model」（資料保留並用於改進模型），套件不對可能以資料訓練者送大脈絡，脈絡長度等項缺而不收；`pick` 指名此二者者落入 `missing`。**收錄前先讀官方〈Privacy〉，再決定可送之提示詞**。另 `deepseek-v4.1-flash-free` 之 CLI 型錄 release_date 現為 2026-10-17（上文記 2026-09-10），context 與輸出上限不變。
 
 各模型的檔位名稱並不一致（有的只到 `high`、有的跳過 `medium`、有的到 `xhigh` 為止、有的沒有檔位），換模型時以 `--verbose` 實查，不要套用別支的檔位。型錄上新出現、尚未收為套件條目的，用之前先照下節查核並實跑。
 
@@ -93,7 +98,7 @@ variant：low、high、max
 | `oc:agnes-ai/agnes-3.0-flash` | `agnes-ai/agnes-3.0-flash` | `agnes-ai` | `AGNES_KEYS` | `https://apihub.agnes-ai.com/v1` | `@ai-sdk/openai-compatible` |
 | ~~`oc:poolside/poolside/laguna-s-2.1`~~ | — | — | — | — | **已移除(w-dispatch-ai 1.0.108)**:2026-11-21 實測 Poolside 官方端點 `/models` 仍列,請求一律 HTTP 400「Model version … is deactivated」 |
 
-走 OpenCode 自家供應商的另外七條（1.0.60 起：`big-pickle`、`mimo-v2.6-flash-free`、`beam-free`、`deepseek-v4.1-flash-free`、`flint-40b-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`；原另有 `glm-5.3-flash-free`，2026-11-18 opencode 下架、w-dispatch-ai 1.0.102 移除）**不需要 provider 定義也不帶金鑰**，`config` 內只有權限鎖，且一律 `useStoredAuth: false` 走匿名免費存取。**改匿名的理由是帶金鑰反而受該金鑰所屬工作區之模型開關影響**（實測回 `Model access is disabled` 且耗 76s），結果會隨執行機器而異。全表之 `kind: 'opencode'` 條目共 16 條（1.0.108 起；`oc:` 8 條——1.0.60 起為 10 條，1.0.102 移除已下架之 `glm-5.3-flash-free`、1.0.108 移除 Poolside 條目;另有 `ocgo:` 8 條〔1.0.72 起 8 條、1.0.78 增為 9 條、1.0.85 回到 8 條〕，**與上述七條相反，須金鑰、不匿名**，見下節），逐條說明見 SKILL.md 之「條目表」與「OpenCode Go」。
+走 OpenCode 自家供應商的另外八條（1.0.60 起：`big-pickle`、`mimo-v2.6-flash-free`、`beam-free`、`deepseek-v4.1-flash-free`、`flint-40b-free`、`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`；1.0.112 新增 `hy4-flash-free`；原另有 `glm-5.3-flash-free`，2026-11-18 opencode 下架、w-dispatch-ai 1.0.102 移除）**不需要 provider 定義也不帶金鑰**，`config` 內只有權限鎖，且一律 `useStoredAuth: false` 走匿名免費存取。**改匿名的理由是帶金鑰反而受該金鑰所屬工作區之模型開關影響**（實測回 `Model access is disabled` 且耗 76s），結果會隨執行機器而異。全表之 `kind: 'opencode'` 條目共 17 條（1.0.112 起；`oc:` 9 條——1.0.60 起為 10 條，1.0.102 移除已下架之 `glm-5.3-flash-free`、1.0.108 移除 Poolside 條目、1.0.112 新增 `hy4-flash-free`;另有 `ocgo:` 8 條〔1.0.72 起 8 條、1.0.78 增為 9 條、1.0.85 回到 8 條〕，**與上述八條相反，須金鑰、不匿名**，見下節），逐條說明見 SKILL.md 之「條目表」與「OpenCode Go」。
 
 上表之 `nvidia/poolside/laguna-xs-2.1`（403）是 **NVIDIA 轉售的另一個 laguna 項目**（歷史探測），與 Poolside 官方路徑無關；官方路徑之兩條目已於 1.0.108 移除。同一個模型經不同路徑屬不同供應商，額度池與故障域各自獨立。
 

@@ -5,7 +5,7 @@ description: 當任務需要委派給 Antigravity，或需要使用其提供的 
 
 # dispatch-antigravity
 
-使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.110，其中預設模型與〈skipPermissions: false 只擋工作區外之寫入〉另依 2026-11-13 之 1.0.92 內建條目與 agy 1.5.7 實測更新，見文末對照；固定旗標與自用鍵自 1.0.17 起未變動，**但 1.0.92 起 `timeoutMs` 無效值改用預設 300000、`printTimeout` 之推導不再另行封頂，1.0.109 起 `skipPermissions`／`addDirs`／`exe`／`cwd`／`env`／`maxRetries` 給了無效值之處置改為拒絕或視為未給；1.0.110 起再收嚴：影響計費之 `model`、`effort` 給了而非原始非空字串、`env` 各變數之值給了而非字串（`undefined` 與 `''` 合法）即回 `params`（`attempts: 0`、不起子程序），見〈逾時分層〉、〈轉接器契約〉與〈安裝檢查〉2026-11-23（1.0.110）對照**（1.0.73 另加自用鍵 `spawnGate`：每次 spawn 前有機器級守門，agy 預設不限，見〈逾時分層〉選項表；1.0.80 另加自用鍵 `promptVia`：提示詞不超過 30,000 字元仍走 `--print`、逐位元不變，超過才改走 stdin，見〈提示詞傳輸〉；1.0.79 起遞補層對 agy 條目於送出前先看額度，見〈逾時分層〉選項表之 `quotaGate`），**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-11-13 以 1.5.7 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
+使用 `w-dispatch-ai` 的 `dispatchAntigravity()` 執行自動化 Antigravity 任務（本技能對照 1.0.112，其中預設模型與〈skipPermissions: false 只擋工作區外之寫入〉另依 2026-11-13 之 1.0.92 內建條目與 agy 1.5.7 實測更新，見文末對照；固定旗標與自用鍵自 1.0.17 起未變動，**但 1.0.92 起 `timeoutMs` 無效值改用預設 300000、`printTimeout` 之推導不再另行封頂，1.0.109 起 `skipPermissions`／`addDirs`／`exe`／`cwd`／`env`／`maxRetries` 給了無效值之處置改為拒絕或視為未給；1.0.110 起再收嚴：影響計費之 `model`、`effort` 給了而非原始非空字串、`env` 各變數之值給了而非字串（`undefined` 與 `''` 合法）即回 `params`（`attempts: 0`、不起子程序），見〈逾時分層〉、〈轉接器契約〉與〈安裝檢查〉2026-11-23（1.0.110）對照；1.0.112 起新增選項 `readOnly`（agy 真防寫：加 `--settings` 內聯 `permissions.deny`，自用鍵由九個增為十個），且內建 5 個 agy 條目皆自帶 `readOnly: true`——以內建條目派工者，工作區內寫入由放行改為被擋（行為變更；須寫入者見〈權限〉與〈`readOnly`：agy 真防寫〉），見〈轉接器契約〉與〈安裝檢查〉2026-11-24（1.0.112）對照；1.0.111 對本轉接器無使用端改變，`readOnly` 未開時固定旗標與 1.0.110 逐位相同**（1.0.73 另加自用鍵 `spawnGate`：每次 spawn 前有機器級守門，agy 預設不限，見〈逾時分層〉選項表；1.0.80 另加自用鍵 `promptVia`：提示詞不超過 30,000 字元仍走 `--print`、逐位元不變，超過才改走 stdin，見〈提示詞傳輸〉；1.0.79 起遞補層對 agy 條目於送出前先看額度，見〈逾時分層〉選項表之 `quotaGate`），**但 1.0.50 起 `printTimeout` 的推導反轉為晚於外層**，見〈逾時分層〉）。執行檔名稱是 `agy`，且 CLI 須為 **1.1.25 以上**（見下方「CLI 版本下限」；2026-11-13 以 1.5.7 實測通過）。轉接器會設定 print 模式、權限、模型／effort、工作區目錄、互相配合的內外層逾時，並維持不 reject 的結果契約。
 
 需要變更模型 slug、effort、print 模式旗標、逾時或工作區可視範圍時，讀取 [references/agy-flags.md](references/agy-flags.md)。
 
@@ -248,7 +248,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 | `spawnGate` | 未給＝**不限**（1.0.73 起；守門為 no-op：不查行程、不取樣，零成本） | CLI 類每次 spawn 前的機器級守門，**antigravity 預設不限**（只有 opencode 預設啟用，其 `opencode.exe` 單次短呼叫實測約占 1.1 核心）。**未驗證處**：`agy.exe` 在套件實測機上沒有行程，**其 CPU 占用從未量測**——預設不限是「未證實會占核故不擋」，不是「已證實不占核」，有實測後預設可能改為限制。要限者逐次明給 `spawnGate: { maxCli: N }`（數機器上 `agy.exe`〔非 Windows 為 `agy`〕之行程數，達 N 即等；RAM／CPU 門檻同樣預設關，要用另給 `ramUsedMax`／`cpuMax`），`false` 明確關閉。啟用後：每 10 秒再查、累計等逾 10 分鐘放行（fail-open，計數或取樣失敗亦放行）；等待在 spawn 之前，**不計入該次 `timeoutMs`**，有 `budgetMs` 時計入預算；1.0.109 起有期限（`budgetMs` 換算之期限與呼叫端 `spawnGate.deadlineAt` 取較早者）時，探針逾時亦不超過「期限 − `minAttemptMs` − 現在」、排互斥鎖之等候受同一期限約束，到點即 fail-open 放行（`onTrace` 之 `fail-open` 事件 `reason` 為 `'deadline'`／`'lock-timeout'`；因期限縮短而逾時者不算探針故障、不冷卻）；結果實際等過才帶 `gateWaitedMs`、逾時放行者另帶 `gateFailOpen: true` |
 | `quotaGate` | 未給＝**預設開**（antigravity 條目自 1.0.79 起；此鍵為遞補層與 `createAiCaller` 的選項，不是 `dispatchAntigravity()` 的自用鍵、不轉傳轉接器） | 遞補層選到 agy 條目（**無 `keys` 者**）、呼叫轉接器前，先看**額度帳**（`store.quota`，`now < until` 即略過、不查不派），再以 `getQuotaAntigravity`（`agy -p "/usage"`，唯讀、不耗額度）查用量，**任一視窗 `usedPercent ≥ 95` 即略過、不派**——事件 `quota-skip`（帶 `source`：`'usage-api'`／`'ledger'`／`'limit-text'`）、`tried[].outcome: 'quota-skip'`、合成失敗結果 `errorType: 'quota'`、`failureKind: 'no-credit'`、`error` 以 `QUOTA_COOLDOWN:` 開頭、`attempts: 0`；**不寫條目冷卻**（`cooldownMs` 之既有語意不變）。此前額度滿期間，每輪每席都先空試一次（可達逾時）。視窗依 `model` 對到 `/usage` 的群組：`gemini-4-argon*`→「Gemini 4 Argon」、`gemini-*`→「Gemini Models」、`claude-*`／`gpt-oss-*`→「Claude and GPT models」，**對不到取全部視窗**——所以 `agy:claude-*` 條目看的是「Claude and GPT models」群組（含 5 小時窗），不是 Gemini 的。**入帳**：判定為被擋且被擋視窗的重置時刻可解析時，寫入 `store.quota`（`until` 為被擋視窗重置時刻之最晚者，上限現在＋8 天，跨行程經既有 `store` 持久化；`store` 無效時退回行程內記憶體），之後 `now < until` 不再查詢，過期才重查；agy 的額度字樣本套件未見過、**不內建**，要靠失敗文字入帳者由呼叫端注入 `quotaUntilOf(r)`（以 `entry:<id>` 入帳，只對明給 `id` 的條目有效）。**預設只作用於 `exe` 為真的 `agy`（或未給 `exe`）**，假 CLI 與包裝腳本不被預設查詢，明給 `quotaGate: true` 或物件才不論 `exe`。**fail-open**：讀者逾時、拋錯、未授權、欄位缺漏、`usedPercent` 缺漏或非數字一律不擋（另發 `quota-gate-error`）。**成本**：agy `/usage` 較慢（套件本機實測 1 次 9.5 秒；套件 README 稱 10～60 秒），讀者結果預設快取 300 秒（`antigravityCacheMs`）、查詢逾時 60 秒（`antigravityTimeoutMs`），首次呼叫與快取到期後的第一次呼叫會多等這段。**關閉**：`quotaGate: false`（遞補層頂層或單一條目；查用量、讀帳、寫帳三處全關）；只想調門檻用 `antigravityMax`（`false` 關閉該家）或 `windowMax`。帳在重置前不重查，期間若升級方案或補充額度，須清除 `store.quota` 之該鍵或 `quotaGate: false` |
 
-遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀或給了非物件、`exe`／`cwd`／`skipPermissions`／`addDirs` 給了而無效）時**整組跳過**，不在同組內逐把換金鑰。1.0.109 起條目層之 `params` 失敗（含上述安全相關 opt 給了而無效）於發 `try` 事件**之前**即判，**不發 `try`**（`onUsage` 不入帳；仍進 `tried`）；轉接器自身才得知之 `params`（如 `model` 缺漏）仍在 `try` 之後，結果帶 `attempts: 0` 可辨。1.0.110 起此「發 `try` 之前即判」另涵蓋條目層之 `model`、`effort` 給了而非原始非空字串，以及 `env` 資料屬性之值非字串（getter 不執行，由轉接器物化時才判，那時 `try` 已發）；這些條目同樣不發 `try`、`onUsage` 不入帳。
+遞補鏈遇到 `TIMEOUT`、`spawn`（子進程起不來，含命令列過長）或 `params`（參數與設定檢核失敗，如 `env` 不可讀或給了非物件、`exe`／`cwd`／`skipPermissions`／`readOnly`〔1.0.112 起〕／`addDirs` 給了而無效）時**整組跳過**，不在同組內逐把換金鑰。1.0.109 起條目層之 `params` 失敗（含上述安全相關 opt 給了而無效）於發 `try` 事件**之前**即判，**不發 `try`**（`onUsage` 不入帳；仍進 `tried`）；轉接器自身才得知之 `params`（如 `model` 缺漏）仍在 `try` 之後，結果帶 `attempts: 0` 可辨。1.0.110 起此「發 `try` 之前即判」另涵蓋條目層之 `model`、`effort` 給了而非原始非空字串，以及 `env` 資料屬性之值非字串（getter 不執行，由轉接器物化時才判，那時 `try` 已發）；這些條目同樣不發 `try`、`onUsage` 不入帳。
 
 **`budgetFor()` 有陷阱，不要照抄**：它**只累加條目自己的 `timeoutMs`**，讀不到你寫在 opt／`defaults` 的那一個；而套件內建的 providers 條目**刻意不帶 `timeoutMs`**，所以 `budgetFor(內建條目)` 恆為「條目數 × 300000」（1.0.53 內建 21 條就是 105 分鐘）——比你的 4 小時還小，反而把它壓下去。要用它就得先把 `timeoutMs: 14_400_000` 逐條寫進每個條目，否則直接寫 `K × 14_400_000`。
 
@@ -258,7 +258,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 
 **被砍時要保住已完成的部分**：失敗結果的 `stdout` 只會留 500 字元（`wsemi/src/execCli.mjs`），所以正式派工一律掛 `onStdout` 邊跑邊落檔——〈執行步驟〉的範本已寫入 `stdout.log`，不要拿掉，否則被砍就真的什麼都不剩。
 
-**逾時與假成功是兩回事**：外層逾時被殺時 `errorType` 為 `timeout`；而**權限不足、提示詞層被禁止寫檔、明給小 `printTimeout` 時的內層逾時三者，agy 都是 exit 0，轉接器回 `ok: true`、不產生 `errorType`**——除非掛了 `validate`：權限不足時 stdout 為空，`nonempty` 會把它轉成 `validation` 失敗。看到「沒有結果但也沒有錯誤」先分清是哪一種，別互相誤診。
+**逾時與假成功是兩回事**：外層逾時被殺時 `errorType` 為 `timeout`；而**權限不足、提示詞層被禁止寫檔、明給小 `printTimeout` 時的內層逾時三者，agy 都是 exit 0，轉接器回 `ok: true`、不產生 `errorType`**——除非掛了 `validate`：權限不足時 stdout 為空，`nonempty` 會把它轉成 `validation` 失敗。**例外：`readOnly: true`（1.0.112 起，內建 agy 條目皆帶）擋下寫入時 agy 同樣 exit 0、`ok: true`，但 stdout 是模型之說明文字（非空），`nonempty` 擋不住**，判被擋一律看檔案是否落地（見〈`readOnly`：agy 真防寫〉）。看到「沒有結果但也沒有錯誤」先分清是哪一種，別互相誤診。
 
 ## 權限：先定能力下限，再往下收斂
 
@@ -267,17 +267,17 @@ Bash({ run_in_background: true, timeout: 7200000,
 | 任務類型 | 能力下限 | agy 的給法 |
 |---|---|---|
 | 純生成、翻譯、改寫（素材全在提示詞內） | 無 | `addDirs: []`，不公開任何目錄 |
-| 探索、調研、讀碼回答 | 讀檔 | `addDirs` 須含全部待查目錄；純讀取任務**不需**跳過權限（2026-09-08 實測通過） |
-| 審計、複審、調查 | 讀檔 ＋ 寫檔（報告落檔）＋ 唯讀查證指令 | `skipPermissions: true`；`addDirs` 同時含被審目錄與產出目錄 |
+| 探索、調研、讀碼回答 | 讀檔 | `addDirs` 須含全部待查目錄；純讀取任務**不需**跳過權限（2026-09-08 實測通過）；要保證不改動工作區加 `readOnly: true`（1.0.112 起，內建 agy 條目已帶，見〈`readOnly`：agy 真防寫〉） |
+| 審計、複審、調查 | 讀檔 ＋ 寫檔（報告落檔）＋ 唯讀查證指令 | `skipPermissions: true`；`addDirs` 同時含被審目錄與產出目錄；**不給 `readOnly`**（直接呼叫預設 `false`；給 `true` 則報告檔寫不出）。走內建 agy 條目者以 `patch` 覆寫 `{ readOnly: false, skipPermissions: true }`（只覆寫 `skipPermissions` 不足） |
 | 寫測試、驗證猜想、重現問題 | 讀檔 ＋ 寫測試檔 ＋ 執行測試 | 同上；agy 建檔與跑指令走的都是需要 `command` 權限的工具 |
 | 修改、實作 | 讀 ＋ 寫 ＋ 執行 | 轉接器預設的 `skipPermissions: true` |
 
-轉接器的 `skipPermissions` 預設為 `true`（加入 `--dangerously-skip-permissions`），只有在輸入與工作區可信時才適用；**它只接受原始布林**（1.0.109 起）：給了非布林（`'false'`、`0`、`''`、物件等）回 `params` 失敗、不起子程序，不再退回 `true`（修前非布林一律退回 `true` 而悄悄關掉權限閘門）。要收斂時 agy 有三個維度：**①工作區目錄**（`addDirs`，最實際——把目標複製或 `git worktree` 出一份到獨立目錄，只把該目錄加進工作區）、**②執行模式**（`extraArgs` 傳 `--mode plan` 為唯讀規劃檔位、`--mode accept-edits` 為可寫執行）、**③終端限制**（`--sandbox`）。後兩者本技能尚未實測，用前先照「派工前的能力探測」驗一次。**注意 `skipPermissions: false` 不在這三個維度之內當作唯讀用**：它只擋工作區外之寫入，工作區內仍可寫（見下方〈`skipPermissions: false` 只擋工作區外之寫入〉）。
+轉接器的 `skipPermissions` 預設為 `true`（加入 `--dangerously-skip-permissions`），只有在輸入與工作區可信時才適用；**它只接受原始布林**（1.0.109 起）：給了非布林（`'false'`、`0`、`''`、物件等）回 `params` 失敗、不起子程序，不再退回 `true`（修前非布林一律退回 `true` 而悄悄關掉權限閘門）。要收斂時 agy 有三個維度：**①工作區目錄**（`addDirs`，最實際——把目標複製或 `git worktree` 出一份到獨立目錄，只把該目錄加進工作區）、**②執行模式**（`extraArgs` 傳 `--mode plan` 只是在提示詞前加 `/plan` 指令、**不是防線**〔`w-dispatch-ai` 1.0.112 檔頭，依官方〈Choose an execution mode〉頁〕；`--mode accept-edits` 為可寫執行）、**③終端限制**（`--sandbox`）。`--mode accept-edits` 與 `--sandbox` 本技能尚未實測，用前先照「派工前的能力探測」驗一次。**真防寫用 `readOnly`**（1.0.112 起，見下方〈`readOnly`：agy 真防寫〉）；**注意 `skipPermissions: false` 不當作唯讀用**：它只擋工作區外之寫入，工作區內仍可寫（見下方〈`skipPermissions: false` 只擋工作區外之寫入〉）。
 
 - **審計必須自己讀檔**。把檔案內容貼進提示詞不算獨立審計：被派對象只看得到你挑給它的片段，找不出你漏掉的地方，而那正是複審的唯一價值。
 - **驗證猜想必須能寫檔並執行**。不能寫測試就只剩推論；「我認為可能是 X」沒有可重現的執行結果，不是結論。
 - **`addDirs: []` 等於它什麼都讀不到**，探索與審計類任務必然交白卷。
-- **沿用 `w-dispatch-ai/src/providers.mjs` 的條目要先看鎖**：表內五條 agy 條目（`agy:gemini-3.8-flash-high`、`agy:gemini-4-hydrogen-high`〔1.0.92 起〕、`agy:gemini-4-argon-high`、`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`）一律帶 `skipPermissions: false` 與 `addDirs: ['.']`，那是給純文字生成與遞補用的檔位，**但它只擋工作區外之寫入，不是唯讀**（工作區內仍可寫，見下方〈`skipPermissions: false` 只擋工作區外之寫入〉）。條目註解記載的 2026-08-15 canary 實測：無此鎖時要求建檔會真的落地，`false` 之下（寫到工作區外者）寫入被擋、唯讀工具照常，而且**被擋時 agy 回 exit 0、stdout 為空**（2026-10-18 於 1.4.2、2026-11-13 於 1.5.7 重測仍是如此，見下表）。要寫入就得把它覆寫為 `true`。另外這五條在全取鏈中**相鄰**（1.0.92 前為四條），agy 整體卡頓時會連續逾時 5 次（約 5×`timeoutMs`）才輪到下一家，套件建議全取時搭配 `budgetMs` 與 `cooldownMs`（README 行為變更紀錄第 31 條；條數依 1.0.92 條目註解）。
+- **沿用 `w-dispatch-ai/src/providers.mjs` 的條目要先看鎖**：表內五條 agy 條目（`agy:gemini-3.8-flash-high`、`agy:gemini-4-hydrogen-high`〔1.0.92 起〕、`agy:gemini-4-argon-high`、`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`）一律帶 `skipPermissions: false` 與 `addDirs: ['.']`（1.0.112 起另一律帶 `readOnly: true`），那是給純文字生成與遞補用的檔位，**其中 `skipPermissions: false` 只擋工作區外之寫入，不是唯讀**（工作區內仍可寫，見下方〈`skipPermissions: false` 只擋工作區外之寫入〉）；**真正擋工作區內寫入的是 1.0.112 起之 `readOnly: true`**（見下方〈`readOnly`：agy 真防寫〉）。條目註解記載的 2026-08-15 canary 實測：無此鎖時要求建檔會真的落地，`false` 之下（寫到工作區外者）寫入被擋、唯讀工具照常，而且**被擋時 agy 回 exit 0、stdout 為空**（2026-10-18 於 1.4.2、2026-11-13 於 1.5.7 重測仍是如此，見下表）。要寫入就得以 `patch` 覆寫 `{ readOnly: false, skipPermissions: true }`（只覆寫 `skipPermissions` 不足：`readOnly` 之 deny 規則在 `skipPermissions: true` 下仍有效）。另外這五條在全取鏈中**相鄰**（1.0.92 前為四條），agy 整體卡頓時會連續逾時 5 次（約 5×`timeoutMs`）才輪到下一家，套件建議全取時搭配 `budgetMs` 與 `cooldownMs`（README 行為變更紀錄第 31 條；條數依 1.0.92 條目註解）。
 
 ### 第四層權限：提示詞前綴（走工作流時預設禁止寫檔）
 
@@ -304,8 +304,21 @@ Bash({ run_in_background: true, timeout: 7200000,
 
 - **`skipPermissions: false` 只擋「工作區之外」的寫入；工作區內仍可寫**——它不是「防寫」或「唯讀」。「工作區」在本測試中 `addDirs` 與 `cwd` 為同一目錄，二者各自的效力未分別驗證。
 - 與 `w-dispatch-ai` 1.0.92 之 README〈agy「防寫」之邊界〉段與條目註解之本機金絲雀相符（Hydrogen、3.8 Flash、Argon 各 1 次，三者一致）；本技能只實呼 Hydrogen，3.8 與 Argon 引用套件之紀錄。上節 2026-10-18 之舊實測（3.8 Flash、1.4.2）當時輸出檔之位置未載，無法判斷是 agy 行為改變，或當年測的是工作區外。
-- **後果**：內建 agy 條目之「防寫鎖」（`skipPermissions: false` ＋ `addDirs: ['.']`）對「提示詞引導寫工作區內檔案」不設防；`cwd` 指向真實專案時，檔案可能真的被改。提示詞層之 `NO_SIDE_EFFECT` 前綴是請求不是強制，也補不了這一點。
-- **要真唯讀時：尚無已實測之機械作法。** `--mode plan`、`--sandbox`、`--settings`（1.5.7 `--help` 新見，可傳 session 專用之 settings.json 鍵）本技能皆未實測，不得當作已證之唯讀鎖；要用先以「要求寫到 `cwd` 內之檔」金絲雀驗它是否真的不落地。目前可行之降風險作法只有：把 `cwd`／`addDirs` 指向**可丟棄之副本**（目標複製或 `git worktree`），原件不在 `addDirs` 內（工作區外之寫入被擋，如上述「寫工作區外」之實測），收回後審副本之 diff。
+- **後果**：內建 agy 條目之「防寫鎖」（`skipPermissions: false` ＋ `addDirs: ['.']`）對「提示詞引導寫工作區內檔案」不設防；`cwd` 指向真實專案時，檔案可能真的被改。提示詞層之 `NO_SIDE_EFFECT` 前綴是請求不是強制，也補不了這一點。**1.0.112 起內建 agy 條目另帶 `readOnly: true`，此後果對內建條目已消除**（套件以 agy 1.5.12 實測，見下節）；直接呼叫 `dispatchAntigravity()` 預設 `readOnly: false`，仍有此後果。
+- **要真唯讀時：用 `readOnly: true`（1.0.112 起，見下節）。** `--mode plan` 只在提示詞前加 `/plan` 指令、不是防線，`--sandbox` 本技能未實測，不得當作唯讀鎖；`--settings` 即 `readOnly` 所用之旗標（1.5.7 `--help` 新見，可傳 session 專用之 settings.json 鍵），不必再自行傳。另一降風險作法是把 `cwd`／`addDirs` 指向**可丟棄之副本**（目標複製或 `git worktree`），原件不在 `addDirs` 內（工作區外之寫入被擋，如上述「寫工作區外」之實測），收回後審副本之 diff；以 OS 層唯讀工作區（ACL 拒絕寫入）亦經套件驗證擋得住，但須呼叫端自管副本與權限（平台相依），轉接器不提供。
+
+### `readOnly`：agy 真防寫（1.0.112 起）
+
+**實測摘要**（套件於 agy 1.5.12 之本機實測，見 `w-dispatch-ai` 1.0.112 之 `src/dispatchAntigravity.mjs` 檔頭【真防寫】與 README 行為變更紀錄第 90 條；**本技能未重驗**，實測表見 [references/agy-permission-tests.md](references/agy-permission-tests.md) ③）：
+
+- **作法**：選項 `readOnly`（Boolean，預設 `false`）為 `true` 時，於 `--dangerously-skip-permissions`（若有）之後、`--print-timeout` 之前加 `--settings '{"permissions":{"deny":["write_file(*)","command(*)"]}}'`（本次工作階段限定、不存檔；依套件所引官方〈Agent permissions〉頁，deny 優先於 ask 與 allow、任何模式皆擋）。未開時旗標與 1.0.110 逐位相同。
+- **兩條 deny 缺一不可**：只 deny `write_file` 時，模型改用 shell 指令繞過而檔案落地（Hydrogen 實測）；故 `command(*)` 一併 deny，檔案工具與 shell 指令之寫入皆被擋。**`command(*)` 字面涵蓋所有 shell 指令**，須跑唯讀查證指令之任務不可開 `readOnly`（該情形之實際行為未實測）。
+- **讀取照常**：工作區內讀檔實測正常（Hydrogen）。
+- **與 `skipPermissions` 獨立**：`readOnly: true` 併 `skipPermissions: true` 仍被擋（Hydrogen 實測：deny 不被 always-proceed 取代）。**審計寫報告檔、寫測試者不可給 `readOnly`**：直接呼叫給 `readOnly: false`（預設）＋ `skipPermissions: true`；走內建條目者以 `patch` 覆寫 `{ readOnly: false, skipPermissions: true }`（只覆寫 `skipPermissions` 不足）。
+- **輸入檢核**：`readOnly` 須為原始布林，給了非布林回 `params`、不起子程序，不退回 `false` 而放寬（遞補層於發 `try` 事件之前即判）；`extraArgs` 自帶 `--settings`（含 `--settings=…` 與單橫線寫法）與 `readOnly: true` 並用亦回 `params`、不起子程序——套件不依賴 agy 對重複 `--settings` 之合併語意（未實測）；要合併自己的 settings 者自行併入 `extraArgs` 並不給 `readOnly`。
+- **被擋時的樣子**：離開碼 0、`ok: true`、stdout 為模型之說明文字（**非空**，如 `Permission denied for write_file(…). Matches user-configured deny rule`），**不同於**「工作區外寫入被自動拒絕」之空輸出——不得以「stdout 為空」判斷是否被擋，`validate: 'nonempty'` 也擋不住；一律以檔案是否落地驗收。
+- **內建 5 個 agy 條目皆自帶 `readOnly: true`（行為變更）**：Hydrogen、Argon、3.8 於 agy 1.5.12 經轉接器各 1 次，要求寫入工作區內之檔皆被擋而未落地。**Claude 兩個 agy 條目（`agy:claude-sonnet-5-5-high`、`agy:claude-opus-5-5-high`）未於 1.5.12 實測**——規則由 agy 權限引擎執行，理論上與模型無關，但這兩條依賴此推論。
+- **舊版 agy**：不認得 `--settings` 之版本，agy 自身回旗標錯誤（失敗而非靜默放行寫入）；`--settings` 之最低 agy 版本未查。
 
 ### 派工前的能力探測
 
@@ -323,7 +336,7 @@ const probe = await wda.dispatchAntigravity(
 // 只看 stdout 不算數：要確認 probe-out.txt 真的落地
 ```
 
-探測可用低檔位，它驗的是權限不是推理；正式派工再換回預設模型。探測失敗時先修權限與 `addDirs`，不要改提示詞重試。（`gemini-4-hydrogen-low` 於 2026-11-13 之 `agy models` 列出、`/effort` 可查；**本輪未對 `-low` 檔實呼**，實呼只用 `-high` 檔——要用 `-low` 探測者首次使用時自行確認它回得出結果。）**要依賴 `skipPermissions: false` 擋寫入者，探測須同時含「寫到工作區內」與「寫到工作區外」兩種**，才看得出它擋的只是工作區外（見上節）。
+探測可用低檔位，它驗的是權限不是推理；正式派工再換回預設模型。探測失敗時先修權限與 `addDirs`，不要改提示詞重試。（`gemini-4-hydrogen-low` 於 2026-11-13 之 `agy models` 列出、`/effort` 可查；**本輪未對 `-low` 檔實呼**，實呼只用 `-high` 檔——要用 `-low` 探測者首次使用時自行確認它回得出結果。）**要依賴 `skipPermissions: false` 擋寫入者，探測須同時含「寫到工作區內」與「寫到工作區外」兩種**，才看得出它擋的只是工作區外（見上節）。**要依賴 `readOnly: true` 擋寫入者，探測以「要求寫到工作區內之檔」驗它真的不落地，並以檔案是否落地判定（被擋時 stdout 非空）**；**要寫報告檔而走內建 agy 條目者，探測須用覆寫後之條目**（`readOnly: false`＋`skipPermissions: true`），否則探測就會在寫檔步驟失敗。
 
 ## 結構化輸出
 
@@ -342,18 +355,21 @@ await wda.dispatchAntigravity(prompt, {
 
 **提示詞超過 30,000 字元時**，預設的 `promptVia: 'auto'` 會改走 stdin（固定 `--output-format stream-json`，`stdout` 已還原為純回覆文字、原始 NDJSON 在 `raw`；見〈提示詞傳輸〉），此時 `extraArgs` 若帶 `--output-format`（如上例）會回 `params` 錯誤、不 spawn。超長提示詞的呼叫請去掉該旗標；要保留該旗標者明給 `promptVia: 'argv'` 並把提示詞縮到 30,000 字元內。
 
-## 轉接器契約（w-dispatch-ai 1.0.110）
+## 轉接器契約（w-dispatch-ai 1.0.112）
 
 **給了而無效之處置（1.0.109 起，勿再依賴「無效即退回預設」）**：影響安全或可視範圍之 opt（`exe`、`cwd`、`skipPermissions`、`addDirs`、`env`）**給了而無效（含 `''`）即以 `params` 拒絕**（`ok: false`、`attempts: 0`、不起子程序〔含 stdin 路徑之 `agy --version` 探測〕、訊息不回顯值）；`undefined`／`null` 才視為未給。`timeoutMs`、`maxRetries` 等量級／次數類則**視為未給而用預設**（不報錯）。要用預設就**不給該欄**。
 
 **1.0.110 起再加兩類，同樣回 `params`、`attempts: 0`、不起子程序（含 `agy --version` 探測）**：①影響計費之 `model`、`effort` 給了而非原始非空字串（數字、物件、包裝物件等）——修前整段 `--model`／`--effort` 旗標不出現而改用 agy 自行決定之模型與檔位（計費隨之改變）；**`''` 與未給（`undefined`／`null`）照舊不帶旗標**（`''` 是文件載明之預設）；`effort` 與帶檔位 slug 之衝突仍由 agy 判定。②`env` 各變數之值須為字串——`undefined` 合法（代表移除該變數，可遮蔽繼承值）、`''` 合法；`null`、數字、布林、物件、陣列、包裝物件、函數、`Symbol`、`BigInt` 回 `params`（修前被 Node 轉成字面字串 `'null'`／`'123'` 交給子程序，`Symbol` 則使 spawn 拋錯；訊息只寫不合規個數與首個之 `typeof`，不含值與變數名），**要移除變數就給 `undefined`，不要給 `null`**。**仍維持「給了無效視為未給」者**：`promptVia`（無效回退 `'auto'`）、`printTimeout`、`maxRetries`、`timeoutMs`、`retryDelayMs`、`extraArgs`、`spawnGate` 等不改變計費之 opt。
+
+**1.0.112 起新增 `readOnly`（agy 真防寫）**：Boolean，預設 `false`（不帶旗標，旗標與 1.0.110 逐位相同）；`true` 加 `--settings` 內聯 `permissions.deny[write_file(*), command(*)]`，擋工作區內之檔案工具與 shell 寫入、讀取照常；**給了而非布林同樣回 `params`、`attempts: 0`、不起子程序**；與 `extraArgs` 自帶之 `--settings` 並用亦回 `params`。**內建 5 個 agy 條目皆自帶 `readOnly: true`（行為變更）**：被擋時 `ok: true` 與非空說明文字，須寫入者見〈`readOnly`：agy 真防寫〉。
 
 | 選項 | 轉接器預設值 | 行為 |
 |---|---:|---|
 | `exe` | `agy` | 執行檔名稱或絕對路徑；給了而非非空字串（含 `''`）回 `params`（1.0.109 起，修前退回 PATH 上之 `agy`） |
 | `model` | 省略 | 展開為 `--model <slug>`；給了而非原始非空字串回 `params`（1.0.110 起，修前整段旗標不出現而改用 agy 預設模型）；未給（`undefined`／`null`）與 `''` 照舊不帶旗標 |
 | `effort` | 省略 | 展開為 `--effort <level>`；給了而非原始非空字串回 `params`（1.0.110 起，修前不帶 `--effort` 而用 agy 預設檔位）；未給與 `''` 照舊不帶旗標 |
-| `skipPermissions` | `true` | 加入 `--dangerously-skip-permissions`；須為原始布林，給了非布林回 `params`（1.0.109 起，修前退回 `true`） |
+| `skipPermissions` | `true` | 加入 `--dangerously-skip-permissions`；須為原始布林，給了非布林回 `params`（1.0.109 起，修前退回 `true`）。**`false` 只擋工作區外之寫入，不是唯讀**（見〈`skipPermissions: false` 只擋工作區外之寫入〉）；真防寫用 `readOnly` |
+| `readOnly` | `false` | **1.0.112 新增**，自用鍵、不轉交 `execCli`。`true` 時於 `--dangerously-skip-permissions` 之後、`--print-timeout` 之前加 `--settings '{"permissions":{"deny":["write_file(*)","command(*)"]}}'`（本次工作階段限定、不存檔）；`write_file` 與 `command` 兩條缺一不可（只擋 `write_file` 會被 shell 繞過）；須為原始布林，給了非布林回 `params`（不退回 `false`）；`extraArgs` 自帶 `--settings` 與 `true` 並用回 `params`；被擋時 `ok: true` 且 stdout 非空，判被擋用檔案是否落地；與 `skipPermissions: true` 並用仍擋。**內建 5 個 agy 條目皆自帶 `true`**，須寫入者以 `patch` 覆寫 `{ readOnly: false, skipPermissions: true }`。細節見〈`readOnly`：agy 真防寫〉 |
 | `printTimeout` | `timeoutMs` 秒數 + 30 | agy 內層逾時；預設推導值恆晚於外層，只作後備（推導不另行封頂，見〈逾時分層〉）。明給小於 `timeoutMs` 的值會讓慢回合變成 `ok: true` 的截斷輸出 |
 | `addDirs` | 實際 `cwd` | 重複展開為 `--add-dir`；明確傳入 `[]` 可停用自動加入；給了而非陣列、不可讀、元素數逾 10000、或非空而元素全無效者回 `params`（1.0.109 起，修前退回 `[cwd]`） |
 | `promptVia` | `'auto'` | **1.0.80 新增**，自用鍵、不轉交 `execCli`。`'argv'`／`'stdin'`／`'auto'`（無效值回退 `'auto'`）：不超過 30,000 字元走 `--print`、超過走 stdin 的 `--input-format stream-json`；細節見〈提示詞傳輸〉 |
@@ -378,18 +394,18 @@ await wda.dispatchAntigravity(prompt, {
 
 | 想知道 | 讀哪個檔 |
 |---|---|
-| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchAntigravity.mjs`（旗標順序為 `--dangerously-skip-permissions` → `--print-timeout` → `--model` → `--effort` → 各 `--add-dir` → `extraArgs` → `--print <prompt>`〔argv 路徑；stdin 路徑改為 `--input-format stream-json --output-format stream-json`、不帶 `--print`〕；自用鍵九個：`exe`／`model`／`effort`／`skipPermissions`／`printTimeout`／`addDirs`／`extraArgs`／`input`／`promptVia`，其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`（`validate` 除外，由該檔自行判定）；提示詞上限 30000 字元（僅 argv 路徑）與 `promptVia` 的傳法、stdin 路徑判成敗與舊版 agy 的處置、`printTimeout` 推導公式（`timeoutMs` 秒數 + 30；`timeoutMs` 已先經 `castTimerMs` 判為 1～2147483647 之整數，推導不另行封頂）亦在此；stdin 輸出的解析與版本探測在 `src/parseAgyStream.mjs`、`src/checkAgyStdinSupport.mjs`） |
+| 完整選項、預設值、固定旗標與其順序、哪些鍵不轉傳給 `execCli` | `src/dispatchAntigravity.mjs`（旗標順序為 `--dangerously-skip-permissions` → `--settings <deny JSON>`〔僅 `readOnly: true`，1.0.112 起〕 → `--print-timeout` → `--model` → `--effort` → 各 `--add-dir` → `extraArgs` → `--print <prompt>`〔argv 路徑；stdin 路徑改為 `--input-format stream-json --output-format stream-json`、不帶 `--print`〕；自用鍵十個：`exe`／`model`／`effort`／`skipPermissions`／`readOnly`／`printTimeout`／`addDirs`／`extraArgs`／`input`／`promptVia`（`readOnly` 1.0.112 起），其餘鍵經 `src/runExecCli.mjs` 轉給 `execCli`（`validate` 除外，由該檔自行判定）；提示詞上限 30000 字元（僅 argv 路徑）與 `promptVia` 的傳法、stdin 路徑判成敗與舊版 agy 的處置、`printTimeout` 推導公式（`timeoutMs` 秒數 + 30；`timeoutMs` 已先經 `castTimerMs` 判為 1～2147483647 之整數，推導不另行封頂）亦在此；stdin 輸出的解析與版本探測在 `src/parseAgyStream.mjs`、`src/checkAgyStdinSupport.mjs`） |
 | 有哪些 kind、何時用 CLI 類何時用 REST 類 | `src/adapters.mjs` 檔頭（判準只有一條：這次呼叫需不需要工具） |
 | 實際可用且已被實測過的模型條目（含權限鎖、`addDirs`、實測耗時） | `src/providers.mjs` |
-| `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。agy 被權限擋下（stdout 空）只靠 `nonempty` 擋得住，這個字更不能打錯 |
+| `validate` 規則語法與判定 | `src/buildValidator.mjs`（規則字串）與 `src/runExecCli.mjs`（判定流程）——**1.0.49 起 CLI 類不再走 `wsemi/src/execCli.mjs` 內建的驗證器**，規則語法與其逐字相同。`nonempty`／`json`／`min:N`，逗號串接須全部通過；自訂函數可回傳 Promise，拋錯或 reject 時 stderr 前綴 `validate threw: <訊息>`、逾時前綴 `validate timed out: did not settle within <N>s`。但**規則名稱打錯（如 `nonemtpy`）會被靜默忽略、等於完全沒驗**——判斷式沒有 `else` 分支，只有 `min:` 的參數打錯（如 `min:abc`）才算失敗。agy 被權限擋下（stdout 空）只靠 `nonempty` 擋得住，這個字更不能打錯；**`readOnly: true` 擋下者 stdout 非空，`nonempty` 擋不住**（判被擋用檔案是否落地） |
 | `errorType` 值域與判準 | `src/getErrorType.mjs` 檔頭一覽（子進程未能啟動一律以結構判定為 `spawn`：`code` 為 `null` 且 `pid` 為 `undefined`，含命令列過長、權限不足、非有效執行檔；前置檢查擋下的提示詞過長（`promptVia: 'argv'`）則為 `params`，stdin 路徑的 `extraArgs` 衝突旗標與 agy 版本過舊亦為 `params`，stdin 路徑無 `result` 事件或 `result` 非 `SUCCESS` 為 `exec`；1.0.73 起 `spawnGate` 守門等待被 `shouldStop` 中止時亦回 `aborted`；1.0.79 起 `quotaGate` 略過條目之合成失敗結果為 `quota`） |
 | 遞補層送出前的額度門檻（`quotaGate`）與額度帳 | `src/subQuotaGate.mjs` 檔頭（訂閱類條目的適用範圍、agy 群組對照、選項與快取）、`src/quotaLedger.mjs`（`store.quota` 形狀與 8 天上限）、`src/quotaJudge.mjs`（視窗判定與快取）；agy 讀者為 `src/quota/getQuotaAntigravity.mjs` |
-| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000；其註解已更正：agy 1.4.0 之 `print-timeout` 預設為 `0s`，此值不再以「對齊 5m0s」為依據）、`src/castTimerMs.mjs`（`timeoutMs` 判定單一來源：1～2147483647 之整數才採用，其餘回預設，不夾上限）、`src/castCountOr.mjs`（`maxRetries` 等次數類）、`src/readSafeOpt.mjs`（`exe`／`cwd`／`skipPermissions`／`addDirs`／`env` 給了而無效即拒絕）、`src/gateHints.mjs`（`shouldStop`／`minAttemptMs` 兩來源合併）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
+| 逾時的完整機制 | **`README.md` 之「Timeout 總覽」是唯一把各層串起來的權威說明**（階梯結構、各參數預設、工作流總時長公式）；細節另見 `src/dfTimeoutMs.mjs`（統一預設 300000；其註解已更正：agy 1.4.0 之 `print-timeout` 預設為 `0s`，此值不再以「對齊 5m0s」為依據）、`src/castTimerMs.mjs`（`timeoutMs` 判定單一來源：1～2147483647 之整數才採用，其餘回預設，不夾上限）、`src/castCountOr.mjs`（`maxRetries` 等次數類）、`src/readSafeOpt.mjs`（`exe`／`cwd`／`skipPermissions`／`readOnly`／`addDirs`／`env` 給了而無效即拒絕）、`src/gateHints.mjs`（`shouldStop`／`minAttemptMs` 兩來源合併）、`src/runExecCli.mjs`（自訂 `validate` 與子進程共用同一次嘗試之 `timeoutMs`）、`src/budgetFor.mjs`（只累加條目層 `timeoutMs`）、`src/dispatchAiFallback.mjs`（`budgetMs`／`minAttemptMs`／`cooldownMs`／`coolDetect`／`shouldStop` 之實際行為）、`src/dispatchAiWkf.mjs` 檔頭；守門等待在 spawn 之前、不計入 `timeoutMs`、計入 `budgetMs`，見 `src/cliSpawnGate.mjs` 檔頭【逾時歸屬】與 README 之「CLI spawn 守門」 |
 | spawn 前機器級守門（`spawnGate`）：預設值與依據、同一瞬間整批放行之處理、成本實測、fail-open | `src/cliSpawnGate.mjs` 檔頭（含 `onTrace` 事件型別）與 `README.md` 之「CLI spawn 守門」；接點為 `src/runExecCli.mjs`（四家轉接器共用之單一入口） |
 | 提示詞層之防寫前綴 | `src/wkf/noSideEffectPrefix.mjs`（前綴原文）、`src/wkf/callAiWithFallback.mjs`（預設掛上、`promptPrefix: ''` 才關閉） |
 | 多供應商遞補、金鑰輪替、條目 id 命名規則 | `src/dispatchAiFallback.mjs` 檔頭 |
 
-**檔頭註解是實測紀錄，不是設計說明**：`src/dispatchAntigravity.mjs` 檔頭記著一組最容易誤判的實測（2026-08-13，以隨機 token 驗證）——**只給 `cwd` 而沒有 `--add-dir` 時，弱模型直接回「找不到檔案」、強模型自行摸索（116 秒，對照帶 `--add-dir` 的 6 秒），而且兩者都是 `ok: true`**；這種情況極易被誤判成「模型能力不足」，實際是可視範圍沒開。同檔另記載 `--print` 為帶值旗標（純文字塞 stdin 會進互動模式卡住）、1.0.80 起的【提示詞兩種傳法】（`promptVia` 與預設取 `'auto'` 的理由）、【stdin路徑之判成敗】與【舊版agy → 明確錯誤】三段、model 與 effort 的衝突規則（帶檔位 slug 與 `--effort` **檔位不一致才拒絕**，一致則放行）、未給 model 時 agy 預設為 Gemini 4 Argon (Medium)、雙逾時改為外層先到的理由，以及權限被擋時 stderr 的訊息。與本技能所述不一致時，以原始碼與其實測註記為準，並回頭修技能。
+**檔頭註解是實測紀錄，不是設計說明**：`src/dispatchAntigravity.mjs` 檔頭記著一組最容易誤判的實測（2026-08-13，以隨機 token 驗證）——**只給 `cwd` 而沒有 `--add-dir` 時，弱模型直接回「找不到檔案」、強模型自行摸索（116 秒，對照帶 `--add-dir` 的 6 秒），而且兩者都是 `ok: true`**；這種情況極易被誤判成「模型能力不足」，實際是可視範圍沒開。同檔另記載 `--print` 為帶值旗標（純文字塞 stdin 會進互動模式卡住）、1.0.80 起的【提示詞兩種傳法】（`promptVia` 與預設取 `'auto'` 的理由）、【stdin路徑之判成敗】與【舊版agy → 明確錯誤】三段、model 與 effort 的衝突規則（帶檔位 slug 與 `--effort` **檔位不一致才拒絕**，一致則放行）、未給 model 時 agy 預設為 Gemini 4 Argon (Medium)、雙逾時改為外層先到的理由，權限被擋時 stderr 的訊息，以及 1.0.112 起之【skipPermissions:false 只擋工作區外之寫入; 真防寫用 readOnly】段（官方依據、agy 1.5.12 實測、兩條 deny 缺一不可、被擋時輸出非空）。與本技能所述不一致時，以原始碼與其實測註記為準，並回頭修技能。
 
 ## 執行期驗證
 
@@ -430,6 +446,17 @@ agy update       # 版本低於 1.1.25 時升級
 ```
 
 無人值守／無介面執行前，須先以互動方式完成 Google 認證。
+
+2026-11-24 對照（1.0.112）：以 `w-dispatch-ai` **1.0.112** 之原始碼（`src/dispatchAntigravity.mjs`、`src/providers.mjs`、`src/readSafeOpt.mjs`）與 README 行為變更紀錄第 89、90 條核對（**未實際呼叫 agy**；agy 1.5.12 之實測為套件側所做，本技能未重驗；1.0.111 對本轉接器無使用端改變）。固定旗標順序（`readOnly` 未開時）與其餘自用鍵不變；**變的是新增 `readOnly`，且內建 5 個 agy 條目自帶 `readOnly: true`**——使用端若依賴內建 agy 條目能寫入工作區（審計寫報告檔、寫測試）須以 `patch` 覆寫 `{ readOnly: false, skipPermissions: true }`（只改 `skipPermissions` 不足）：
+
+| 項目 | 1.0.112 之行為（修前） |
+|---|---|
+| `readOnly`（新選項） | Boolean，預設 `false`（不帶旗標，旗標與 1.0.110 逐位相同）；`true` 加 `--settings '{"permissions":{"deny":["write_file(*)","command(*)"]}}'`，擋工作區內之檔案工具與 shell 寫入、讀取照常；兩條缺一不可（只 deny `write_file` 會被 shell 繞過）；給了而非布林回 `params`；`extraArgs` 自帶 `--settings` 與 `readOnly: true` 並用回 `params`；與 `skipPermissions: true` 並用仍擋 |
+| 內建 5 個 agy 條目 | 皆帶 `readOnly: true`（**行為變更**；修前只帶 `skipPermissions: false`，工作區內寫入照樣落地、只擋工作區外）；被擋時 `ok: true` 與非空說明文字（不同於工作區外被自動拒絕之空輸出），判被擋看檔案是否落地 |
+| 遞補層之條目層 `params` 失敗 | 另涵蓋 `readOnly` 給了而非布林，於發 `try` 之前判，不發 `try`、`onUsage` 不入帳（`SAFE_SPEC` 新增之列） |
+| 條目表 | 全表 **36 條**（新增 `oc:opencode/hy4-flash-free`；antigravity 仍 5 條） |
+| 未實測 | Claude 兩個 agy 條目之 `readOnly`；`--settings` 之最低 agy 版本（舊版不認時 agy 自身回旗標錯誤而失敗，不會靜默放行寫入）；`extraArgs` 與 `readOnly` 各給 `--settings` 時之合併語意（故以 `params` 拒絕） |
+| 原有「`skipPermissions: false` 只擋工作區外」之敘述 | 仍成立（直接呼叫 `readOnly` 預設 `false`）；改的是**真防寫用 `readOnly`**，審計寫報告檔者用 `skipPermissions: true` 且不給 `readOnly` |
 
 2026-11-23 對照（1.0.110）：以 `w-dispatch-ai` **1.0.110** 之原始碼（`src/readSafeOpt.mjs`、`src/dispatchAntigravity.mjs`、`src/runExecCli.mjs`、`src/dispatchAiFallback.mjs`）與 README 行為變更紀錄第 87、88 條核對（**未實際呼叫 agy**）。固定旗標順序與自用鍵不變；**變的是給了無效值之處置再收嚴到影響計費之 `model`／`effort` 與 `env` 各變數之值**——使用端若依賴「無效即退回預設」或「`env` 值為 `null`／數字會被轉成字串」須改為不給該欄或給有效值（要移除 `env` 變數就給 `undefined`）：
 

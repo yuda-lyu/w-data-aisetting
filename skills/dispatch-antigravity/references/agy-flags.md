@@ -12,6 +12,8 @@
 
 2026-11-13 更新（預設模型改 Gemini 4 Hydrogen、型錄、`/effort`、`--help`）之來源：本機 `agy` **1.5.7** 之 `agy --version`、`agy models`、`agy --help`、`agy -p /effort --model <slug> --output-format json`，以及以技能根 `w-dispatch-ai`（實裝 1.0.90）對 `gemini-4-hydrogen-high` 之三次實呼（`skipPermissions` 真假、工作區內外寫檔，細節見 SKILL.md〈`skipPermissions: false` 只擋工作區外之寫入〉）；內建條目依 `w-dispatch-ai` 1.0.92 之 `src/providers.mjs`。下方「主要旗標」「子命令」「輸出與離開狀態」之表仍為 2026-10-18（1.4.2）之建表，僅就 1.5.7 `--help` 補列新見項（見該節）。
 
+2026-11-24 增補（`--settings` 與 `readOnly`、被擋時輸出非空）之來源：`w-dispatch-ai` **1.0.112** 之 `src/dispatchAntigravity.mjs` 檔頭【真防寫】與 `src/providers.mjs` 之 agy 條目註解（套件以 agy 1.5.12 於本機實測；本檔**未重跑**，見 SKILL.md〈`readOnly`：agy 真防寫〉）。
+
 模型型錄由伺服器提供，可能獨立於本文件變更。修改固定模型前，須重新執行 `agy models`。
 
 ## 非互動語法
@@ -105,14 +107,14 @@ MSYS_NO_PATHCONV=1 agy -p /effort --model gemini-4-hydrogen-high --output-format
 | `--json-schema <schema-or-path>` | 限制最終結果結構 |
 | `-c`、`--continue` | 延續最近一次對話 |
 | `--conversation <id>` | 以 ID 恢復對話 |
-| `--mode accept-edits\|auto\|plan` | 選擇執行模式 |
+| `--mode accept-edits\|auto\|plan` | 選擇執行模式；`plan` 只在提示詞前加 `/plan` 指令，**不是防線**（`w-dispatch-ai` 1.0.112 檔頭，依官方〈Choose an execution mode〉頁） |
 | `--agent <name>` | 選擇自訂代理 |
 | `--project <id-or-name>` | 選擇專案 |
 | `--new-project` | 為本次執行建立專案 |
 | `--disable-slash-commands` | 停用 print 模式的 slash command 與技能展開 |
 | `--sandbox` | 啟用 Antigravity 終端限制 |
 | `--log-file <path>` | 覆寫 CLI log 檔路徑 |
-| `--settings <json-or-path>` | **1.5.7 `--help` 新見（2026-11-13，本檔未實測）**：僅本次 session 有效之 settings.json 鍵（行內 JSON 物件或檔案路徑），不存檔；與派工之權限規則是否相關未驗 |
+| `--settings <json-or-path>` | **1.5.7 `--help` 新見（2026-11-13）**：僅本次 session 有效之 settings.json 鍵（行內 JSON 物件或檔案路徑），不存檔。**1.0.112 起 `dispatchAntigravity({ readOnly: true })` 即以此旗標內聯 `permissions.deny[write_file(*), command(*)]` 做真防寫**（套件於 agy 1.5.12 實測；deny 優先於 ask 與 allow、任何模式皆擋），見 SKILL.md〈`readOnly`：agy 真防寫〉；`extraArgs` 自帶 `--settings` 與 `readOnly: true` 並用回 `params`；舊版 agy 之最低支援版本未查 |
 | `--remote-agent` | **1.5.7 新見（未實測）**：以遠端 agent 執行對話；派工不使用 |
 
 模型沒有 `-m` 短旗標，必須使用 `--model`。
@@ -157,6 +159,7 @@ agy 的非成功結局多半是 **exit 0**，只看離開碼分不出來：
 | 情境 | 離開碼 | stdout | stderr |
 |---|---:|---|---|
 | 權限閘門擋下（未加 `--dangerously-skip-permissions`，工具需要寫入**工作區外**之路徑；寫到工作區內者於 1.5.7 實測放行而落地，見 SKILL.md〈`skipPermissions: false` 只擋工作區外之寫入〉） | 0 | 空 | `jetski: no output produced — a tool required the "write_file" permission that headless mode cannot prompt for, so it was auto-denied. …`（2026-10-18 於 1.4.2 實測；1.1.27 時同段訊息印在 stdout、權限名為 `command`） |
+| `readOnly: true` 之 deny 規則擋下（1.0.112 起；內建 agy 條目皆帶） | 0 | **非空**：模型之說明文字，如 `Permission denied for write_file(…). Matches user-configured deny rule` | 套件檔頭未記載 stderr（套件於 agy 1.5.12 實測）；stdout **不是**上一列之空輸出，`validate: 'nonempty'` 擋不住，判被擋看檔案是否落地（SKILL.md〈`readOnly`：agy 真防寫〉） |
 | `--print-timeout` 到期 | 0 | 已產出之部分，可能為空 | `[agy] print timeout after <t> with turn in progress; returning partial output` |
 | 指定了不存在的模型 | 1 | — | 錯誤訊息（不會靜默退回其他模型） |
 | stream-json 輸入：未知的 `event` 值（如 `user_message`） | **0** | 只有 `init` 事件、沒有 `result` | warning；**離開碼 0 不代表成功**，須以有無 `result` 事件判斷（2026-11-07 套件於 agy 1.5.2 實測） |
