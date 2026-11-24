@@ -193,7 +193,7 @@ kill 與 rm 皆**不保證成功**,執行後必回頭驗證:殺程序後以 `net
 - **配置**:專案/套件根目錄之 `CLAUDE.md`(進入點,自動載入)＋ `./sgud/`:`exp/experience.md`(經驗)、`proc/process.md`(處理要點)、`rule/rulebook.md`(規則帳本＝藍圖)、`state/state.md`(狀態＝現況)、`feedback/feedback.md`(回饋,§12.2).
 - **接續工作先讀 `state.md`**,不必翻經驗檔;完成一項功能或結束一輪工作時即更新 `state.md`,只記現況、不寫過程(過程寫入經驗).
 - **sgud 優先於自動記憶**:Claude Code 之自動記憶(`~/.claude/projects/<路徑編碼>/memory/`;非 §1 之[長期記憶])依資料夾路徑存放,資料夾移動或更名(如自有套件之層級改變)即失聯.專案/套件之重要資訊(使用者裁示、規則、經驗、現況)一律寫入其 sgud,自動記憶至多留指向;見自動記憶有而 sgud 無者,先提取至 sgud.
-- **只有 `sgud/` 納入 git 版控並隨 npm 包發布**;`CLAUDE*.md` 維持不入版控(`.gitignore` 保留 `CLAUDE*.md`,不得加 `!CLAUDE.md`).公開庫之 `sgud/` 不得含金鑰、權杖、內網位址或帳號資訊,亦不寫使用端專案之名稱與案情.
+- **只有 `sgud/` 納入 git 版控並隨 npm 包發布**;`CLAUDE*.md` 維持不入版控(`.gitignore` 保留 `CLAUDE*.md`,不得加 `!CLAUDE.md`).公開庫之 `sgud/` 不得含金鑰、權杖、內網位址、帳號資訊或本機路徑,亦不寫使用端專案之名稱與案情.
 
 ## 15. AI CLI 本機對話紀錄之盤查與清理
 
