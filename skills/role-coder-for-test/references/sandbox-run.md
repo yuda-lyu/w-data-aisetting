@@ -38,8 +38,10 @@ registerHooks({
 用法(bash):
 
 ```bash
-NODE_OPTIONS="--import=file:///<守門模組絕對路徑>" SANDBOX_ROOT=<沙箱根絕對路徑> npm --prefix <沙箱根> test
+NODE_OPTIONS="--import=file:///<守門模組絕對路徑>" SANDBOX_ROOT=<沙箱根絕對路徑> node <沙箱根>/node_modules/mocha/bin/mocha.js <與 scripts.test 相同之參數>
 ```
+
+**不要用 `npm --prefix <沙箱根> test` 帶守門**:`NODE_OPTIONS` 會傳給 `npm`／`npx` 自身(其 `npm-prefix.js`、`npx-cli.js` 在沙箱外),守門把 npm 自己之模組解析攔下,測試根本沒跑(使用端實測).以工作目錄為沙箱根、直接以 node 起沙箱內之 mocha;`scripts.test` 之參數照抄.
 
 實測結果(夾具同上,工作目錄故意取在沙箱之外以模擬誤用):
 
@@ -53,14 +55,14 @@ NODE_OPTIONS="--import=file:///<守門模組絕對路徑>" SANDBOX_ROOT=<沙箱�
 - 守門只擋**模組解析**;以 `fs` 讀設定檔(如依 `process.cwd()` 找設定)不被擋,故仍須以複本之根為工作目錄(§5.1 第 2 點).
 - 路徑比對在 Windows 不分大小寫;Node 解析時預設還原符號連結／目錄連結為真實路徑,故以目錄連結接回上層專案之 `node_modules` 者,守門會視為沙箱之外而擋下——這也是沙箱不建目錄連結之理由.
 - `--import` 之值須為 file URL(Windows 之磁碟機代號路徑不可直接給).
-- 未實測:`mocha --parallel` 之 worker 是否繼承 `NODE_OPTIONS`(環境變數預設由子行程繼承,啟用前先以「故意解析到沙箱外」之案確認守門在 worker 內亦觸發);僅於 Node v24.22.1 實測,其他版本之 `registerHooks` 可用性未測.
+- `mocha --parallel` 之 worker 繼承 `NODE_OPTIONS`,守門於 worker 內亦觸發(使用端實測:於發布包解開之目錄之 worker 內匯入只在上層專案才有之套件即拋 `[sandbox-guard]`);仍建議每次以一個「故意解析到沙箱外」之探測案確認守門生效.僅於 Node v24.22.1 實測,其他版本之 `registerHooks` 可用性未測.
 
 ## 3. 沙箱配置
 
 1. 沙箱自建 `node_modules`,放相依套件之**發布包複本**(`npm pack <套件>@<版本>` 解開之內容),不建目錄連結.
 2. 不用 git(沙箱在另一個倉庫之樹下時,git 會向上找到上層專案之倉庫);eslint 明指該套件之設定:`-c <設定檔>`(eslint 8 另有 `--no-eslintrc`,8.57.1 實測有此旗標;9 以上之 flat config 無此旗標,依其說明).
 3. 於發布包解開之目錄跑全套:`npm pack` 之發布包**不含 `.gitignore`**(實測 `npm pack --dry-run`,tarball 內只有 `package.json` 與原始檔),依賴它之測試於此配置必敗,驗證步驟須寫明哪些測試因此排除;安裝相依所產生之 `package-lock.json` 於提案端環境含倉庫位址,須在跑「發布內容不含內網位址」類之測試前檢查並刪除(本機 npm 12.1.0 所產鎖檔無 `resolved` 欄,視 npm 版本與設定而異,故不假設,以檢查為準).
-4. 以 `npm --prefix <根> test` 起測時,script 之 `process.cwd()` 即 `<根>`(實測).
+4. 以 `npm --prefix <根> test` 起測時,script 之 `process.cwd()` 即 `<根>`(實測);但帶守門時不用此法(見 §2),改以沙箱根為工作目錄直接以 node 起 mocha.
 5. **發布包配置之全套(每輪)**(提案端之作法,本庫未另行實跑):`npm pack` → 解開 → 複製 lockfile → `npm ci`(依 lockfile 精確安裝)→ 被測物會起外部程式者,移除真實 CLI 之 PATH 並以 `where`／`which` 驗證(SKILL §5.2)→ 平行執行時 `--jobs` 不超過邏輯核數減 2(以免占滿使用中之機器).
    - 本機 npm 設有新版冷卻期(`min-release-age`)而 lockfile 之版本仍在冷卻期內者,`npm ci` 報 `ETARGET`(提案所述:約 3 分鐘後才失敗,並留下半裝之 `node_modules`,重試前先刪除);只在 lockfile 之版本與工作樹已安裝者相同時,才對該驗證複本以 `--min-release-age=0` 覆寫——不藉此引入新版本.
    - 解開之目錄自帶 `node_modules`、無目錄連結,可兼作變異之鏡像根.
