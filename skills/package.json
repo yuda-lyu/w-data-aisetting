@@ -7,7 +7,7 @@
     "mupdf": "1.28.6",
     "opencc-js": "1.4.2",
     "unpdf": "1.9.1",
-    "w-dispatch-ai": "^1.0.116",
+    "w-dispatch-ai": "^1.0.118",
     "w-dwdata-hub": "^1.0.56",
     "w-dwload-dlp": "^1.0.86",
     "w-fetch-web": "^1.0.62",

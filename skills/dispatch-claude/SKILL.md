@@ -336,7 +336,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 
 **與套件內建規劃的關係**：`w-dispatch-ai/src/providers.mjs` 檔頭的 timeout 規劃以「單一 AI 工作約 15 分鐘」估出 `timeoutMs: 1_200_000`，那是一般複雜任務的估法；**正式派工以本節的 4 小時為準**，不要照抄 20 分鐘把它調回去。套件內部四層（②～⑤）的權威整合說明在套件 README 的「Timeout 總覽」一節；第①層是呼叫端的事，README 不涵蓋。
 
-**被砍時要保住已完成的部分**：失敗結果的 `stdout` 只會留 500 字元（`wsemi/src/execCli.mjs`；驗證失敗者同，見 `src/runExecCli.mjs`），所以正式派工一律掛 `onStdout` 邊跑邊落檔——〈執行步驟〉的範本已寫入 `stdout.log`，不要拿掉，否則被砍就真的什麼都不剩。**帶金鑰時（`key`，或只以 `env` 傳 `ANTHROPIC_API_KEY`；1.0.114 起）`onStdout`／`onStderr` 收到的是已遮蔽之文字（金鑰與內建憑證樣式皆為 `***`）且以列為單位**：一列要等換行才送出，故呼叫端行程被外力終止時，最後未滿一列不會落檔；逾時被終止者照常補送尾段。結果之 `stdout`／`stderr`／`error`／`failureDetail` 亦同字樣遮蔽（舊版字樣 `[REDACTED]` 已不用）；診斷家族另遮金鑰樣式集，偶有誤遮。
+**被砍時要保住已完成的部分**：失敗結果的 `stdout` 只會留 500 字元（`wsemi/src/execCli.mjs`；驗證失敗者同，見 `src/runExecCli.mjs`），所以正式派工一律掛 `onStdout` 邊跑邊落檔——〈執行步驟〉的範本已寫入 `stdout.log`，不要拿掉，否則被砍就真的什麼都不剩。**帶金鑰時（`key`，或只以 `env` 傳 `ANTHROPIC_API_KEY`；1.0.114 起。1.0.118 起另含：`key`、`env` 皆未給而本行程環境有 `ANTHROPIC_API_KEY`〔子程序繼承之〕——只遮蔽，不參與失敗分類 `failureKind` 與「沒額度」之交叉確認；`env` 以 `undefined` 明示移除者不遮）`onStdout`／`onStderr` 收到的是已遮蔽之文字（金鑰與內建憑證樣式皆為 `***`）且以列為單位**：一列要等換行才送出，故呼叫端行程被外力終止時，最後未滿一列不會落檔；逾時被終止者照常補送尾段。結果之 `stdout`／`stderr`／`error`／`failureDetail` 亦同字樣遮蔽（舊版字樣 `[REDACTED]` 已不用）；診斷家族另遮金鑰樣式集，偶有誤遮。
 
 **逾時與假成功是兩回事**：逾時被殺時 `errorType` 為 `timeout`；權限不足（或提示詞層被禁止寫檔）則是 `ok: true`／exit 0，**根本不會產生 `errorType`**。看到「沒有結果但也沒有錯誤」先分清是哪一種，別互相誤診。
 

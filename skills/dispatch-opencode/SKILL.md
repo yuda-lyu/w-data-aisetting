@@ -635,7 +635,7 @@ Bash({ run_in_background: true, timeout: 7200000,
 
 **與套件內建規劃的關係**：`w-dispatch-ai/src/providers.mjs` 檔頭的 timeout 規劃以「單一 AI 工作約 15 分鐘」估出 `timeoutMs: 1_200_000`，那是一般複雜任務的估法；**正式派工以本節的 4 小時為準**，不要照抄 20 分鐘把它調回去。套件內部四層（②～⑤）的權威整合說明在套件 README 的「Timeout 總覽」一節；第①層是呼叫端的事，README 不涵蓋。
 
-**被砍時要保住已完成的部分**：失敗結果的 `stdout` 只會留 500 字元（`wsemi/src/execCli.mjs`；驗證失敗者同，見 `src/runExecCli.mjs`），所以正式派工一律掛 `onStdout` 邊跑邊落檔——〈執行步驟〉的範本已寫入 `stdout.log`，不要拿掉，否則被砍就真的什麼都不剩。**有注入金鑰時（`key`＋`provider`，或 `env` 自給／繼承之 `OPENCODE_AUTH_CONTENT` 所含之金鑰；1.0.114 起）`onStdout`／`onStderr` 收到的是已遮蔽之文字（`***`）且以列為單位**：一列要等換行才送出，呼叫端行程被外力終止時最後未滿一列不會落檔；逾時被終止者照常補送尾段。結果之 `stdout`／`stderr`／`error`／`failureDetail`／`deniedRule` 亦同字樣遮蔽；REST 條目（`api-*`）之錯誤路徑之 `stderr`／`error` 亦已遮蔽金鑰。
+**被砍時要保住已完成的部分**：失敗結果的 `stdout` 只會留 500 字元（`wsemi/src/execCli.mjs`；驗證失敗者同，見 `src/runExecCli.mjs`），所以正式派工一律掛 `onStdout` 邊跑邊落檔——〈執行步驟〉的範本已寫入 `stdout.log`，不要拿掉，否則被砍就真的什麼都不剩。**有注入金鑰時（`key`＋`provider`，或 `env` 自給／繼承之 `OPENCODE_AUTH_CONTENT` 所含之金鑰；1.0.114 起）`onStdout`／`onStderr` 收到的是已遮蔽之文字（`***`）且以列為單位**：一列要等換行才送出，呼叫端行程被外力終止時最後未滿一列不會落檔；逾時被終止者照常補送尾段。結果之 `stdout`／`stderr`／`error`／`failureDetail`／`deniedRule` 亦同字樣遮蔽；REST 條目（`api-*`）之錯誤路徑之 `stderr`／`error` 亦已遮蔽金鑰；**1.0.118 起成功路徑亦遮蔽**：`stdout`／`answers`／`usage`／`finishReason`（閘道回顯金鑰時由原樣變 `***`；`validate` 仍收原文）。副作用：呼叫端以 `headers` 自給之非白名單標頭值（如 `X-Env` 之值）之字樣若出現於合法模型輸出，亦被遮為 `***`，下游無失敗訊號——自給標頭之值勿與預期輸出之字樣相同。
 
 **逾時與假成功是兩回事**：逾時被殺時 `errorType` 為 `timeout`；權限被擋、或提示詞層被禁止寫檔則是 `ok: true`／exit 0，**根本不會產生 `errorType`**——除非掛了 `validate` 而回覆恰為空字串（見〈權限不足是 exit 0 的假成功〉），才會轉成 `validation` 失敗。看到「沒有結果但也沒有錯誤」先分清是哪一種，別互相誤診。
 
