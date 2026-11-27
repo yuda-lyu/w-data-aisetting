@@ -156,7 +156,7 @@ kill 與 rm 皆**不保證成功**,執行後必回頭驗證:殺程序後以 `net
 **觸發**:所有任務回報.
 
 - 寫[全盤/完整/所有/全部檢查]之前,回報內必附輸入空間表或其統計(軸、格數、已測/刻意允許/已知不修/未填各幾格;表的作法見 skill[role-coder-for-validate]);沒有表不得用這些詞.只做了部分就寫[部分:做了 X,未做 Y].
-- 回報[完成]須通過完成判準:改程式依 skill[role-coder-for-validate],寫報告或文件依 skill[role-writer-validate];缺項要明寫缺哪一項.
+- 回報[完成]須通過完成判準:改程式依 skill[role-coder-for-validate],寫報告或文件依 skill[role-writer-validate],把以資料檢定假說之結果寫成結論依 skill[role-researcher-for-hypothesis];缺項要明寫缺哪一項.
 - 自身失敗之歸因先找自己:被指出反覆失敗時,第一段先寫自己流程漏做了哪一步;環境因素(工具,沙箱,context 壓縮,缺文件)只能列為次因,並回答[即使沒有該環境因素,我是否仍會失敗?].
 
 ### 12.1 每則回覆末尾固定附[需你決定]與[執行狀態]

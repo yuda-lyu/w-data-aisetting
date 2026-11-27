@@ -129,6 +129,7 @@ description: |
 | fetch-web | 抓取網頁文章內容之方法；本技能管抓到之內容能否當證據 |
 | role-operator-pdf | PDF 抽文字、轉圖 |
 | role-researcher-for-calculation | 數值、幾何、統計與領域計算方法之調研：定義、算法、實作三層、對抗案例、參考解、領域適用性 |
+| role-researcher-for-hypothesis | 以資料檢定假說並寫成結論之紀律：判準先寫、對照、相依之單位、族內校正、換期確認；本技能管外部來源之證據 |
 | role-writer-validate | 報告之主張溯源；報告引用外部文獻時，其證據依本技能之一手來源與摘錄（其 L0a 只驗連結存在）。報告內各主張之判定值依該技能 Step 3；本技能之判定值只用於調研帳冊 |
 | role-coder-for-test | 測試與樣本數據中之連結、引用須真實可連（§6）；本技能管內容是否支持主張 |
 | role-coder-for-validate | 依調研結果改程式時之完成判準 |
