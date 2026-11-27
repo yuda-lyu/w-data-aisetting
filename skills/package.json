@@ -1,18 +1,18 @@
 {
   "dependencies": {
     "@cantoo/pdf-lib": "2.11.1",
-    "@napi-rs/canvas": "1.1.0",
-    "@officecli/officecli": "1.0.160",
+    "@napi-rs/canvas": "1.1.1",
+    "@officecli/officecli": "1.0.161",
     "fontkit": "2.0.4",
     "mupdf": "1.28.6",
     "opencc-js": "1.4.2",
     "unpdf": "1.9.1",
     "w-dispatch-ai": "^1.0.121",
-    "w-dwdata-hub": "^1.0.61",
-    "w-dwload-dlp": "^1.0.90",
-    "w-fetch-web": "^1.0.67",
-    "w-orm-lmdb": "^1.0.88",
-    "w-zip": "^1.0.85",
+    "w-dwdata-hub": "^1.0.62",
+    "w-dwload-dlp": "^1.0.91",
+    "w-fetch-web": "^1.0.68",
+    "w-orm-lmdb": "^1.0.89",
+    "w-zip": "^1.0.86",
     "wsemi": "^1.9.82"
   },
   "allowScripts": {
