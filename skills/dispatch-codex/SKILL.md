@@ -295,9 +295,11 @@ fs.writeFileSync(out('result.json'), JSON.stringify(result, null, 2));
 **步驟 2：以 detached 啟動。** 用前景 Bash 執行，立即返回；**不要**用 `run_in_background` 跑派工本身，那會讓它受上表時限約束：
 
 ```bash
-nohup node ./tmp/<案名>/dispatch.mjs > ./tmp/<案名>/run.log 2>&1 &
-sleep 3; cat ./tmp/<案名>/node.pid   # 印得出 PID 才算啟動成功；印不出來先讀 run.log
+d=./tmp/<案名>; rm -f "$d/result.json" "$d/node.pid"; [ ! -e "$d/result.json" ] && [ ! -e "$d/node.pid" ] && nohup node "$d/dispatch.mjs" > "$d/run.log" 2>&1 &
+for i in $(seq 1 30); do [ -s ./tmp/<案名>/node.pid ] && break; sleep 1; done; cat ./tmp/<案名>/node.pid   # 印得出 PID 才算啟動成功；30 秒仍無先讀 run.log
 ```
+
+**啟動前先刪上一輪之 `result.json`、`node.pid` 並回驗不存在**（上列第一行）：重派、續接或先試跑後正式跑而沿用同一 `./tmp/<案名>/` 時，舊 `result.json` 使步驟 3 立即回 `DONE`（讀到的是上一輪之結果），舊 `node.pid` 使存活判斷看到舊 PID（已結束則誤報 `CRASHED`，已被其他行程重用則誤判仍在跑）。刪除由 agent 於啟動前做，不放在 `dispatch.mjs` 開頭（等待若在 node 啟動完成前即掛上，仍會先看到舊檔）；要保留上一輪結果者先改名搬開（如 `result.prev.json`）。同一原則見 skill[role-setup-scheduler-for-session]〈配方 E〉（四個 dispatch-* 技能本段相同，改一處要四處同步）。
 
 **步驟 3：分段等待。** 用背景 Bash，`timeout` 必須明給 `7200000`（不給就是 30 分鐘）；迴圈在第 6900 秒自行結束，趕在上限之前回報：
 
